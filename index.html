@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#004679" />
+    <meta name="color-scheme" content="light" />
+    <title>司法試験論文式 → Scrapbox 変換</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="hero">
+        <h1>司法試験論文式 → Scrapbox 変換</h1>
+        <p class="subtitle">法務省ウェブの公表PDFから自動で抽出します</p>
+      </header>
+
+      <section class="form">
+        <div class="field">
+          <label for="year">年度</label>
+          <select id="year"></select>
+        </div>
+
+        <div class="field">
+          <label for="subject">科目</label>
+          <select id="subject"></select>
+        </div>
+
+        <div class="field">
+          <label for="type">種類</label>
+          <select id="type">
+            <option value="試験問題">試験問題</option>
+            <option value="出題の趣旨">出題の趣旨</option>
+            <option value="採点実感">採点実感</option>
+          </select>
+        </div>
+
+        <div class="actions">
+          <button id="run" class="btn-primary" type="button">変換実行</button>
+          <button id="copy" class="btn-secondary" type="button" disabled>
+            結果をコピー
+          </button>
+          <button id="download" class="btn-secondary" type="button" disabled>
+            .txt 保存
+          </button>
+        </div>
+      </section>
+
+      <section class="progress" aria-live="polite">
+        <div class="bar">
+          <div id="bar-fill" class="bar-fill"></div>
+        </div>
+        <div id="status" class="status">待機中</div>
+      </section>
+
+      <section class="output">
+        <div class="tabs" role="tablist">
+          <button
+            class="tab active"
+            data-target="result"
+            type="button"
+            role="tab"
+          >
+            結果
+          </button>
+          <button class="tab" data-target="log" type="button" role="tab">
+            ログ
+          </button>
+        </div>
+        <pre id="result" class="pane active" role="tabpanel"></pre>
+        <pre id="log" class="pane" role="tabpanel"></pre>
+      </section>
+
+      <footer class="foot">
+        <p>
+          中継サーバ:
+          <span id="worker-status" class="muted">設定確認中…</span>
+        </p>
+      </footer>
+    </main>
+
+    <!-- PDF.js (legacy build for wide compatibility) -->
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs"
+      type="module"
+    ></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
