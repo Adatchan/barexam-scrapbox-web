@@ -701,15 +701,14 @@ function parseSaitenSection(boxes, systemName, qNum, sectionKeyword) {
 }
 
 // ─── Scrapbox 記法変換 ────────────────────────────────────────────────────
-function toScrapbox(paras, yearLabel, subjectLabel) {
+function toScrapbox(paras, yearLabel, subjectLabel, pdfUrl) {
   let tag;
   const m = /（(.+)）/.exec(subjectLabel);
   tag = m ? m[1] : subjectLabel;
-  const out = [
-    `${yearLabel}司法試験　${subjectLabel}`,
-    `#司法試験 #${tag} #論文式 #${yearLabel}`,
-    "",
-  ];
+  const out = [`${yearLabel}司法試験　${subjectLabel}`];
+  if (pdfUrl) out.push(pdfUrl);
+  out.push(`#司法試験 #${tag} #論文式 #${yearLabel}`);
+  out.push("");
   for (const p of paras) {
     if (/^〔設問\d+〕/.test(p)) out.push(`[** ${p}]`);
     else if (/^【.+】/.test(p)) out.push(`[* ${p}]`);
@@ -719,15 +718,14 @@ function toScrapbox(paras, yearLabel, subjectLabel) {
   return out.join("\n").replace(/\s+$/, "") + "\n";
 }
 
-function toScrapboxNarrative(paras, yearLabel, subjectLabel, docType) {
+function toScrapboxNarrative(paras, yearLabel, subjectLabel, docType, pdfUrl) {
   let tag;
   const m = /（(.+)）/.exec(subjectLabel);
   tag = m ? m[1] : subjectLabel;
-  const out = [
-    `${yearLabel}司法試験　${subjectLabel}　${docType}`,
-    `#司法試験 #${tag} #論文式 #${yearLabel} #${docType}`,
-    "",
-  ];
+  const out = [`${yearLabel}司法試験　${subjectLabel}　${docType}`];
+  if (pdfUrl) out.push(pdfUrl);
+  out.push(`#司法試験 #${tag} #論文式 #${yearLabel} #${docType}`);
+  out.push("");
   for (const p of paras) {
     const ps = p.trim();
     if (isSaitenTitle(p)) out.push(`[** ${p}]`);
@@ -857,8 +855,8 @@ async function runConversion({ yearKey, subject, docType }, ctx) {
 
   const result =
     docType === "試験問題"
-      ? toScrapbox(paras, yearLabel, subjectLabel)
-      : toScrapboxNarrative(paras, yearLabel, subjectLabel, docType);
+      ? toScrapbox(paras, yearLabel, subjectLabel, pdfUrl)
+      : toScrapboxNarrative(paras, yearLabel, subjectLabel, docType, pdfUrl);
 
   setProgress(1.0);
   return { yearLabel, subjectLabel, docType, result };
