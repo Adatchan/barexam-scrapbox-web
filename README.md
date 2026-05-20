@@ -7,7 +7,7 @@ Mac / iPhone / iPad / Windows の任意のブラウザから動かせる静的 W
 ```
 web/
 ├── index.html       UI 本体
-├── style.css        スタイル（yglpc.com 風カラー）
+├── style.css        スタイル
 ├── app.js           変換ロジック（PDF.js を使用）
 ├── worker/
 │   └── worker.js    Cloudflare Worker（moj.go.jp 中継プロキシ）
