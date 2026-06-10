@@ -405,6 +405,9 @@ function groupLinesIntoBlocks(lines) {
     if (/^〔[^〔〕]+〕$/.test(t)) return true;
     if (/^〔第[１２３]問〕/.test(t) && t.length < 120) return true;
     if (/^〔設問\d+〕/.test(t) && t.length < 120) return true;
+    // 採点実感のセクションタイトル（句点で終わらないため、放置すると
+    // 直後の本文と結合されてタイトル判定に失敗する年度がある）
+    if (isSaitenTitle(t)) return true;
     return false;
   };
 
@@ -480,8 +483,11 @@ function isHeader(b) {
   );
 }
 function isSaitenTitle(t) {
+  // 平成23年以前は「新司法試験」表記
   return (
-    /^[令平].{1,8}年司法試験/.test(t) && t.includes("採点実感") && t.length < 80
+    /^[令平].{1,8}年新?司法試験/.test(t) &&
+    t.includes("採点実感") &&
+    t.length < 80
   );
 }
 
@@ -694,39 +700,50 @@ function parseShushiSectionSelect(boxes, sectionKeyword, qNum) {
   return { paras: parseNarrativeParagraphs(qBoxes, skip), pageRange: pageRangeOf(qBoxes) };
 }
 
-function parseSaitenSection(boxes, systemName, qNum, sectionKeyword) {
+function parseSaitenSection(boxes, systemName, qNum, sectionKeyword, subjectLabel) {
   const qKanji = Q_KANJI[qNum];
-  let pattern, targetLabel;
-  if (sectionKeyword) {
-    pattern = new RegExp(
-      `${reEscape(sectionKeyword)}[^第]{0,5}?第${reEscape(qKanji)}問`,
-    );
-    targetLabel = sectionKeyword;
-  } else {
-    pattern = new RegExp(`${reEscape(systemName)}第${reEscape(qKanji)}問`);
-    targetLabel = systemName;
+  const target = sectionKeyword || systemName;
+  const escaped = reEscape(target);
+
+  // タイトルの書式は年度・科目で異なる:
+  //   問別:     令和７年司法試験の採点実感（公法系科目第１問）
+  //   科目単位: 令和７年司法試験の採点実感（労働法）          ← 選択科目
+  //   系列単位: 平成２３年新司法試験の採点実感等に関する意見（公法系科目）
+  //   科目名:   平成２２年新司法試験の採点実感等に関する意見（憲法）
+  // 問別タイトルを優先し、なければ科目・系列単位のセクション全体を返す
+  // （その場合は第１問・第２問が分かれていないため両方を含む）。
+  const patterns = [
+    new RegExp(`${escaped}[^第]{0,5}?第${reEscape(qKanji)}問`),
+    new RegExp(`[（(]${escaped}[）)]`),
+  ];
+  // 表示ラベル（例: 公法系第１問（憲法））から科目名を取り出してフォールバックに使う
+  const subjM = /（(.+)）/.exec(subjectLabel || "");
+  if (subjM && subjM[1] !== target) {
+    patterns.push(new RegExp(`[（(]${reEscape(subjM[1])}[）)]`));
   }
 
-  const isTargetTitle = (t) => isSaitenTitle(t) && pattern.test(t);
-
-  const si = boxes.findIndex((b) => isTargetTitle(b.text));
-  if (si === -1)
-    throw new Error(
-      `採点実感「${targetLabel}第${qKanji}問」のタイトルが見つかりません。`,
+  for (const pattern of patterns) {
+    const si = boxes.findIndex(
+      (b) => isSaitenTitle(b.text) && pattern.test(b.text),
     );
-
-  let ei = boxes.length;
-  for (let i = si + 1; i < boxes.length; i++) {
-    if (isSaitenTitle(boxes[i].text)) {
-      ei = i;
-      break;
+    if (si === -1) continue;
+    let ei = boxes.length;
+    for (let i = si + 1; i < boxes.length; i++) {
+      if (isSaitenTitle(boxes[i].text)) {
+        ei = i;
+        break;
+      }
     }
+    const targetBoxes = boxes.slice(si, ei);
+    return {
+      paras: parseNarrativeParagraphs(targetBoxes),
+      pageRange: pageRangeOf(targetBoxes),
+    };
   }
-  const targetBoxes = boxes.slice(si, ei);
-  return {
-    paras: parseNarrativeParagraphs(targetBoxes),
-    pageRange: pageRangeOf(targetBoxes),
-  };
+
+  throw new Error(
+    `採点実感「${target}第${qKanji}問」のタイトルが見つかりません。`,
+  );
 }
 
 // ─── Scrapbox 記法変換 ────────────────────────────────────────────────────
@@ -890,6 +907,7 @@ async function runConversion({ yearKey, subject, docType }, ctx) {
       systemName,
       qNum,
       sectionKeyword,
+      subjectLabel,
     ));
   }
 
