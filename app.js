@@ -295,6 +295,7 @@ async function extractBoxes(pdfBytes, onProgress) {
     const lines = groupItemsIntoLines(items);
     const pageBoxes = groupLinesIntoBlocks(lines);
     pageBoxes.sort((a, b) => b.y1 - a.y1);
+    for (const b of pageBoxes) b.page = pn;
     boxes.push(...pageBoxes);
 
     onProgress && onProgress(pn / pdf.numPages);
@@ -469,6 +470,13 @@ function isSaitenTitle(t) {
   );
 }
 
+// 抽出対象ボックス群が占めるページ範囲 [開始, 終了] を返す（1 始まり）
+function pageRangeOf(boxes) {
+  const pages = boxes.map((b) => b.page).filter((p) => Number.isInteger(p));
+  if (!pages.length) return null;
+  return [Math.min(...pages), Math.max(...pages)];
+}
+
 // ─── 段落抽出（試験問題用、X 座標インデント判定） ───────────────────────
 function parseParagraphs(boxes, startMarker, endMarker) {
   const si = boxes.findIndex((b) => b.text.includes(startMarker));
@@ -527,7 +535,7 @@ function parseParagraphs(boxes, startMarker, endMarker) {
     prevX = x0;
   }
   if (cur) paras.push(cur);
-  return paras;
+  return { paras, pageRange: pageRangeOf(boxes.slice(si, ei)) };
 }
 
 // ─── narrative（出題の趣旨・採点実感）見出し判定 ───────────────────────
@@ -616,7 +624,8 @@ function parseShushiSection(boxes, systemName, qNum) {
     const t = b.text;
     return nosp(t).includes(sysNosp) && t.length < 20;
   };
-  return parseNarrativeParagraphs(secBoxes.slice(qSi, qEi), skip);
+  const qBoxes = secBoxes.slice(qSi, qEi);
+  return { paras: parseNarrativeParagraphs(qBoxes, skip), pageRange: pageRangeOf(qBoxes) };
 }
 
 function parseShushiSectionSelect(boxes, sectionKeyword, qNum) {
@@ -666,7 +675,8 @@ function parseShushiSectionSelect(boxes, sectionKeyword, qNum) {
     const ts = b.text.trim();
     return ts.length < 10 && kwNosp === nosp(ts);
   };
-  return parseNarrativeParagraphs(secBoxes.slice(qSi, qEi), skip);
+  const qBoxes = secBoxes.slice(qSi, qEi);
+  return { paras: parseNarrativeParagraphs(qBoxes, skip), pageRange: pageRangeOf(qBoxes) };
 }
 
 function parseSaitenSection(boxes, systemName, qNum, sectionKeyword) {
@@ -697,7 +707,11 @@ function parseSaitenSection(boxes, systemName, qNum, sectionKeyword) {
       break;
     }
   }
-  return parseNarrativeParagraphs(boxes.slice(si, ei));
+  const targetBoxes = boxes.slice(si, ei);
+  return {
+    paras: parseNarrativeParagraphs(targetBoxes),
+    pageRange: pageRangeOf(targetBoxes),
+  };
 }
 
 // ─── Scrapbox 記法変換 ────────────────────────────────────────────────────
@@ -794,6 +808,10 @@ async function runConversion({ yearKey, subject, docType }, ctx) {
   log(`  ${pdfBytes.byteLength.toLocaleString()} バイト`);
   setProgress(0.4);
 
+  // PDF.js は渡した ArrayBuffer を worker に移譲（detach）するため、
+  // 原典PDF保存用にコピーを確保しておく。
+  const pdfBytesCopy = pdfBytes.slice(0);
+
   let boxes = await extractBoxes(pdfBytes, (f) => {
     setProgress(0.4 + 0.4 * f);
   });
@@ -825,7 +843,7 @@ async function runConversion({ yearKey, subject, docType }, ctx) {
 
   setProgress(0.85);
 
-  let paras;
+  let paras, pageRange;
   if (docType === "試験問題") {
     let startMarker = `〔第${Q_KANJI[qNum]}問〕`;
     let endMarker = null;
@@ -842,13 +860,22 @@ async function runConversion({ yearKey, subject, docType }, ctx) {
         }
       }
     }
-    paras = parseParagraphs(boxes, startMarker, endMarker);
+    ({ paras, pageRange } = parseParagraphs(boxes, startMarker, endMarker));
   } else if (docType === "出題の趣旨") {
     if (sectionKeyword)
-      paras = parseShushiSectionSelect(boxes, sectionKeyword, qNum);
-    else paras = parseShushiSection(boxes, systemName, qNum);
+      ({ paras, pageRange } = parseShushiSectionSelect(
+        boxes,
+        sectionKeyword,
+        qNum,
+      ));
+    else ({ paras, pageRange } = parseShushiSection(boxes, systemName, qNum));
   } else {
-    paras = parseSaitenSection(boxes, systemName, qNum, sectionKeyword);
+    ({ paras, pageRange } = parseSaitenSection(
+      boxes,
+      systemName,
+      qNum,
+      sectionKeyword,
+    ));
   }
 
   setProgress(0.95);
@@ -859,7 +886,15 @@ async function runConversion({ yearKey, subject, docType }, ctx) {
       : toScrapboxNarrative(paras, yearLabel, subjectLabel, docType, pdfUrl);
 
   setProgress(1.0);
-  return { yearLabel, subjectLabel, docType, result, pdfUrl };
+  return {
+    yearLabel,
+    subjectLabel,
+    docType,
+    result,
+    pdfUrl,
+    pageRange,
+    pdfBytes: pdfBytesCopy,
+  };
 }
 
 // =============================================================================
@@ -925,6 +960,8 @@ function setProgressBar(frac) {
 
 let lastResult = "";
 let lastPdfUrl = "";
+let lastPdfBytes = null;
+let lastPageRange = null;
 
 async function onRun() {
   const yearKey = $("year").value;
@@ -935,6 +972,8 @@ async function onRun() {
   $("result").textContent = "";
   lastResult = "";
   lastPdfUrl = "";
+  lastPdfBytes = null;
+  lastPageRange = null;
   $("copy").disabled = true;
   $("download").disabled = true;
   $("source").disabled = true;
@@ -951,16 +990,25 @@ async function onRun() {
     .forEach((p) => p.classList.toggle("active", p.id === "log"));
 
   try {
-    const { yearLabel, subjectLabel, docType: dt, result, pdfUrl } =
-      await runConversion(
-        { yearKey, subject, docType },
-        {
-          log: (m) => appendLog(m, "info"),
-          setProgress: setProgressBar,
-        },
-      );
+    const {
+      yearLabel,
+      subjectLabel,
+      docType: dt,
+      result,
+      pdfUrl,
+      pageRange,
+      pdfBytes,
+    } = await runConversion(
+      { yearKey, subject, docType },
+      {
+        log: (m) => appendLog(m, "info"),
+        setProgress: setProgressBar,
+      },
+    );
     lastResult = result;
     lastPdfUrl = pdfUrl || "";
+    lastPdfBytes = pdfBytes || null;
+    lastPageRange = pageRange || null;
     $("result").textContent = result;
     $("copy").disabled = false;
     $("download").disabled = false;
@@ -1019,9 +1067,73 @@ function onDownload() {
   URL.revokeObjectURL(url);
 }
 
-function onOpenSource() {
-  if (!lastPdfUrl) return;
-  window.open(lastPdfUrl, "_blank", "noopener");
+// ─── 原典PDF（該当ページのみ）保存 ──────────────────────────────────────
+let _pdfLibPromise = null;
+async function loadPdfLib() {
+  if (!_pdfLibPromise)
+    _pdfLibPromise = import("https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm");
+  return _pdfLibPromise;
+}
+
+async function onSaveSourcePdf() {
+  if (!lastPdfBytes) {
+    // バイト列がない場合は従来どおり原典をそのまま開く
+    if (lastPdfUrl) window.open(lastPdfUrl, "_blank", "noopener");
+    return;
+  }
+  const btn = $("source");
+  btn.disabled = true;
+  try {
+    const { PDFDocument } = await loadPdfLib();
+    const src = await PDFDocument.load(lastPdfBytes, {
+      ignoreEncryption: true,
+    });
+    const total = src.getPageCount();
+
+    let bytes;
+    let rangeLabel = `全${total}ページ`;
+    if (lastPageRange) {
+      const start = Math.max(1, lastPageRange[0]);
+      const end = Math.min(total, lastPageRange[1]);
+      const indices = [];
+      for (let p = start; p <= end; p++) indices.push(p - 1);
+      const out = await PDFDocument.create();
+      const pages = await out.copyPages(src, indices);
+      for (const pg of pages) out.addPage(pg);
+      bytes = await out.save();
+      rangeLabel =
+        start === end ? `${start}ページのみ` : `${start}〜${end}ページ`;
+    } else {
+      bytes = await src.save();
+    }
+
+    const yearKey = $("year").value;
+    const subject = $("subject").value;
+    const docType = $("type").value;
+    const yearLabel = yearKey.startsWith("r")
+      ? `令和${yearKey.slice(1)}年`
+      : `平成${yearKey.slice(1)}年`;
+    const filename = `${yearLabel}${subject}${docType}（原典抜粋）.pdf`;
+
+    const blob = new Blob([bytes], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    appendLog(
+      `原典PDFの該当ページ（${rangeLabel} / 原典 全${total}ページ）を保存しました。`,
+      "ok",
+    );
+  } catch (e) {
+    appendLog(`原典PDFの抽出に失敗: ${e.message} — 元のPDFを開きます。`, "warn");
+    if (lastPdfUrl) window.open(lastPdfUrl, "_blank", "noopener");
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function checkWorkerStatus() {
@@ -1043,5 +1155,5 @@ window.addEventListener("DOMContentLoaded", () => {
   $("run").addEventListener("click", onRun);
   $("copy").addEventListener("click", onCopy);
   $("download").addEventListener("click", onDownload);
-  $("source").addEventListener("click", onOpenSource);
+  $("source").addEventListener("click", onSaveSourcePdf);
 });
