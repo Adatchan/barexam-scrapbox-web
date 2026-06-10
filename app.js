@@ -371,7 +371,7 @@ function groupLinesIntoBlocks(lines) {
     if (/^【[^【】]+】$/.test(t)) return true;
     if (/^〔[^〔〕]+〕$/.test(t)) return true;
     if (/^〔第[１２３]問〕/.test(t) && t.length < 120) return true;
-    if (/^〔設問[0-9０-９]+〕/.test(t) && t.length < 120) return true;
+    if (/^〔設問[0-9０-９]*〕/.test(t) && t.length < 120) return true;
     // 採点実感のセクションタイトル（句点で終わらないため、放置すると
     // 直後の本文と結合されてタイトル判定に失敗する年度がある）
     if (isSaitenTitle(t)) return true;
@@ -391,6 +391,11 @@ function groupLinesIntoBlocks(lines) {
   // 文末記号で終わっているか（「。」「．」「！」「？」、後続に閉じカッコや空白を許容）
   const SENTENCE_END = /[。．！？!?][」』）)\s]*$/;
 
+  // 法律案・資料などの構造マーカー行（「第１ ○○」「１ ○○」）。
+  // この行から新しいブロックを開始する（行自体は後続と結合してよい）。
+  const isStructureMarker = (l) =>
+    /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ]/.test(l.text);
+
   for (const line of lines) {
     if (!line.text) continue;
 
@@ -402,6 +407,12 @@ function groupLinesIntoBlocks(lines) {
 
     if (isStandaloneHeader(line)) {
       emitSolo(line);
+      continue;
+    }
+
+    if (isStructureMarker(line)) {
+      flush();
+      cur = [line];
       continue;
     }
 
@@ -486,7 +497,7 @@ function parseParagraphs(boxes, startMarker, endMarker) {
     const t = b.text;
     const x0 = b.x0;
 
-    if (/^〔設問[0-9０-９]+〕/.test(t)) {
+    if (/^〔設問[0-9０-９]*〕/.test(t)) {
       if (cur) paras.push(cur);
       cur = "";
       paras.push(t);
@@ -502,6 +513,20 @@ function parseParagraphs(boxes, startMarker, endMarker) {
       inLaw = false;
       continue;
     }
+    // 【資料】等の見出し直後の短いタイトル行（例: 法律案の骨子の題名）は
+    // 見出しと同じ行に結合する
+    if (
+      !cur &&
+      paras.length &&
+      /^【[^【】]+】$/.test(paras[paras.length - 1]) &&
+      t.length < 40 &&
+      !/[。．！？]$/.test(t) &&
+      !/^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ]/.test(t)
+    ) {
+      paras[paras.length - 1] += t;
+      prevX = x0;
+      continue;
+    }
     if (/^第\d+条/.test(t)) {
       if (cur) paras.push(cur);
       cur = t;
@@ -511,6 +536,13 @@ function parseParagraphs(boxes, startMarker, endMarker) {
     }
     if (inLaw) {
       cur += t;
+      continue;
+    }
+    // 構造マーカー（「第１ ○○」「１ ○○」）は新しい段落を開始する
+    if (/^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ]/.test(t)) {
+      if (cur) paras.push(cur);
+      cur = t;
+      prevX = x0;
       continue;
     }
 
@@ -724,15 +756,25 @@ function toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate) {
     out.push(`#司法試験 #${tag} #論文式 #${yearLabel}`);
   }
   out.push("");
+  // 【資料】ブロック内は構造マーカー行（「第１ ○○」「１ ○○」）を
+  // 空行なしの連続行として出力する
+  const isMarker = (p) =>
+    /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ]/.test(p);
+  let tight = false;
   for (const p of paras) {
-    if (/^〔設問[0-9０-９]+〕/.test(p)) {
+    if (/^〔設問[0-9０-９]*〕/.test(p)) {
       // 設問見出しは前に空行を1つ足し（計2行空け）、直後の本文は次行に続ける
+      tight = false;
       out.push("");
       out.push(decorate ? `[** ${p}]` : p);
     } else if (/^【.+】/.test(p)) {
+      tight = p.includes("資料");
       out.push(decorate ? `[* ${p}]` : p);
-      out.push("");
+      if (!tight) out.push("");
+    } else if (tight && isMarker(p)) {
+      out.push(p);
     } else {
+      tight = false;
       out.push(p);
       out.push("");
     }
