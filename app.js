@@ -53,7 +53,9 @@ const RESULTS_URL_MAP = {
   r7: "https://www.moj.go.jp/jinji/shihoushiken/jinji08_00265.html",
 };
 
-const NO_SAITEN = new Set(["r1"]);
+// 採点実感が法務省ウェブに掲載されていない年度（現時点ではなし。
+// かつて r1 を指定していたが、実際には掲載されている）
+const NO_SAITEN = new Set([]);
 
 // 科目 → [系列名, 問番号, 表示ラベル, 選択科目キーワード(任意)]
 const SUBJECT_MAP = {
@@ -66,6 +68,10 @@ const SUBJECT_MAP = {
   刑訴: ["刑事系科目", 2, "刑事系第２問（刑事訴訟法）"],
   経済法第１問: ["選択科目", 1, "選択科目（経済法）第１問", "経済法"],
   経済法第２問: ["選択科目", 2, "選択科目（経済法）第２問", "経済法"],
+  労働法第１問: ["選択科目", 1, "選択科目（労働法）第１問", "労働法"],
+  労働法第２問: ["選択科目", 2, "選択科目（労働法）第２問", "労働法"],
+  倒産法第１問: ["選択科目", 1, "選択科目（倒産法）第１問", "倒産法"],
+  倒産法第２問: ["選択科目", 2, "選択科目（倒産法）第２問", "倒産法"],
 };
 
 const Q_KANJI = { 1: "１", 2: "２", 3: "３" };
@@ -172,7 +178,12 @@ async function fetchShushiPdfUrl(resultsUrl, sectionKeyword) {
     if (m) return resolveUrl(m[1], resultsUrl);
   }
 
-  const subM = /href="(\/jinji[^"]+\.html)"[^>]*>[^<]*出題の趣旨/.exec(html);
+  // サブページへのリンクは相対（/jinji/...）と絶対（https://www.moj.go.jp/jinji/...）
+  // の両方の書き方が混在する（例: 令和元年は絶対URL）
+  const subM =
+    /href="((?:https?:\/\/www\.moj\.go\.jp)?\/jinji[^"]+\.html)"[^>]*>[^<]*出題の趣旨/.exec(
+      html,
+    );
 
   if (subM && sectionKeyword) {
     const subUrl = resolveUrl(subM[1], resultsUrl);
@@ -213,7 +224,11 @@ async function fetchSaitenPdfUrl(resultsUrl, systemName, sectionKeyword) {
   }
 
   const directM = /href="([^"#]+\.pdf)"[^>]*>[^<]*採点実感/.exec(html);
-  const subM = /href="(\/jinji[^"]+\.html)"[^>]*>[^<]*採点実感/.exec(html);
+  // 相対・絶対どちらの URL 表記でもサブページを拾う（令和元年は絶対URL）
+  const subM =
+    /href="((?:https?:\/\/www\.moj\.go\.jp)?\/jinji[^"]+\.html)"[^>]*>[^<]*採点実感/.exec(
+      html,
+    );
 
   if (subM) {
     const subUrl = resolveUrl(subM[1], resultsUrl);
