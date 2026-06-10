@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   update-years:
@@ -36,3 +37,10 @@ jobs:
           git add years.js
           git commit -m "chore: 法務省ウェブの巡回により年度対応表を自動更新"
           git push
+
+      # リポジトリに60日間コミットがないと GitHub が定期実行を自動停止する
+      # ため、実行のたびに再有効化してタイマーをリセットする
+      - name: 定期実行の自動停止を防止
+        run: gh workflow enable update-years.yml --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}
