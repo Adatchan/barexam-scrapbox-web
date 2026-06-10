@@ -1147,7 +1147,7 @@ async function onSaveSourcePdf() {
       out = src;
     }
 
-    // 各ページのヘッダー右側にファイル名を記載
+    // 各ページのフッター右側にファイル名を記載
     const stamp = makeTextStampPng(baseName);
     const stampImg = await out.embedPng(stamp.dataUrl);
     const stampH = 9; // pt
@@ -1155,7 +1155,7 @@ async function onSaveSourcePdf() {
     for (const page of out.getPages()) {
       page.drawImage(stampImg, {
         x: page.getWidth() - stampW - 28,
-        y: page.getHeight() - stampH - 16,
+        y: 16,
         width: stampW,
         height: stampH,
         opacity: 0.85,
