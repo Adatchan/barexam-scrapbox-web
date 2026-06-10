@@ -1,4 +1,4 @@
-# 司法試験論文式 → Scrapbox 変換（ブラウザ版）
+# BarBox – 司法試験論文式過去問を Scrapbox へ（ブラウザ版）
 
 Mac / iPhone / iPad / Windows の任意のブラウザから動かせる静的 Web アプリ版です。
 
