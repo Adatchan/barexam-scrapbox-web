@@ -17,6 +17,8 @@ const PDFJS_CDN = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION
 // ─── データテーブル ────────────────────────────────────────────────────────
 // 年度→URL対応表は scripts/update-years.mjs が自動更新する years.js に分離
 import { YEAR_URL_MAP, RESULTS_URL_MAP } from "./years.js";
+// 更新情報（自動クロールが news.js に追記する）
+import { NEWS } from "./news.js";
 
 // 採点実感が法務省ウェブに掲載されていない年度（現時点ではなし。
 // かつて r1 を指定していたが、実際には掲載されている）
@@ -920,6 +922,20 @@ function initSelectors() {
   }
 }
 
+function initNews() {
+  const list = $("news-list");
+  if (!list) return;
+  for (const item of NEWS.slice(0, 5)) {
+    const li = document.createElement("li");
+    const date = document.createElement("span");
+    date.className = "news-date";
+    date.textContent = item.date;
+    li.appendChild(date);
+    li.appendChild(document.createTextNode(item.text));
+    list.appendChild(li);
+  }
+}
+
 function setupTabs() {
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -1148,6 +1164,7 @@ function checkWorkerStatus() {
 // ── 起動 ─────────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   initSelectors();
+  initNews();
   setupTabs();
   checkWorkerStatus();
   $("run").addEventListener("click", onRun);

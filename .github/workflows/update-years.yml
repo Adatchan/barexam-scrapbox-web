@@ -23,19 +23,19 @@ jobs:
         with:
           node-version: 22
 
-      - name: 法務省ページを巡回して years.js を更新
+      - name: 法務省ページを巡回して years.js / news.js を更新
         run: node scripts/update-years.mjs
 
       - name: 変更があればコミットしてプッシュ
         run: |
-          if git diff --quiet years.js; then
+          if git diff --quiet years.js news.js; then
             echo "変更なし"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add years.js
-          git commit -m "chore: 法務省ウェブの巡回により年度対応表を自動更新"
+          git add years.js news.js
+          git commit -m "chore: 法務省ウェブの巡回により年度対応表・更新情報を自動更新"
           git push
 
       # リポジトリに60日間コミットがないと GitHub が定期実行を自動停止する

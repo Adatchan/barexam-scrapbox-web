@@ -75,6 +75,42 @@ textarea {
   font-size: 0.9rem;
 }
 
+/* ── 更新情報 ────────────────────────────────────────── */
+.news {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary-mid);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 24px;
+}
+
+.news-title {
+  margin: 0 0 4px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: 0.04em;
+}
+
+.news-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.news-list li {
+  padding: 2px 0;
+}
+
+.news-list .news-date {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.75em;
+}
+
 /* ── フォーム ────────────────────────────────────────── */
 .form {
   display: grid;

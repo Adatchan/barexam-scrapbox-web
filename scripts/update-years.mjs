@@ -14,10 +14,11 @@
 // =============================================================================
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const YEARS_JS = join(ROOT, "years.js");
+const NEWS_JS = join(ROOT, "news.js");
 
 const JISSHI_HUB = "https://www.moj.go.jp/jinji/shihoushiken/jinji08_00025.html";
 const KEKKA_HUB = "https://www.moj.go.jp/jinji/shihoushiken/jinji08_00026.html";
@@ -92,6 +93,51 @@ function sortKeys(keys) {
   return [...keys].sort((a, b) => rank(a) - rank(b));
 }
 
+// "r8" → 令和8年 / "r1" → 令和元年 / "h30" → 平成30年
+function yearKeyToLabel(key) {
+  const era = key[0] === "r" ? "令和" : "平成";
+  const n = Number(key.slice(1));
+  return `${era}${era === "令和" && n === 1 ? "元" : n}年`;
+}
+
+// JST の今日の日付を "YYYY.MM.DD" で返す
+function todayJst() {
+  const parts = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (t) => parts.find((p) => p.type === t).value;
+  return `${get("year")}.${get("month")}.${get("day")}`;
+}
+
+function renderNewsJs(news, state) {
+  const newsLines = news
+    .map((n) => `  { date: ${JSON.stringify(n.date)}, text: ${JSON.stringify(n.text)} },`)
+    .join("\n");
+  const stateLines = sortKeys(Object.keys(state))
+    .map((k) => `  ${k}: { shushi: ${!!state[k].shushi}, saiten: ${!!state[k].saiten} },`)
+    .join("\n");
+  return `// =============================================================================
+// 更新情報
+//
+// このファイルは scripts/update-years.mjs により自動更新されます。
+// NEWS: 画面の「更新情報」欄に表示されるお知らせ（新しい順）
+// CRAWL_STATE: 年度ごとに出題の趣旨・採点実感の掲載を確認済みかの記録
+//              （未確認の項目だけを週次クロールで再チェックする）
+// =============================================================================
+
+export const NEWS = [
+${newsLines}
+];
+
+export const CRAWL_STATE = {
+${stateLines}
+};
+`;
+}
+
 function loadExistingMaps() {
   let src;
   try {
@@ -143,6 +189,18 @@ const existing = loadExistingMaps();
 const yearMap = { ...existing.YEAR_URL_MAP };
 const resultsMap = { ...existing.RESULTS_URL_MAP };
 
+// 更新情報と巡回状態（news.js は純粋なデータ ESM なので import で読む）
+const { NEWS: news, CRAWL_STATE: state } = await import(
+  pathToFileURL(NEWS_JS).href
+).then(
+  (m) => ({ NEWS: [...m.NEWS], CRAWL_STATE: structuredClone(m.CRAWL_STATE) }),
+  () => ({ NEWS: [], CRAWL_STATE: {} }),
+);
+const addNews = (text) => {
+  news.unshift({ date: todayJst(), text });
+  console.log(`+ NEWS: ${text}`);
+};
+
 // 結果ハブ: 年度ページ URL をそのまま採用
 const kekkaHub = parseHub(await fetchHtml(KEKKA_HUB), KEKKA_HUB);
 if (Object.keys(kekkaHub).length === 0)
@@ -166,20 +224,41 @@ for (const [key, pageUrl] of Object.entries(jisshiHub)) {
   if (examUrl) {
     yearMap[key] = examUrl;
     console.log(`+ YEAR_URL_MAP ${key}: ${examUrl}`);
+    addNews(`${yearKeyToLabel(key)}の試験問題が掲載されました。`);
   } else {
     console.log(`  ${key}: 試験問題リンク未掲載のためスキップ (${pageUrl})`);
   }
 }
 
-const next = renderYearsJs(yearMap, resultsMap);
-let current = "";
-try {
-  current = readFileSync(YEARS_JS, "utf8");
-} catch {}
-
-if (next !== current) {
-  writeFileSync(YEARS_JS, next);
-  console.log("CHANGED");
-} else {
-  console.log("UNCHANGED");
+// 出題の趣旨・採点実感の掲載チェック（未確認の年度だけ結果ページを見に行く）
+for (const key of sortKeys(Object.keys(resultsMap))) {
+  if (rank(key) < MIN_RANK) continue;
+  const st = (state[key] ??= { shushi: false, saiten: false });
+  if (st.shushi && st.saiten) continue;
+  const html = await fetchHtml(resultsMap[key]);
+  if (!st.shushi && /href="[^"]+"[^>]*>[^<]*出題の趣旨/.test(html)) {
+    st.shushi = true;
+    addNews(`${yearKeyToLabel(key)}の出題の趣旨が掲載されました。`);
+  }
+  if (!st.saiten && /href="[^"]+"[^>]*>[^<]*採点実感/.test(html)) {
+    st.saiten = true;
+    addNews(`${yearKeyToLabel(key)}の採点実感が掲載されました。`);
+  }
 }
+
+// ─── 書き出し ──────────────────────────────────────────────────────────────
+let changed = false;
+const writeIfChanged = (path, next) => {
+  let current = "";
+  try {
+    current = readFileSync(path, "utf8");
+  } catch {}
+  if (next !== current) {
+    writeFileSync(path, next);
+    changed = true;
+  }
+};
+
+writeIfChanged(YEARS_JS, renderYearsJs(yearMap, resultsMap));
+writeIfChanged(NEWS_JS, renderNewsJs(news, state));
+console.log(changed ? "CHANGED" : "UNCHANGED");
