@@ -153,6 +153,24 @@ textarea {
   border-color: var(--primary-mid);
 }
 
+.radio-group {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+
+.radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.radio input {
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
 /* ── ボタン ──────────────────────────────────────────── */
 .actions {
   grid-column: 1 / -1;

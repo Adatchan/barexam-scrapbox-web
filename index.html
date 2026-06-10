@@ -46,6 +46,20 @@
           </select>
         </div>
 
+        <div class="field">
+          <label>出力形式</label>
+          <div class="radio-group">
+            <label class="radio">
+              <input type="radio" name="format" value="plain" checked />
+              ノーマル
+            </label>
+            <label class="radio">
+              <input type="radio" name="format" value="scrapbox" />
+              Scrapbox記法
+            </label>
+          </div>
+        </div>
+
         <div class="actions">
           <button id="run" class="btn-primary" type="button">変換実行</button>
           <button id="copy" class="btn-secondary" type="button" disabled>
@@ -104,6 +118,6 @@
       src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20260610.10"></script>
+    <script type="module" src="./app.js?v=20260610.11"></script>
   </body>
 </html>

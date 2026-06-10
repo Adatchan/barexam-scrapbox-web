@@ -371,7 +371,7 @@ function groupLinesIntoBlocks(lines) {
     if (/^【[^【】]+】$/.test(t)) return true;
     if (/^〔[^〔〕]+〕$/.test(t)) return true;
     if (/^〔第[１２３]問〕/.test(t) && t.length < 120) return true;
-    if (/^〔設問\d+〕/.test(t) && t.length < 120) return true;
+    if (/^〔設問[0-9０-９]+〕/.test(t) && t.length < 120) return true;
     // 採点実感のセクションタイトル（句点で終わらないため、放置すると
     // 直後の本文と結合されてタイトル判定に失敗する年度がある）
     if (isSaitenTitle(t)) return true;
@@ -486,7 +486,7 @@ function parseParagraphs(boxes, startMarker, endMarker) {
     const t = b.text;
     const x0 = b.x0;
 
-    if (/^〔設問\d+〕/.test(t)) {
+    if (/^〔設問[0-9０-９]+〕/.test(t)) {
       if (cur) paras.push(cur);
       cur = "";
       paras.push(t);
@@ -713,43 +713,60 @@ function parseSaitenSection(boxes, systemName, qNum, sectionKeyword, subjectLabe
   );
 }
 
-// ─── Scrapbox 記法変換 ────────────────────────────────────────────────────
-function toScrapbox(paras, yearLabel, subjectLabel, pdfUrl) {
-  let tag;
-  const m = /（(.+)）/.exec(subjectLabel);
-  tag = m ? m[1] : subjectLabel;
+// ─── テキスト出力（ノーマル / Scrapbox 記法） ──────────────────────────────
+// decorate=true のときだけ Scrapbox の装飾（[* ] [** ] #タグ）を付ける
+function toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate) {
   const out = [`${yearLabel}司法試験　${subjectLabel}`];
   if (pdfUrl) out.push(pdfUrl);
-  out.push(`#司法試験 #${tag} #論文式 #${yearLabel}`);
+  if (decorate) {
+    const m = /（(.+)）/.exec(subjectLabel);
+    const tag = m ? m[1] : subjectLabel;
+    out.push(`#司法試験 #${tag} #論文式 #${yearLabel}`);
+  }
   out.push("");
   for (const p of paras) {
-    if (/^〔設問\d+〕/.test(p)) out.push(`[** ${p}]`);
-    else if (/^【.+】/.test(p)) out.push(`[* ${p}]`);
-    else out.push(p);
-    out.push("");
+    if (/^〔設問[0-9０-９]+〕/.test(p)) {
+      // 設問見出しは前に空行を1つ足し（計2行空け）、直後の本文は次行に続ける
+      out.push("");
+      out.push(decorate ? `[** ${p}]` : p);
+    } else if (/^【.+】/.test(p)) {
+      out.push(decorate ? `[* ${p}]` : p);
+      out.push("");
+    } else {
+      out.push(p);
+      out.push("");
+    }
   }
   return out.join("\n").replace(/\s+$/, "") + "\n";
 }
 
-function toScrapboxNarrative(paras, yearLabel, subjectLabel, docType, pdfUrl) {
-  let tag;
-  const m = /（(.+)）/.exec(subjectLabel);
-  tag = m ? m[1] : subjectLabel;
+function toScrapboxNarrative(
+  paras,
+  yearLabel,
+  subjectLabel,
+  docType,
+  pdfUrl,
+  decorate,
+) {
   const out = [`${yearLabel}司法試験　${subjectLabel}　${docType}`];
   if (pdfUrl) out.push(pdfUrl);
-  out.push(`#司法試験 #${tag} #論文式 #${yearLabel} #${docType}`);
+  if (decorate) {
+    const m = /（(.+)）/.exec(subjectLabel);
+    const tag = m ? m[1] : subjectLabel;
+    out.push(`#司法試験 #${tag} #論文式 #${yearLabel} #${docType}`);
+  }
   out.push("");
   for (const p of paras) {
     const ps = p.trim();
-    if (isSaitenTitle(p)) out.push(`[** ${p}]`);
-    else if (/^〔第[１２３]問〕$/.test(ps)) out.push(`[** ${ps}]`);
-    else if (/^【.+】$/.test(ps)) out.push(`[* ${ps}]`);
+    if (isSaitenTitle(p)) out.push(decorate ? `[** ${p}]` : p);
+    else if (/^〔第[１２３]問〕$/.test(ps)) out.push(decorate ? `[** ${ps}]` : ps);
+    else if (/^【.+】$/.test(ps)) out.push(decorate ? `[* ${ps}]` : ps);
     else if (
       p.length < 30 &&
       /^[１２３４５６７８９\d]+[　\s]/.test(p) &&
       !p.includes("\n")
     )
-      out.push(`[* ${p}]`);
+      out.push(decorate ? `[* ${p}]` : p);
     else out.push(p);
     out.push("");
   }
@@ -762,7 +779,7 @@ function parseYearKey(key) {
   return { key, label: `平成${key.slice(1)}年` };
 }
 
-async function runConversion({ yearKey, subject, docType }, ctx) {
+async function runConversion({ yearKey, subject, docType, decorate }, ctx) {
   const { log, setProgress } = ctx;
   if (!(yearKey in YEAR_URL_MAP)) throw new Error(`未対応の年度: ${yearKey}`);
   if (!(subject in SUBJECT_MAP)) throw new Error(`未対応の科目: ${subject}`);
@@ -882,8 +899,15 @@ async function runConversion({ yearKey, subject, docType }, ctx) {
 
   const result =
     docType === "試験問題"
-      ? toScrapbox(paras, yearLabel, subjectLabel, pdfUrl)
-      : toScrapboxNarrative(paras, yearLabel, subjectLabel, docType, pdfUrl);
+      ? toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate)
+      : toScrapboxNarrative(
+          paras,
+          yearLabel,
+          subjectLabel,
+          docType,
+          pdfUrl,
+          decorate,
+        );
 
   setProgress(1.0);
   return {
@@ -977,10 +1001,16 @@ let lastPdfUrl = "";
 let lastPdfBytes = null;
 let lastPageRange = null;
 
+function selectedFormat() {
+  const el = document.querySelector('input[name="format"]:checked');
+  return el ? el.value : "plain";
+}
+
 async function onRun() {
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const docType = $("type").value;
+  const decorate = selectedFormat() === "scrapbox";
 
   $("log").textContent = "";
   $("result").textContent = "";
@@ -1013,7 +1043,7 @@ async function onRun() {
       pageRange,
       pdfBytes,
     } = await runConversion(
-      { yearKey, subject, docType },
+      { yearKey, subject, docType, decorate },
       {
         log: (m) => appendLog(m, "info"),
         setProgress: setProgressBar,
@@ -1069,7 +1099,8 @@ function onDownload() {
       : docType === "出題の趣旨"
         ? "出題の趣旨"
         : "採点実感";
-  const filename = `${yearLabel}${subject}${suffix}（scrapbox記法）.txt`;
+  const formatSuffix = selectedFormat() === "scrapbox" ? "（scrapbox記法）" : "";
+  const filename = `${yearLabel}${subject}${suffix}${formatSuffix}.txt`;
   const blob = new Blob([lastResult], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
