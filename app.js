@@ -859,7 +859,7 @@ async function runConversion({ yearKey, subject, docType }, ctx) {
       : toScrapboxNarrative(paras, yearLabel, subjectLabel, docType, pdfUrl);
 
   setProgress(1.0);
-  return { yearLabel, subjectLabel, docType, result };
+  return { yearLabel, subjectLabel, docType, result, pdfUrl };
 }
 
 // =============================================================================
@@ -924,6 +924,7 @@ function setProgressBar(frac) {
 }
 
 let lastResult = "";
+let lastPdfUrl = "";
 
 async function onRun() {
   const yearKey = $("year").value;
@@ -933,8 +934,10 @@ async function onRun() {
   $("log").textContent = "";
   $("result").textContent = "";
   lastResult = "";
+  lastPdfUrl = "";
   $("copy").disabled = true;
   $("download").disabled = true;
+  $("source").disabled = true;
   $("run").disabled = true;
   setProgressBar(0);
   setStatus("開始");
@@ -948,17 +951,20 @@ async function onRun() {
     .forEach((p) => p.classList.toggle("active", p.id === "log"));
 
   try {
-    const { yearLabel, subjectLabel, docType: dt, result } = await runConversion(
-      { yearKey, subject, docType },
-      {
-        log: (m) => appendLog(m, "info"),
-        setProgress: setProgressBar,
-      },
-    );
+    const { yearLabel, subjectLabel, docType: dt, result, pdfUrl } =
+      await runConversion(
+        { yearKey, subject, docType },
+        {
+          log: (m) => appendLog(m, "info"),
+          setProgress: setProgressBar,
+        },
+      );
     lastResult = result;
+    lastPdfUrl = pdfUrl || "";
     $("result").textContent = result;
     $("copy").disabled = false;
     $("download").disabled = false;
+    $("source").disabled = !lastPdfUrl;
     appendLog(`完了: ${yearLabel} ${subjectLabel} ${dt}`, "ok");
     setStatus("完了", "ok");
 
@@ -1013,6 +1019,11 @@ function onDownload() {
   URL.revokeObjectURL(url);
 }
 
+function onOpenSource() {
+  if (!lastPdfUrl) return;
+  window.open(lastPdfUrl, "_blank", "noopener");
+}
+
 function checkWorkerStatus() {
   const el = $("worker-status");
   if (WORKER_URL.includes("example.workers.dev")) {
@@ -1032,4 +1043,5 @@ window.addEventListener("DOMContentLoaded", () => {
   $("run").addEventListener("click", onRun);
   $("copy").addEventListener("click", onCopy);
   $("download").addEventListener("click", onDownload);
+  $("source").addEventListener("click", onOpenSource);
 });
