@@ -1109,10 +1109,11 @@ async function onSaveSourcePdf() {
 
     const yearKey = $("year").value;
     const subject = $("subject").value;
+    const docType = $("type").value;
     const yearLabel = yearKey.startsWith("r")
       ? `令和${yearKey.slice(1)}年`
       : `平成${yearKey.slice(1)}年`;
-    const filename = `${yearLabel}司法試験${subject}.pdf`;
+    const filename = `${yearLabel}司法試験${subject}${docType}.pdf`;
 
     const blob = new Blob([bytes], { type: "application/pdf" });
     const url = URL.createObjectURL(blob);
