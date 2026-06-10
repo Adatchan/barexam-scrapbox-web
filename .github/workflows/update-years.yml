@@ -1,0 +1,38 @@
+# 法務省ウェブを週1回巡回し、新年度の司法試験ページを検出したら
+# years.js を自動更新してデプロイするワークフロー。
+# （試験問題は例年8月頃、出題の趣旨・採点実感は9〜11月頃に掲載される）
+name: 新年度の自動取り込み
+
+on:
+  schedule:
+    # 毎週月曜 09:00 JST (00:00 UTC)
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-years:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 法務省ページを巡回して years.js を更新
+        run: node scripts/update-years.mjs
+
+      - name: 変更があればコミットしてプッシュ
+        run: |
+          if git diff --quiet years.js; then
+            echo "変更なし"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add years.js
+          git commit -m "chore: 法務省ウェブの巡回により年度対応表を自動更新"
+          git push
