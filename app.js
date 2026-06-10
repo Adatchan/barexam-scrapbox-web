@@ -1089,6 +1089,24 @@ async function loadPdfLib() {
   return _pdfLibPromise;
 }
 
+// ファイル名をヘッダー用の透過 PNG として描画する（PDF への日本語テキスト
+// 埋め込みは日本語フォントの同梱が必要になるため、Canvas 描画で代替する）
+function makeTextStampPng(text) {
+  const fontPx = 48;
+  const font = `${fontPx}px -apple-system, "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif`;
+  const canvas = document.createElement("canvas");
+  let ctx = canvas.getContext("2d");
+  ctx.font = font;
+  canvas.width = Math.ceil(ctx.measureText(text).width) + 8;
+  canvas.height = Math.ceil(fontPx * 1.4);
+  ctx = canvas.getContext("2d"); // サイズ変更で状態が初期化されるため再設定
+  ctx.font = font;
+  ctx.fillStyle = "#555555";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, 4, canvas.height / 2);
+  return { dataUrl: canvas.toDataURL("image/png"), aspect: canvas.width / canvas.height };
+}
+
 async function onSaveSourcePdf() {
   if (!lastPdfBytes) {
     // バイト列がない場合は従来どおり原典をそのまま開く
@@ -1104,30 +1122,47 @@ async function onSaveSourcePdf() {
     });
     const total = src.getPageCount();
 
-    let bytes;
-    let rangeLabel = `全${total}ページ`;
-    if (lastPageRange) {
-      const start = Math.max(1, lastPageRange[0]);
-      const end = Math.min(total, lastPageRange[1]);
-      const indices = [];
-      for (let p = start; p <= end; p++) indices.push(p - 1);
-      const out = await PDFDocument.create();
-      const pages = await out.copyPages(src, indices);
-      for (const pg of pages) out.addPage(pg);
-      bytes = await out.save();
-      rangeLabel =
-        start === end ? `${start}ページのみ` : `${start}〜${end}ページ`;
-    } else {
-      bytes = await src.save();
-    }
-
     const yearKey = $("year").value;
     const subject = $("subject").value;
     const docType = $("type").value;
     const yearLabel = yearKey.startsWith("r")
       ? `令和${yearKey.slice(1)}年`
       : `平成${yearKey.slice(1)}年`;
-    const filename = `${yearLabel}司法試験${subject}${docType}.pdf`;
+    const baseName = `${yearLabel}司法試験${subject}${docType}`;
+    const filename = `${baseName}.pdf`;
+
+    let out;
+    let rangeLabel = `全${total}ページ`;
+    if (lastPageRange) {
+      const start = Math.max(1, lastPageRange[0]);
+      const end = Math.min(total, lastPageRange[1]);
+      const indices = [];
+      for (let p = start; p <= end; p++) indices.push(p - 1);
+      out = await PDFDocument.create();
+      const pages = await out.copyPages(src, indices);
+      for (const pg of pages) out.addPage(pg);
+      rangeLabel =
+        start === end ? `${start}ページのみ` : `${start}〜${end}ページ`;
+    } else {
+      out = src;
+    }
+
+    // 各ページのヘッダー右側にファイル名を記載
+    const stamp = makeTextStampPng(baseName);
+    const stampImg = await out.embedPng(stamp.dataUrl);
+    const stampH = 9; // pt
+    const stampW = stampH * stamp.aspect;
+    for (const page of out.getPages()) {
+      page.drawImage(stampImg, {
+        x: page.getWidth() - stampW - 28,
+        y: page.getHeight() - stampH - 16,
+        width: stampW,
+        height: stampH,
+        opacity: 0.85,
+      });
+    }
+
+    const bytes = await out.save();
 
     const blob = new Blob([bytes], { type: "application/pdf" });
     const url = URL.createObjectURL(blob);
