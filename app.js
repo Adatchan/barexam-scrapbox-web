@@ -295,11 +295,23 @@ async function onSaveSourceZip() {
   }
 }
 
+// 年度・科目・種類が変わったら、直前の変換結果に依存する
+// コピー / .txt 保存を無効化する（古い内容と新しい選択の組合せで
+// 保存される事故を防ぐ。処理キャッシュはキーが選択値なので破棄不要）
+function invalidateResult() {
+  lastResult = "";
+  $("copy").disabled = true;
+  $("download").disabled = true;
+}
+
 // ── 起動 ─────────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   initSelectors();
   initNews();
   setupTabs();
+  for (const id of ["year", "subject", "type"]) {
+    $(id).addEventListener("change", invalidateResult);
+  }
   $("run").addEventListener("click", onRun);
   $("copy").addEventListener("click", onCopy);
   $("download").addEventListener("click", onDownload);
