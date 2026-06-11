@@ -747,9 +747,14 @@ function parseSaitenSection(boxes, systemName, qNum, sectionKeyword, subjectLabe
 
 // ─── テキスト出力（ノーマル / Scrapbox 記法） ──────────────────────────────
 // decorate=true のときだけ Scrapbox の装飾（[* ] [** ] #タグ）を付ける
+// 公共データ利用規約（PDL1.0）に基づく出典・加工の表示
+function sourceLine(pdfUrl) {
+  return `出典：法務省ウェブサイト（${pdfUrl}）を加工して作成`;
+}
+
 function toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate) {
   const out = [`${yearLabel}司法試験　${subjectLabel}`];
-  if (pdfUrl) out.push(pdfUrl);
+  if (pdfUrl) out.push(sourceLine(pdfUrl));
   if (decorate) {
     const m = /（(.+)）/.exec(subjectLabel);
     const tag = m ? m[1] : subjectLabel;
@@ -791,7 +796,7 @@ function toScrapboxNarrative(
   decorate,
 ) {
   const out = [`${yearLabel}司法試験　${subjectLabel}　${docType}`];
-  if (pdfUrl) out.push(pdfUrl);
+  if (pdfUrl) out.push(sourceLine(pdfUrl));
   if (decorate) {
     const m = /（(.+)）/.exec(subjectLabel);
     const tag = m ? m[1] : subjectLabel;
@@ -1220,17 +1225,28 @@ async function onSaveSourcePdf() {
       out = src;
     }
 
-    // 各ページのフッター右側にファイル名を記載
+    // 各ページのフッターにファイル名（右）と出典・加工表示（左）を記載
     const stamp = makeTextStampPng(baseName);
     const stampImg = await out.embedPng(stamp.dataUrl);
     const stampH = 9; // pt
     const stampW = stampH * stamp.aspect;
+    const srcStamp = makeTextStampPng(sourceLine(lastPdfUrl));
+    const srcImg = await out.embedPng(srcStamp.dataUrl);
+    const srcH = 7; // pt
+    const srcW = srcH * srcStamp.aspect;
     for (const page of out.getPages()) {
       page.drawImage(stampImg, {
         x: page.getWidth() - stampW - 28,
         y: 16,
         width: stampW,
         height: stampH,
+        opacity: 0.85,
+      });
+      page.drawImage(srcImg, {
+        x: 28,
+        y: 17,
+        width: srcW,
+        height: srcH,
         opacity: 0.85,
       });
     }

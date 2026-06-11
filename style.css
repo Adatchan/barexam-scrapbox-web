@@ -75,6 +75,16 @@ textarea {
   font-size: 0.9rem;
 }
 
+.disclaimer {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.disclaimer a {
+  color: var(--primary-mid);
+}
+
 /* ── 更新情報 ────────────────────────────────────────── */
 .news {
   background: var(--panel-2);
