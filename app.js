@@ -391,10 +391,10 @@ function groupLinesIntoBlocks(lines) {
   // 文末記号で終わっているか（「。」「．」「！」「？」、後続に閉じカッコや空白を許容）
   const SENTENCE_END = /[。．！？!?][」』）)\s]*$/;
 
-  // 法律案・資料などの構造マーカー行（「第１ ○○」「１ ○○」）。
+  // 法律案・資料・事例などの構造マーカー行（「第１ ○○」「１ ○○」「１．○○」）。
   // この行から新しいブロックを開始する（行自体は後続と結合してよい）。
   const isStructureMarker = (l) =>
-    /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ]/.test(l.text);
+    /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ．.]/.test(l.text);
 
   // 会話文の開始行（「甲：」「Ｘ：」のような短い話者名＋全角コロン）
   const isDialogueLine = (l) => /^[^\s。、．：]{1,4}：/.test(l.text);
@@ -541,14 +541,26 @@ function parseParagraphs(boxes, startMarker, endMarker) {
       cur += t;
       continue;
     }
-    // 構造マーカー（「第１ ○○」「１ ○○」）や会話文の開始
+    // 構造マーカー（「第１ ○○」「１ ○○」「１．○○」）や会話文の開始
     // （「甲：」「Ｘ：」）は新しい段落を開始する
     if (
-      /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ]/.test(t) ||
+      /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ．.]/.test(t) ||
       /^[^\s。、．：]{1,4}：/.test(t)
     ) {
       if (cur) paras.push(cur);
       cur = t;
+      prevX = x0;
+      continue;
+    }
+
+    // 会話の発言が改ページ等で分断された場合の継続
+    // （発言が文末記号で終わっていなければ続きとみなして結合する）
+    if (
+      cur &&
+      /^[^\s。、．：]{1,4}：/.test(cur) &&
+      !/[。．！？!?][」』）)\s]*$/.test(cur)
+    ) {
+      cur += t;
       prevX = x0;
       continue;
     }
@@ -768,39 +780,39 @@ function toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate) {
     out.push(`#司法試験 #${tag} #論文式 #${yearLabel}`);
   }
   out.push("");
-  // 【資料】ブロック内は構造マーカー行（「第１ ○○」「１ ○○」）を
-  // 空行なしの連続行として出力する
+  // 構造マーカー行（「第１ ○○」「１ ○○」「１．○○」）と会話文
+  // （「甲：」「Ｘ：」）は空行なしの連続行として出力する
   const isMarker = (p) =>
-    /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ]/.test(p);
-  // 会話文（「甲：」「Ｘ：」）も空行なしの連続行として出力する
+    /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ．.]/.test(p);
   const isDialogue = (p) => /^[^\s。、．：]{1,4}：/.test(p);
-  let tight = false;
   let inDialogue = false;
+  let inMarkerBlock = false;
   for (const p of paras) {
     const dialogue = isDialogue(p);
-    // 会話ブロックの終わりには空行を1つ入れる
-    if (inDialogue && !dialogue) out.push("");
+    const marker = !dialogue && isMarker(p);
+    // 連続行ブロック（会話・番号付き項目）の終わりには空行を1つ入れる
+    if ((inDialogue && !dialogue) || (inMarkerBlock && !marker && !dialogue))
+      out.push("");
     if (/^〔設問[0-9０-９]*〕/.test(p)) {
       // 設問見出しは前に空行を1つ足し（計2行空け）、直後の本文は次行に続ける
-      tight = false;
       out.push("");
       out.push(decorate ? `[** ${p}]` : p);
     } else if (/^【.+】/.test(p)) {
-      tight = p.includes("資料");
       out.push(decorate ? `[* ${p}]` : p);
-      if (!tight) out.push("");
+      // 【資料】は直後に題名・条項が続くため空行を入れない
+      if (!p.includes("資料")) out.push("");
     } else if (dialogue) {
       // 直前の段落・発言と空行なしで詰める
       if (out[out.length - 1] === "") out.pop();
       out.push(p);
-    } else if (tight && isMarker(p)) {
+    } else if (marker) {
       out.push(p);
     } else {
-      tight = false;
       out.push(p);
       out.push("");
     }
     inDialogue = dialogue;
+    inMarkerBlock = marker;
   }
   return out.join("\n").replace(/\s+$/, "") + "\n";
 }
