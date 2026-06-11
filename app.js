@@ -1215,7 +1215,87 @@ function makeTextStampPng(text) {
   return { dataUrl: canvas.toDataURL("image/png"), aspect: canvas.width / canvas.height };
 }
 
+// 原典PDFから該当ページを抜き出し、出典・ファイル名スタンプを付けた
+// PDF バイト列を生成する
+async function buildStampedPdf(pdfBytes, pageRange, baseName, pdfUrl) {
+  const { PDFDocument } = await loadPdfLib();
+  const src = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  const total = src.getPageCount();
+
+  let out;
+  let rangeLabel = `全${total}ページ`;
+  if (pageRange) {
+    const start = Math.max(1, pageRange[0]);
+    const end = Math.min(total, pageRange[1]);
+    const indices = [];
+    for (let p = start; p <= end; p++) indices.push(p - 1);
+    out = await PDFDocument.create();
+    const pages = await out.copyPages(src, indices);
+    for (const pg of pages) out.addPage(pg);
+    rangeLabel =
+      start === end ? `${start}ページのみ` : `${start}〜${end}ページ`;
+  } else {
+    out = src;
+  }
+
+  // 各ページのフッターにファイル名（右）と出典・加工表示（左）を記載
+  const stamp = makeTextStampPng(baseName);
+  const stampImg = await out.embedPng(stamp.dataUrl);
+  const stampH = 9; // pt
+  const stampW = stampH * stamp.aspect;
+  const srcStamp = makeTextStampPng(sourceLine(pdfUrl));
+  const srcImg = await out.embedPng(srcStamp.dataUrl);
+  const srcH = 7; // pt
+  const srcW = srcH * srcStamp.aspect;
+  for (const page of out.getPages()) {
+    page.drawImage(stampImg, {
+      x: page.getWidth() - stampW - 28,
+      y: 16,
+      width: stampW,
+      height: stampH,
+      opacity: 0.85,
+    });
+    page.drawImage(srcImg, {
+      x: 28,
+      y: 17,
+      width: srcW,
+      height: srcH,
+      opacity: 0.85,
+    });
+  }
+
+  return { bytes: await out.save(), rangeLabel, total };
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function currentYearLabel() {
+  const yearKey = $("year").value;
+  return yearKey.startsWith("r")
+    ? `令和${yearKey.slice(1)}年`
+    : `平成${yearKey.slice(1)}年`;
+}
+
+let _fflatePromise = null;
+async function loadFflate() {
+  if (!_fflatePromise)
+    _fflatePromise = import("https://cdn.jsdelivr.net/npm/fflate@0.8.2/+esm");
+  return _fflatePromise;
+}
+
 async function onSaveSourcePdf() {
+  const mode = $("source-mode").value;
+  if (mode === "zip") return onSaveSourceZip();
+
   if (!lastPdfBytes) {
     // バイト列がない場合は従来どおり原典をそのまま開く
     if (lastPdfUrl) window.open(lastPdfUrl, "_blank", "noopener");
@@ -1224,74 +1304,20 @@ async function onSaveSourcePdf() {
   const btn = $("source");
   btn.disabled = true;
   try {
-    const { PDFDocument } = await loadPdfLib();
-    const src = await PDFDocument.load(lastPdfBytes, {
-      ignoreEncryption: true,
-    });
-    const total = src.getPageCount();
-
-    const yearKey = $("year").value;
     const subject = $("subject").value;
     const docType = $("type").value;
-    const yearLabel = yearKey.startsWith("r")
-      ? `令和${yearKey.slice(1)}年`
-      : `平成${yearKey.slice(1)}年`;
-    const baseName = `${yearLabel}司法試験${subject}${docType}`;
-    const filename = `${baseName}.pdf`;
+    const baseName = `${currentYearLabel()}司法試験${subject}${docType}`;
 
-    let out;
-    let rangeLabel = `全${total}ページ`;
-    if (lastPageRange) {
-      const start = Math.max(1, lastPageRange[0]);
-      const end = Math.min(total, lastPageRange[1]);
-      const indices = [];
-      for (let p = start; p <= end; p++) indices.push(p - 1);
-      out = await PDFDocument.create();
-      const pages = await out.copyPages(src, indices);
-      for (const pg of pages) out.addPage(pg);
-      rangeLabel =
-        start === end ? `${start}ページのみ` : `${start}〜${end}ページ`;
-    } else {
-      out = src;
-    }
-
-    // 各ページのフッターにファイル名（右）と出典・加工表示（左）を記載
-    const stamp = makeTextStampPng(baseName);
-    const stampImg = await out.embedPng(stamp.dataUrl);
-    const stampH = 9; // pt
-    const stampW = stampH * stamp.aspect;
-    const srcStamp = makeTextStampPng(sourceLine(lastPdfUrl));
-    const srcImg = await out.embedPng(srcStamp.dataUrl);
-    const srcH = 7; // pt
-    const srcW = srcH * srcStamp.aspect;
-    for (const page of out.getPages()) {
-      page.drawImage(stampImg, {
-        x: page.getWidth() - stampW - 28,
-        y: 16,
-        width: stampW,
-        height: stampH,
-        opacity: 0.85,
-      });
-      page.drawImage(srcImg, {
-        x: 28,
-        y: 17,
-        width: srcW,
-        height: srcH,
-        opacity: 0.85,
-      });
-    }
-
-    const bytes = await out.save();
-
-    const blob = new Blob([bytes], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const { bytes, rangeLabel, total } = await buildStampedPdf(
+      lastPdfBytes,
+      lastPageRange,
+      baseName,
+      lastPdfUrl,
+    );
+    triggerDownload(
+      new Blob([bytes], { type: "application/pdf" }),
+      `${baseName}.pdf`,
+    );
     appendLog(
       `原典PDFの該当ページ（${rangeLabel} / 原典 全${total}ページ）を保存しました。`,
       "ok",
@@ -1301,6 +1327,62 @@ async function onSaveSourcePdf() {
     if (lastPdfUrl) window.open(lastPdfUrl, "_blank", "noopener");
   } finally {
     btn.disabled = false;
+  }
+}
+
+// 試験問題・出題の趣旨・採点実感の3点を取得して zip で一括保存する
+async function onSaveSourceZip() {
+  const yearKey = $("year").value;
+  const subject = $("subject").value;
+  const yearLabel = currentYearLabel();
+  const btn = $("source");
+  btn.disabled = true;
+  $("run").disabled = true;
+  setStatus("一括取得中");
+  try {
+    // zip 内は「[年度]司法試験[科目名]一式」フォルダにまとめる
+    const folder = `${yearLabel}司法試験${subject}一式`;
+    const files = {};
+    for (const docType of ["試験問題", "出題の趣旨", "採点実感"]) {
+      try {
+        appendLog(`一括取得: ${docType}`);
+        const { pdfUrl, pageRange, pdfBytes } = await runConversion(
+          { yearKey, subject, docType, decorate: false },
+          { log: (m) => appendLog(m, "info"), setProgress: setProgressBar },
+        );
+        const baseName = `${yearLabel}司法試験${subject}${docType}`;
+        const { bytes, rangeLabel, total } = await buildStampedPdf(
+          pdfBytes,
+          pageRange,
+          baseName,
+          pdfUrl,
+        );
+        files[`${folder}/${baseName}.pdf`] = new Uint8Array(bytes);
+        appendLog(`  ${docType}: ${rangeLabel}（原典 全${total}ページ）`, "ok");
+      } catch (e) {
+        appendLog(`  ${docType} は取得できませんでした: ${e.message}`, "warn");
+      }
+    }
+
+    const names = Object.keys(files);
+    if (names.length === 0) {
+      throw new Error("いずれのPDFも取得できませんでした。");
+    }
+
+    const { zipSync } = await loadFflate();
+    const zipped = zipSync(files);
+    triggerDownload(
+      new Blob([zipped], { type: "application/zip" }),
+      `${folder}.zip`,
+    );
+    appendLog(`一括保存完了（${names.length}件を zip に格納）`, "ok");
+    setStatus("完了", "ok");
+  } catch (e) {
+    appendLog(`一括保存に失敗: ${e.message}`, "err");
+    setStatus("エラー", "error");
+  } finally {
+    btn.disabled = false;
+    $("run").disabled = false;
   }
 }
 
