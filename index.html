@@ -67,21 +67,21 @@
           <button id="download" class="btn-secondary" type="button" disabled>
             .txt 保存
           </button>
-        </div>
-
-        <div class="source-actions">
-          <select id="source-mode" title="原典PDFの保存方法を選択します">
-            <option value="single">原典PDF：選択中の種類のみ</option>
-            <option value="zip">原典PDF：問題・趣旨・実感を一括（zip）</option>
-          </select>
           <button
             id="source"
             class="btn-secondary"
             type="button"
-            title="該当ページだけを原典PDFから抜き出して保存します"
-            disabled
+            title="選択中の種類の該当ページだけを原典PDFから抜き出して保存します（未変換でも自動で取得します）"
           >
-            PDF保存
+            原典PDF保存
+          </button>
+          <button
+            id="source-zip"
+            class="btn-secondary"
+            type="button"
+            title="試験問題・出題の趣旨・採点実感の原典PDF3点を一括で保存します（処理済みの種類は再利用されます）"
+          >
+            一式zip保存
           </button>
         </div>
       </section>
@@ -129,6 +129,6 @@
       src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20260610.18"></script>
+    <script type="module" src="./app.js?v=20260610.20"></script>
   </body>
 </html>

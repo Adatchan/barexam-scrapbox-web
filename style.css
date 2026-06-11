@@ -188,33 +188,6 @@ textarea {
   cursor: pointer;
 }
 
-.source-actions {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.source-actions select {
-  padding: 8px 32px 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: #fff;
-  color: var(--text);
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%23004679' d='M6 8L0 0h12z'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  cursor: pointer;
-}
-
-.source-actions select:focus {
-  outline: 2px solid var(--primary-light);
-  outline-offset: 1px;
-  border-color: var(--primary-mid);
-}
 
 /* ── ボタン ──────────────────────────────────────────── */
 .actions {

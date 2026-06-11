@@ -856,10 +856,50 @@ function parseYearKey(key) {
   return { key, label: `平成${key.slice(1)}年` };
 }
 
+// 年度×科目×種類ごとの処理結果キャッシュ。
+// テキスト変換と原典PDF保存（単体・一括zip）が同じ取得・解析結果を
+// 共有し、二重処理を防ぐ。
+const sourceCache = new Map();
+const SOURCE_CACHE_MAX = 12;
+
+function cachePut(key, entry) {
+  sourceCache.delete(key);
+  sourceCache.set(key, entry);
+  if (sourceCache.size > SOURCE_CACHE_MAX) {
+    sourceCache.delete(sourceCache.keys().next().value);
+  }
+}
+
+// キャッシュエントリから呼び出し元向けの結果を組み立てる
+function assembleResult(entry, docType, decorate) {
+  const { yearLabel, subjectLabel, paras, pdfUrl, pageRange, pdfBytes } = entry;
+  const result =
+    docType === "試験問題"
+      ? toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate)
+      : toScrapboxNarrative(
+          paras,
+          yearLabel,
+          subjectLabel,
+          docType,
+          pdfUrl,
+          decorate,
+        );
+  return { yearLabel, subjectLabel, docType, result, pdfUrl, pageRange, pdfBytes };
+}
+
 async function runConversion({ yearKey, subject, docType, decorate }, ctx) {
   const { log, setProgress } = ctx;
   if (!(yearKey in YEAR_URL_MAP)) throw new Error(`未対応の年度: ${yearKey}`);
   if (!(subject in SUBJECT_MAP)) throw new Error(`未対応の科目: ${subject}`);
+
+  // 同じ年度・科目・種類を処理済みなら再取得せずキャッシュを使う
+  const cacheId = `${yearKey}|${subject}|${docType}`;
+  const cached = sourceCache.get(cacheId);
+  if (cached) {
+    log(`処理済みのため再取得を省略: ${cached.yearLabel} ${cached.subjectLabel} ${docType}`);
+    setProgress(1.0);
+    return assembleResult(cached, docType, decorate);
+  }
 
   const { label: yearLabel } = parseYearKey(yearKey);
   const entry = SUBJECT_MAP[subject];
@@ -974,28 +1014,18 @@ async function runConversion({ yearKey, subject, docType, decorate }, ctx) {
 
   setProgress(0.95);
 
-  const result =
-    docType === "試験問題"
-      ? toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate)
-      : toScrapboxNarrative(
-          paras,
-          yearLabel,
-          subjectLabel,
-          docType,
-          pdfUrl,
-          decorate,
-        );
-
-  setProgress(1.0);
-  return {
+  const cacheEntry = {
     yearLabel,
     subjectLabel,
-    docType,
-    result,
+    paras,
     pdfUrl,
     pageRange,
     pdfBytes: pdfBytesCopy,
   };
+  cachePut(cacheId, cacheEntry);
+
+  setProgress(1.0);
+  return assembleResult(cacheEntry, docType, decorate);
 }
 
 // =============================================================================
@@ -1074,9 +1104,6 @@ function setProgressBar(frac) {
 }
 
 let lastResult = "";
-let lastPdfUrl = "";
-let lastPdfBytes = null;
-let lastPageRange = null;
 
 function selectedFormat() {
   const el = document.querySelector('input[name="format"]:checked');
@@ -1092,12 +1119,8 @@ async function onRun() {
   $("log").textContent = "";
   $("result").textContent = "";
   lastResult = "";
-  lastPdfUrl = "";
-  lastPdfBytes = null;
-  lastPageRange = null;
   $("copy").disabled = true;
   $("download").disabled = true;
-  $("source").disabled = true;
   $("run").disabled = true;
   setProgressBar(0);
   setStatus("開始");
@@ -1111,29 +1134,18 @@ async function onRun() {
     .forEach((p) => p.classList.toggle("active", p.id === "log"));
 
   try {
-    const {
-      yearLabel,
-      subjectLabel,
-      docType: dt,
-      result,
-      pdfUrl,
-      pageRange,
-      pdfBytes,
-    } = await runConversion(
-      { yearKey, subject, docType, decorate },
-      {
-        log: (m) => appendLog(m, "info"),
-        setProgress: setProgressBar,
-      },
-    );
+    const { yearLabel, subjectLabel, docType: dt, result } =
+      await runConversion(
+        { yearKey, subject, docType, decorate },
+        {
+          log: (m) => appendLog(m, "info"),
+          setProgress: setProgressBar,
+        },
+      );
     lastResult = result;
-    lastPdfUrl = pdfUrl || "";
-    lastPdfBytes = pdfBytes || null;
-    lastPageRange = pageRange || null;
     $("result").textContent = result;
     $("copy").disabled = false;
     $("download").disabled = false;
-    $("source").disabled = !lastPdfUrl;
     appendLog(`完了: ${yearLabel} ${subjectLabel} ${dt}`, "ok");
     setStatus("完了", "ok");
 
@@ -1292,27 +1304,32 @@ async function loadFflate() {
   return _fflatePromise;
 }
 
+function setSaveButtonsDisabled(disabled) {
+  $("run").disabled = disabled;
+  $("source").disabled = disabled;
+  $("source-zip").disabled = disabled;
+}
+
+// 選択中の種類の原典PDF（該当ページのみ）を保存する。
+// 変換実行済みならキャッシュを再利用し、未処理なら自動で取得する。
 async function onSaveSourcePdf() {
-  const mode = $("source-mode").value;
-  if (mode === "zip") return onSaveSourceZip();
-
-  if (!lastPdfBytes) {
-    // バイト列がない場合は従来どおり原典をそのまま開く
-    if (lastPdfUrl) window.open(lastPdfUrl, "_blank", "noopener");
-    return;
-  }
-  const btn = $("source");
-  btn.disabled = true;
+  const yearKey = $("year").value;
+  const subject = $("subject").value;
+  const docType = $("type").value;
+  setSaveButtonsDisabled(true);
+  let fallbackUrl = "";
   try {
-    const subject = $("subject").value;
-    const docType = $("type").value;
+    const { pdfUrl, pageRange, pdfBytes } = await runConversion(
+      { yearKey, subject, docType, decorate: false },
+      { log: (m) => appendLog(m, "info"), setProgress: setProgressBar },
+    );
+    fallbackUrl = pdfUrl;
     const baseName = `${currentYearLabel()}司法試験${subject}${docType}`;
-
     const { bytes, rangeLabel, total } = await buildStampedPdf(
-      lastPdfBytes,
-      lastPageRange,
+      pdfBytes,
+      pageRange,
       baseName,
-      lastPdfUrl,
+      pdfUrl,
     );
     triggerDownload(
       new Blob([bytes], { type: "application/pdf" }),
@@ -1322,11 +1339,16 @@ async function onSaveSourcePdf() {
       `原典PDFの該当ページ（${rangeLabel} / 原典 全${total}ページ）を保存しました。`,
       "ok",
     );
+    setStatus("完了", "ok");
   } catch (e) {
-    appendLog(`原典PDFの抽出に失敗: ${e.message} — 元のPDFを開きます。`, "warn");
-    if (lastPdfUrl) window.open(lastPdfUrl, "_blank", "noopener");
+    appendLog(`原典PDFの保存に失敗: ${e.message}`, "err");
+    if (fallbackUrl) {
+      appendLog("元のPDFをそのまま開きます。", "warn");
+      window.open(fallbackUrl, "_blank", "noopener");
+    }
+    setStatus("エラー", "error");
   } finally {
-    btn.disabled = false;
+    setSaveButtonsDisabled(false);
   }
 }
 
@@ -1335,9 +1357,7 @@ async function onSaveSourceZip() {
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const yearLabel = currentYearLabel();
-  const btn = $("source");
-  btn.disabled = true;
-  $("run").disabled = true;
+  setSaveButtonsDisabled(true);
   setStatus("一括取得中");
   try {
     // zip 内は「[年度]司法試験[科目名]一式」フォルダにまとめる
@@ -1381,8 +1401,7 @@ async function onSaveSourceZip() {
     appendLog(`一括保存に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
   } finally {
-    btn.disabled = false;
-    $("run").disabled = false;
+    setSaveButtonsDisabled(false);
   }
 }
 
@@ -1395,4 +1414,5 @@ window.addEventListener("DOMContentLoaded", () => {
   $("copy").addEventListener("click", onCopy);
   $("download").addEventListener("click", onDownload);
   $("source").addEventListener("click", onSaveSourcePdf);
+  $("source-zip").addEventListener("click", onSaveSourceZip);
 });
