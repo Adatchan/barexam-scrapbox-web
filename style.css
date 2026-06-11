@@ -69,6 +69,13 @@ textarea {
   letter-spacing: 0.02em;
 }
 
+.hero h1 .beta {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .hero .subtitle {
   margin: 0;
   color: var(--muted);
