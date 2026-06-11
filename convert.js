@@ -6,7 +6,7 @@
 // 原典PDF保存（単体・一括zip）が同じ取得・解析結果を共有して二重処理を防ぐ。
 // =============================================================================
 import { YEAR_URL_MAP, RESULTS_URL_MAP } from "./years.js";
-import { SUBJECT_MAP, Q_KANJI, NO_SAITEN } from "./data.js";
+import { SUBJECT_MAP, Q_KANJI, yearKeyToLabel } from "./data.js";
 import { nosp } from "./rules.js";
 import {
   fetchPdf,
@@ -24,19 +24,26 @@ import {
 } from "./parser.js";
 import { toScrapbox, toScrapboxNarrative } from "./format.js";
 
-function parseYearKey(key) {
-  if (key.startsWith("r")) return { key, label: `令和${key.slice(1)}年` };
-  return { key, label: `平成${key.slice(1)}年` };
-}
-
-// 年度×科目×種類ごとの処理結果キャッシュ
+// 年度×科目×種類ごとの処理結果キャッシュ。
+// 件数に加えて PDF バイト列の合計容量にも上限を設ける（モバイル考慮）
 const sourceCache = new Map();
-const SOURCE_CACHE_MAX = 12;
+const SOURCE_CACHE_MAX_ENTRIES = 12;
+const SOURCE_CACHE_MAX_BYTES = 30 * 1024 * 1024;
+
+function cacheBytes() {
+  let total = 0;
+  for (const e of sourceCache.values()) total += e.pdfBytes?.byteLength || 0;
+  return total;
+}
 
 function cachePut(key, entry) {
   sourceCache.delete(key);
   sourceCache.set(key, entry);
-  if (sourceCache.size > SOURCE_CACHE_MAX) {
+  while (
+    sourceCache.size > 1 &&
+    (sourceCache.size > SOURCE_CACHE_MAX_ENTRIES ||
+      cacheBytes() > SOURCE_CACHE_MAX_BYTES)
+  ) {
     sourceCache.delete(sourceCache.keys().next().value);
   }
 }
@@ -82,7 +89,7 @@ export async function runConversion({ yearKey, subject, docType, decorate }, ctx
     return assembleResult(cached, docType, decorate);
   }
 
-  const { label: yearLabel } = parseYearKey(yearKey);
+  const yearLabel = yearKeyToLabel(yearKey);
   const [systemName, qNum, subjectLabel, sectionKeyword] = SUBJECT_MAP[subject];
 
   let pdfUrl;
@@ -101,10 +108,6 @@ export async function runConversion({ yearKey, subject, docType, decorate }, ctx
   } else if (docType === "採点実感") {
     if (!(yearKey in RESULTS_URL_MAP))
       throw new Error(`${yearLabel} は採点実感に未対応です。`);
-    if (NO_SAITEN.has(yearKey))
-      throw new Error(
-        `${yearLabel} の採点実感は法務省ウェブに掲載されていません。`,
-      );
     const resultsUrl = RESULTS_URL_MAP[yearKey];
     log(`取得中: ${yearLabel} ${subjectLabel} 採点実感`);
     setProgress(0.05);

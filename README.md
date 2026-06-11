@@ -1,97 +1,87 @@
-# しほしけコンバーター（β版） – 司法試験論文式過去問テキスト変換（ブラウザ版）
+# しほしけコンバーター（β版）
 
-Mac / iPhone / iPad / Windows の任意のブラウザから動かせる静的 Web アプリ版です。
+司法試験論文式の「試験問題」「出題の趣旨」「採点実感」を、法務省ウェブサイトで
+公表されているPDFから自動で抽出してテキスト化する、法務省非公式のWebアプリ。
+処理はすべてブラウザ内で行われ、サーバー側にデータは保存されない。
+
+公開ページ: https://adatchan.github.io/barexam-scrapbox-web/
+
+## 機能
+
+- **テキスト変換**: 年度（平成22年〜最新）× 科目（基本7科目＋経済法・労働法・
+  倒産法 各第1問/第2問）× 種類を選んで変換。出力形式はノーマル（プレーン）と
+  Scrapbox記法（`[* ]` 見出し・`#タグ`付き）を選択可
+- **原典PDF保存**: 原典PDFから該当ページだけを抜き出し、各ページのフッターに
+  ファイル名と出典・加工表示を印字したPDFを保存
+- **一式zip保存**: 試験問題・出題の趣旨・採点実感の3点の抜粋PDFを
+  「[年度]司法試験[科目]一式」フォルダにまとめてzipで保存
+- **処理結果キャッシュ**: 同じ年度・科目・種類の再処理を省略（件数・容量で上限管理）
+- **新年度の自動対応**: 毎週月曜にGitHub Actionsが法務省サイトを巡回し、新年度の
+  掲載を検出すると年度リストと「更新情報」欄を自動更新してデプロイ
+- **出典表示**: 出力には公共データ利用規約（PDL1.0）に基づく
+  「出典：法務省ウェブサイト（URL）を加工して作成」を自動付与
 
 ## 構成
 
 ```
 web/
-├── index.html       UI 本体
-├── style.css        スタイル
-├── app.js           変換ロジック（PDF.js を使用）
-├── worker/
-│   └── worker.js    Cloudflare Worker（moj.go.jp 中継プロキシ）
-└── README.md        このファイル
+├── index.html              UI マークアップ
+├── style.css               スタイル
+├── app.js                  UI 層（イベントハンドラ・表示制御）
+├── rules.js                テキスト構造の共有ルール（正規表現・判定）
+├── data.js                 科目定義などのデータテーブル
+├── years.js                年度→法務省ページURL対応表（自動生成）
+├── news.js                 更新情報と巡回状態（自動生成）
+├── moj.js                  法務省ウェブからの取得（Worker 中継・リンク探索）
+├── parser.js               PDF解析（PDF.js）と段落構造の復元
+├── format.js               テキスト整形（ノーマル / Scrapbox 記法）
+├── convert.js              変換ディスパッチと処理結果キャッシュ
+├── pdfout.js               原典PDFの抜き出し・スタンプ印字・zip
+├── worker/worker.js        Cloudflare Worker（moj.go.jp 中継プロキシ）
+├── scripts/
+│   ├── update-years.mjs    法務省サイト巡回 → years.js / news.js 更新
+│   ├── check-links.mjs     全年度×全種類のリンク探索の健全性チェック
+│   └── bump-version.mjs    index.html のキャッシュバスター（?v=）更新
+├── .githooks/pre-commit    JS/CSS 変更時にキャッシュバスターを自動更新
+└── .github/workflows/
+    └── update-years.yml    週次の自動巡回・健全性チェック（毎週月曜 09:00 JST）
 ```
 
-- **フロント**: 静的 HTML/CSS/JS。GitHub Pages 等にそのまま置けます
-- **バックエンド**: なし。法務省サイトの取得だけ Cloudflare Worker が肩代わり
-- **PDF パース**: ブラウザ内で PDF.js が処理（CDN から自動ロード）
+- **フロント**: 静的 HTML/CSS/JS（ビルド不要）。GitHub Pages で配信
+- **バックエンド**: なし。法務省サイトの取得だけ Cloudflare Worker が中継
+  （moj.go.jp 配下のみ許可・CORSヘッダ付与）
+- **PDF**: 解析は PDF.js、抜粋PDFの生成は pdf-lib、zip は fflate
+  （いずれも CDN から動的ロード）
 
-## セットアップ（所要 15 分）
+## 開発メモ
 
-### ① Cloudflare Worker をデプロイ（5 分）
+クローンしたら一度だけ、コミットフックを有効化する:
 
-1. <https://dash.cloudflare.com/> にアクセス（無料アカウント作成）
-2. 左メニュー **Workers & Pages** → **Create application** → **Create Worker**
-3. 名前を決める（例: `moj-proxy`）→ **Deploy**
-4. デプロイ後、画面右上 **Edit code** をクリック
-5. 表示されたエディタの中身を全部消し、`worker/worker.js` の中身を貼り付け
-6. **Deploy** を押す
-7. 画面上部に表示される URL（例: `https://moj-proxy.あなたの名前.workers.dev`）を控える
-
-無料枠は 1 日 10 万リクエストまでなので、個人利用なら使い切れません。
-
-### ② app.js に Worker の URL を設定（1 分）
-
-`web/app.js` 冒頭の `WORKER_URL` を控えた URL に書き換えます。
-
-```js
-const WORKER_URL = "https://moj-proxy.あなたの名前.workers.dev";
+```sh
+git config core.hooksPath .githooks
 ```
 
-### ③ GitHub にプッシュ（5 分）
+これにより JS/CSS を変更してコミットすると index.html の `?v=` が自動更新される
+（GitHub Pages の最大10分キャッシュ対策）。手動更新は
+`node scripts/bump-version.mjs`。
 
-```bash
-cd web
-git init
-git add .
-git commit -m "Initial commit"
-gh repo create barexam-scrapbox-web --public --source=. --push
+リンク探索の健全性チェック（全年度×全種類、約2分）:
+
+```sh
+node scripts/check-links.mjs
 ```
 
-`gh` が無ければ、GitHub のサイトでリポジトリを作って手動 push。
+法務省サイトの巡回（新年度の検出・更新情報の追記）:
 
-### ④ GitHub Pages を有効化（3 分）
-
-1. リポジトリの **Settings** → **Pages**
-2. **Source** で **Deploy from a branch** を選択
-3. **Branch** で `main` / `(root)` を選び **Save**
-4. 1〜2 分待つと `https://あなたのユーザー名.github.io/barexam-scrapbox-web/` で公開
-
-## 使い方
-
-公開された URL を開けば、
-
-- 年度・科目・種類を選ぶ
-- **変換実行** をクリック
-- 結果がそのまま画面に出る／**結果をコピー**／**.txt 保存**
-
-iPhone Safari でも同じ操作で動作します。
-
-## ローカルでテストする
-
-Worker を URL に設定した後、`web/` ディレクトリで簡易サーバを立ち上げて確認できます。
-
-```bash
-cd web
-python3 -m http.server 8000
-# ブラウザで http://localhost:8000/ を開く
+```sh
+node scripts/update-years.mjs
 ```
 
-> `file://` で開くと ES Modules や fetch がブロックされるため、必ずローカルサーバ越しに開いてください。
-
-## トラブルシュート
-
-| 症状 | 対処 |
-|---|---|
-| `Cloudflare Worker の URL が未設定です` と出る | `app.js` の `WORKER_URL` を編集 |
-| `HTTP 403` で取得失敗 | Worker の `ALLOWED_PREFIX` が `https://www.moj.go.jp/` のままか確認 |
-| `Failed to load module` | GitHub Pages では同一オリジン配信なので、URL のパスがあっているか確認 |
-| `Failed to fetch` | Worker URL の打ち間違い、または Worker のデプロイが完了していない |
-| PDF パースが失敗 | 法務省側のレイアウトが想定外。元の Python 版で対応した上で `app.js` の `parseParagraphs` を同期更新 |
+いずれも週次ワークフロー（update-years.yml）が自動実行する。失敗すると
+GitHub からワークフロー失敗が通知される。
 
 ## ライセンス・出典
 
-- 取得対象は法務省ウェブサイト公表の論文式試験問題・出題の趣旨・採点実感
-- 変換ロジックは元 Python 版（`../bar_exam_to_scrapbox.py`）と同等
+法務省ウェブサイトのコンテンツには「公共データ利用規約（第1.0版）」（PDL1.0）が
+適用される。本アプリの出力には出典と加工した旨の表示が自動で付くので、
+共有の際はそのまま保持すること。

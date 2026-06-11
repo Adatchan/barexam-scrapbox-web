@@ -8,8 +8,22 @@
     />
     <meta name="theme-color" content="#004679" />
     <meta name="color-scheme" content="light" />
+    <meta
+      name="description"
+      content="司法試験論文式の試験問題・出題の趣旨・採点実感を、法務省ウェブの公表PDFからテキストに変換する非公式ツール"
+    />
+    <meta property="og:title" content="しほしけコンバーター（β版）" />
+    <meta
+      property="og:description"
+      content="司法試験論文式の試験問題・出題の趣旨・採点実感を、法務省ウェブの公表PDFからテキストに変換する非公式ツール"
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://adatchan.github.io/barexam-scrapbox-web/"
+    />
     <title>しほしけコンバーター（β版）– 司法試験論文式過去問テキスト変換</title>
-    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./style.css?v=20260611.1935" />
   </head>
   <body>
     <main class="app">
@@ -103,7 +117,14 @@
         <details>
           <summary>出力が原典と違う気がします</summary>
           <p>
-            PDF解析による自動変換のため、改行位置や段落の区切りなどに誤りが生じることがあります。学習には原典PDFをあわせてご確認ください。おかしな箇所があれば開発者までお知らせください。
+            PDF解析による自動変換のため、改行位置や段落の区切りなどに誤りが生じることがあります。学習には原典PDFをあわせてご確認ください。おかしな箇所があれば
+            <a
+              href="https://github.com/Adatchan/barexam-scrapbox-web/issues"
+              target="_blank"
+              rel="noopener"
+              >GitHub の Issue</a
+            >
+            からお知らせください。
           </p>
         </details>
 
@@ -229,11 +250,33 @@
       </footer>
     </main>
 
+    <!-- モジュール初期化失敗や想定外のエラーをログ欄に表示する（調査支援） -->
+    <script>
+      (function () {
+        function report(msg) {
+          var log = document.getElementById("log");
+          if (log) log.textContent += "[NG] 内部エラー: " + msg + "\n";
+          var status = document.getElementById("status");
+          if (status) {
+            status.textContent = "エラー";
+            status.className = "status error";
+          }
+        }
+        window.addEventListener("error", function (e) {
+          report(e.message || "スクリプトの読み込みに失敗しました");
+        });
+        window.addEventListener("unhandledrejection", function (e) {
+          var r = e.reason;
+          report((r && r.message) || String(r));
+        });
+      })();
+    </script>
+
     <!-- PDF.js (legacy build for wide compatibility) -->
     <script
       src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20260611.1"></script>
+    <script type="module" src="./app.js?v=20260611.1935"></script>
   </body>
 </html>

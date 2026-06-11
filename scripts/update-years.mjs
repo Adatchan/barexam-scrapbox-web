@@ -138,28 +138,6 @@ ${stateLines}
 `;
 }
 
-function loadExistingMaps() {
-  let src;
-  try {
-    src = readFileSync(YEARS_JS, "utf8");
-  } catch {
-    return { YEAR_URL_MAP: {}, RESULTS_URL_MAP: {} };
-  }
-  const pick = (name) => {
-    const m = new RegExp(`${name}\\s*=\\s*\\{([^}]*)\\}`).exec(src);
-    if (!m) return {};
-    const map = {};
-    const entryRe = /([a-z0-9]+):\s*"([^"]+)"/g;
-    let e;
-    while ((e = entryRe.exec(m[1]))) map[e[1]] = e[2];
-    return map;
-  };
-  return {
-    YEAR_URL_MAP: pick("YEAR_URL_MAP"),
-    RESULTS_URL_MAP: pick("RESULTS_URL_MAP"),
-  };
-}
-
 function renderYearsJs(yearMap, resultsMap) {
   const renderMap = (map) =>
     sortKeys(Object.keys(map))
@@ -185,7 +163,14 @@ ${renderMap(resultsMap)}
 }
 
 // ─── メイン ────────────────────────────────────────────────────────────────
-const existing = loadExistingMaps();
+// 既存の対応表は years.js（純粋なデータ ESM）を import で読む
+const existing = await import(pathToFileURL(YEARS_JS).href).then(
+  (m) => ({
+    YEAR_URL_MAP: m.YEAR_URL_MAP ?? {},
+    RESULTS_URL_MAP: m.RESULTS_URL_MAP ?? {},
+  }),
+  () => ({ YEAR_URL_MAP: {}, RESULTS_URL_MAP: {} }),
+);
 const yearMap = { ...existing.YEAR_URL_MAP };
 const resultsMap = { ...existing.RESULTS_URL_MAP };
 

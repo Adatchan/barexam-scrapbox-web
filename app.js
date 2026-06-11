@@ -14,7 +14,7 @@
 // =============================================================================
 import { YEAR_URL_MAP } from "./years.js";
 import { NEWS } from "./news.js";
-import { SUBJECT_MAP } from "./data.js";
+import { SUBJECT_MAP, yearKeyToLabel } from "./data.js";
 import { runConversion } from "./convert.js";
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
 
@@ -25,12 +25,9 @@ function initSelectors() {
   const yearSelect = $("year");
   const keys = Object.keys(YEAR_URL_MAP).reverse();
   for (const k of keys) {
-    const label = k.startsWith("r")
-      ? `令和${k.slice(1)}年`
-      : `平成${k.slice(1)}年`;
     const opt = document.createElement("option");
     opt.value = k;
-    opt.textContent = label;
+    opt.textContent = yearKeyToLabel(k);
     yearSelect.appendChild(opt);
   }
 
@@ -128,10 +125,7 @@ function selectedFormat() {
 }
 
 function currentYearLabel() {
-  const yearKey = $("year").value;
-  return yearKey.startsWith("r")
-    ? `令和${yearKey.slice(1)}年`
-    : `平成${yearKey.slice(1)}年`;
+  return yearKeyToLabel($("year").value);
 }
 
 async function onRun() {
@@ -182,15 +176,10 @@ function onDownload() {
   if (!lastResult) return;
   const subject = $("subject").value;
   const docType = $("type").value;
-  const suffix =
-    docType === "試験問題"
-      ? "司法試験問題"
-      : docType === "出題の趣旨"
-        ? "出題の趣旨"
-        : "採点実感";
   const formatSuffix =
     selectedFormat() === "scrapbox" ? "（scrapbox記法）" : "";
-  const filename = `${currentYearLabel()}${subject}${suffix}${formatSuffix}.txt`;
+  // PDF 出力と同じ「[年度]司法試験[科目][種別]」の命名規則に揃える
+  const filename = `${currentYearLabel()}司法試験${subject}${docType}${formatSuffix}.txt`;
   triggerDownload(
     new Blob([lastResult], { type: "text/plain;charset=utf-8" }),
     filename,
@@ -205,7 +194,8 @@ function triggerDownload(blob, filename) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Safari ではクリック直後の revoke でダウンロードが失敗することがある
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ─── 原典PDF保存 ─────────────────────────────────────────────────────────

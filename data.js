@@ -34,6 +34,9 @@ export const SELECT_SUBJECTS = [
   "国際関係法（私法系）",
 ];
 
-// 採点実感が法務省ウェブに掲載されていない年度（現時点ではなし。
-// かつて r1 を指定していたが、実際には掲載されている）
-export const NO_SAITEN = new Set([]);
+// 年度キー（"r7" / "h22"）→ 表示ラベル（"令和7年" / "平成22年"）
+export function yearKeyToLabel(key) {
+  return key.startsWith("r")
+    ? `令和${key.slice(1)}年`
+    : `平成${key.slice(1)}年`;
+}
