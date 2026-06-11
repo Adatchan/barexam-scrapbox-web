@@ -396,6 +396,9 @@ function groupLinesIntoBlocks(lines) {
   const isStructureMarker = (l) =>
     /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ]/.test(l.text);
 
+  // 会話文の開始行（「甲：」「Ｘ：」のような短い話者名＋全角コロン）
+  const isDialogueLine = (l) => /^[^\s。、．：]{1,4}：/.test(l.text);
+
   for (const line of lines) {
     if (!line.text) continue;
 
@@ -410,7 +413,7 @@ function groupLinesIntoBlocks(lines) {
       continue;
     }
 
-    if (isStructureMarker(line)) {
+    if (isStructureMarker(line) || isDialogueLine(line)) {
       flush();
       cur = [line];
       continue;
@@ -538,8 +541,12 @@ function parseParagraphs(boxes, startMarker, endMarker) {
       cur += t;
       continue;
     }
-    // 構造マーカー（「第１ ○○」「１ ○○」）は新しい段落を開始する
-    if (/^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ]/.test(t)) {
+    // 構造マーカー（「第１ ○○」「１ ○○」）や会話文の開始
+    // （「甲：」「Ｘ：」）は新しい段落を開始する
+    if (
+      /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ]/.test(t) ||
+      /^[^\s。、．：]{1,4}：/.test(t)
+    ) {
       if (cur) paras.push(cur);
       cur = t;
       prevX = x0;
@@ -765,8 +772,14 @@ function toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate) {
   // 空行なしの連続行として出力する
   const isMarker = (p) =>
     /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ]/.test(p);
+  // 会話文（「甲：」「Ｘ：」）も空行なしの連続行として出力する
+  const isDialogue = (p) => /^[^\s。、．：]{1,4}：/.test(p);
   let tight = false;
+  let inDialogue = false;
   for (const p of paras) {
+    const dialogue = isDialogue(p);
+    // 会話ブロックの終わりには空行を1つ入れる
+    if (inDialogue && !dialogue) out.push("");
     if (/^〔設問[0-9０-９]*〕/.test(p)) {
       // 設問見出しは前に空行を1つ足し（計2行空け）、直後の本文は次行に続ける
       tight = false;
@@ -776,6 +789,10 @@ function toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate) {
       tight = p.includes("資料");
       out.push(decorate ? `[* ${p}]` : p);
       if (!tight) out.push("");
+    } else if (dialogue) {
+      // 直前の段落・発言と空行なしで詰める
+      if (out[out.length - 1] === "") out.pop();
+      out.push(p);
     } else if (tight && isMarker(p)) {
       out.push(p);
     } else {
@@ -783,6 +800,7 @@ function toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate) {
       out.push(p);
       out.push("");
     }
+    inDialogue = dialogue;
   }
   return out.join("\n").replace(/\s+$/, "") + "\n";
 }
