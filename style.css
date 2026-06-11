@@ -92,6 +92,73 @@ textarea {
   color: var(--primary-mid);
 }
 
+/* ── ヘルプ ──────────────────────────────────────────── */
+.help-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.btn-help {
+  padding: 5px 14px;
+  border: 1px solid var(--primary-mid);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-help:hover {
+  background: var(--panel);
+}
+
+#help-dialog {
+  max-width: 640px;
+  width: calc(100vw - 40px);
+  max-height: 80vh;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  color: var(--text);
+}
+
+#help-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.help-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.help-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--primary);
+}
+
+#help-dialog details {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0;
+}
+
+#help-dialog summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+#help-dialog details p {
+  margin: 8px 0 4px;
+  font-size: 0.92rem;
+  line-height: 1.8;
+}
+
 /* ── 更新情報 ────────────────────────────────────────── */
 .news {
   background: var(--panel-2);

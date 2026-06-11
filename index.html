@@ -20,10 +20,100 @@
         </p>
       </header>
 
+      <div class="help-bar">
+        <button id="help" class="btn-help" type="button">？ ヘルプ</button>
+      </div>
+
       <section class="news" aria-label="更新情報">
         <h2 class="news-title">更新情報</h2>
         <ul id="news-list" class="news-list"></ul>
       </section>
+
+      <dialog id="help-dialog" aria-label="ヘルプ">
+        <div class="help-head">
+          <h2>ヘルプ（よくある質問）</h2>
+          <button id="help-close" class="btn-secondary" type="button">
+            閉じる
+          </button>
+        </div>
+
+        <details open>
+          <summary>このツールは何ですか？</summary>
+          <p>
+            司法試験論文式の「試験問題」「出題の趣旨」「採点実感」を、法務省ウェブサイトで公表されているPDFから自動で抽出してテキスト化する、法務省非公式の個人開発ツールです。処理はすべてブラウザ内で行われ、登録やデータ収集はありません。
+          </p>
+        </details>
+
+        <details>
+          <summary>基本的な使い方は？</summary>
+          <p>
+            年度・科目・種類・出力形式を選んで「変換実行」を押すと、結果欄にテキストが表示されます。「結果をコピー」でクリップボードへ、「.txt 保存」でファイルとして保存できます。
+          </p>
+        </details>
+
+        <details>
+          <summary>対応している年度・科目は？</summary>
+          <p>
+            平成22年から最新年度までの論文式です。科目は基本7科目（憲法・行政法・民法・商法・民訴・刑法・刑訴）と、選択科目のうち経済法・労働法・倒産法（各第１問・第２問）に対応しています。
+          </p>
+        </details>
+
+        <details>
+          <summary>新しい年度はいつ使えるようになりますか？</summary>
+          <p>
+            毎週月曜の朝に法務省ウェブサイトを自動巡回しています。試験問題（例年8月頃）、出題の趣旨・採点実感（例年9〜11月頃）が法務省ウェブに掲載されると、1週間以内に自動で追加され、「更新情報」欄でお知らせします。
+          </p>
+        </details>
+
+        <details>
+          <summary>出力形式の「ノーマル」と「Scrapbox記法」の違いは？</summary>
+          <p>
+            ノーマルは装飾のないプレーンテキストです。Scrapbox記法を選ぶと、見出しが [* ]・[** ] で装飾され、#司法試験 などのタグ行が付きます。どちらも冒頭に出典（法務省の原典PDFのURL）が入ります。
+          </p>
+        </details>
+
+        <details>
+          <summary>「原典PDF保存」は何をしますか？</summary>
+          <p>
+            選択中の年度・科目・種類について、法務省の原典PDFから該当するページだけを抜き出したPDFを保存します。各ページの右下にファイル名、左下に出典を印字します。変換実行をしていなくても、押せば自動で取得・処理されます。
+          </p>
+        </details>
+
+        <details>
+          <summary>「一式zip保存」は何をしますか？</summary>
+          <p>
+            選択中の年度・科目について、試験問題・出題の趣旨・採点実感の3点の抜粋PDFを「[年度]司法試験[科目]一式」フォルダにまとめ、zipで保存します。処理済みの種類は再利用されるため、変換実行のあとに押すと速く完了します。未掲載の種類がある年度では、取得できた分だけが入ります。
+          </p>
+        </details>
+
+        <details>
+          <summary>選択科目の採点実感で、第１問と第２問の内容が同じになります</summary>
+          <p>
+            原典の採点実感が問ごとに分かれていない年度・科目（選択科目や平成期の多く）では、科目全体（第１問・第２問の両方を含む）を出力します。原典の構造上の仕様です。
+          </p>
+        </details>
+
+        <details>
+          <summary>抜粋PDFの先頭ページに前の問題の終わりが入っています</summary>
+          <p>
+            抜粋はページ単位で行うため、同じページ内で前の問題が終わり次の問題が始まっている場合、その部分が含まれます。
+          </p>
+        </details>
+
+        <details>
+          <summary>出力が原典と違う気がします</summary>
+          <p>
+            PDF解析による自動変換のため、改行位置や段落の区切りなどに誤りが生じることがあります。学習には原典PDFをあわせてご確認ください。おかしな箇所があれば開発者までお知らせください。
+          </p>
+        </details>
+
+        <details>
+          <summary>著作権は大丈夫ですか？学内などで共有してもよいですか？</summary>
+          <p>
+            法務省ウェブサイトのコンテンツには「公共データ利用規約（PDL1.0）」が適用されており、出典の記載と加工した旨の表示を条件に、複製・共有・加工が認められています。本ツールの出力には出典・加工表示が自動で付くので、そのまま保持して共有してください。本ツール自体の共有も自由です。
+          </p>
+        </details>
+      </dialog>
 
       <section class="form">
         <div class="field">
@@ -129,6 +219,6 @@
       src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20260610.20"></script>
+    <script type="module" src="./app.js?v=20260610.21"></script>
   </body>
 </html>

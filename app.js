@@ -1415,4 +1415,12 @@ window.addEventListener("DOMContentLoaded", () => {
   $("download").addEventListener("click", onDownload);
   $("source").addEventListener("click", onSaveSourcePdf);
   $("source-zip").addEventListener("click", onSaveSourceZip);
+
+  // ヘルプダイアログ（背景クリックでも閉じる）
+  const helpDialog = $("help-dialog");
+  $("help").addEventListener("click", () => helpDialog.showModal());
+  $("help-close").addEventListener("click", () => helpDialog.close());
+  helpDialog.addEventListener("click", (e) => {
+    if (e.target === helpDialog) helpDialog.close();
+  });
 });
