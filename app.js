@@ -1274,23 +1274,11 @@ async function onSaveSourcePdf() {
   }
 }
 
-function checkWorkerStatus() {
-  const el = $("worker-status");
-  if (WORKER_URL.includes("example.workers.dev")) {
-    el.textContent = "未設定（web/app.js の WORKER_URL を編集してください）";
-    el.className = "err";
-  } else {
-    el.textContent = WORKER_URL;
-    el.className = "ok";
-  }
-}
-
 // ── 起動 ─────────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   initSelectors();
   initNews();
   setupTabs();
-  checkWorkerStatus();
   $("run").addEventListener("click", onRun);
   $("copy").addEventListener("click", onCopy);
   $("download").addEventListener("click", onDownload);
