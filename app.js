@@ -1,1043 +1,33 @@
 // =============================================================================
-// 司法試験論文式 → Scrapbox 変換  ブラウザ版
+// しほしけコンバーター  UI 層
 //
-// 元の Python スクリプト bar_exam_to_scrapbox.py のロジックを JavaScript に移植。
-// PDF パースは PDF.js、moj.go.jp の中継は Cloudflare Worker（同梱の
-// worker/worker.js）が担当する。
+// 画面の初期化とイベントハンドラのみを持つ。実処理は各モジュールに分離:
+//   rules.js   テキスト構造の共有ルール（正規表現・判定）
+//   data.js    科目定義などのデータテーブル
+//   years.js   年度→法務省ページURL対応表（週次クロールが自動更新）
+//   news.js    更新情報（週次クロールが自動追記）
+//   moj.js     法務省ウェブからの取得（Cloudflare Worker 中継）
+//   parser.js  PDF解析（PDF.js）と段落構造の復元
+//   format.js  テキスト整形（ノーマル / Scrapbox 記法）
+//   convert.js 変換ディスパッチと処理結果キャッシュ
+//   pdfout.js  原典PDFの抜き出し・スタンプ印字・zip
 // =============================================================================
-
-// ─── 設定 ──────────────────────────────────────────────────────────────────
-// Cloudflare Worker をデプロイした後、払い出された URL に書き換えてください。
-// 例: "https://moj-proxy.yourname.workers.dev"
-const WORKER_URL = "https://shihoshiken-proxy.adachiyuki0409.workers.dev";
-
-const PDFJS_VERSION = "4.0.379";
-const PDFJS_CDN = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}`;
-
-// ─── データテーブル ────────────────────────────────────────────────────────
-// 年度→URL対応表は scripts/update-years.mjs が自動更新する years.js に分離
-import { YEAR_URL_MAP, RESULTS_URL_MAP } from "./years.js";
-// 更新情報（自動クロールが news.js に追記する）
+import { YEAR_URL_MAP } from "./years.js";
 import { NEWS } from "./news.js";
+import { SUBJECT_MAP } from "./data.js";
+import { runConversion } from "./convert.js";
+import { buildStampedPdf, loadFflate } from "./pdfout.js";
 
-// 採点実感が法務省ウェブに掲載されていない年度（現時点ではなし。
-// かつて r1 を指定していたが、実際には掲載されている）
-const NO_SAITEN = new Set([]);
-
-// 科目 → [系列名, 問番号, 表示ラベル, 選択科目キーワード(任意)]
-const SUBJECT_MAP = {
-  憲法: ["公法系科目", 1, "公法系第１問（憲法）"],
-  行政法: ["公法系科目", 2, "公法系第２問（行政法）"],
-  民法: ["民事系科目", 1, "民事系第１問（民法）"],
-  商法: ["民事系科目", 2, "民事系第２問（商法）"],
-  民訴: ["民事系科目", 3, "民事系第３問（民事訴訟法）"],
-  刑法: ["刑事系科目", 1, "刑事系第１問（刑法）"],
-  刑訴: ["刑事系科目", 2, "刑事系第２問（刑事訴訟法）"],
-  経済法第１問: ["選択科目", 1, "選択科目（経済法）第１問", "経済法"],
-  経済法第２問: ["選択科目", 2, "選択科目（経済法）第２問", "経済法"],
-  労働法第１問: ["選択科目", 1, "選択科目（労働法）第１問", "労働法"],
-  労働法第２問: ["選択科目", 2, "選択科目（労働法）第２問", "労働法"],
-  倒産法第１問: ["選択科目", 1, "選択科目（倒産法）第１問", "倒産法"],
-  倒産法第２問: ["選択科目", 2, "選択科目（倒産法）第２問", "倒産法"],
-};
-
-const Q_KANJI = { 1: "１", 2: "２", 3: "３" };
-
-const SELECT_SUBJECTS = [
-  "倒産法",
-  "租税法",
-  "経済法",
-  "知的財産法",
-  "労働法",
-  "環境法",
-  "国際関係法（公法系）",
-  "国際関係法（私法系）",
-];
-
-// ─── ユーティリティ ────────────────────────────────────────────────────────
-function reEscape(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function nosp(s) {
-  return s.replace(/[\s　]+/g, "");
-}
-
-function resolveUrl(href, baseUrl) {
-  if (/^https?:/.test(href)) return href;
-  return new URL(href, baseUrl).toString();
-}
-
-// ─── 中継経由フェッチ ─────────────────────────────────────────────────────
-async function fetchViaProxy(url, type = "text") {
-  if (WORKER_URL.includes("example.workers.dev")) {
-    throw new Error(
-      "Cloudflare Worker の URL が未設定です。web/app.js の WORKER_URL を編集してください。",
-    );
-  }
-  const proxyUrl = `${WORKER_URL}/?url=${encodeURIComponent(url)}`;
-  const res = await fetch(proxyUrl);
-  if (!res.ok) {
-    throw new Error(`取得失敗 HTTP ${res.status}: ${url}`);
-  }
-  if (type === "arraybuffer") return await res.arrayBuffer();
-  return await res.text();
-}
-
-async function fetchHtml(url) {
-  return await fetchViaProxy(url, "text");
-}
-async function fetchPdf(url) {
-  return await fetchViaProxy(url, "arraybuffer");
-}
-
-// ─── PDF URL 取得（試験問題） ─────────────────────────────────────────────
-async function fetchExamPdfUrl(pageUrl, systemName) {
-  const html = await fetchHtml(pageUrl);
-  const idx = html.indexOf("論文式試験");
-  const section = idx !== -1 ? html.slice(idx) : html;
-  const escaped = reEscape(systemName);
-  const PDF = `href="([^"#]+\\.pdf)"`;
-
-  const patterns = [
-    new RegExp(`${PDF}[^>]*>\\s*${escaped}\\s*<`),
-    new RegExp(`${PDF}[^>]*>\\s*${escaped}`),
-    new RegExp(`${PDF}[^>]*>(?:[^<]*<[^>]+>)*\\s*${escaped}`),
-  ];
-  for (const p of patterns) {
-    const m = p.exec(section);
-    if (m) return resolveUrl(m[1], pageUrl);
-  }
-
-  // Pattern 4: 最近接 PDF リンク
-  let bestDist = Infinity;
-  let bestHref = null;
-  const nameRe = new RegExp(escaped, "g");
-  const linkRe = new RegExp(PDF, "g");
-  const names = [...section.matchAll(nameRe)];
-  const links = [...section.matchAll(linkRe)];
-  for (const nm of names) {
-    for (const lm of links) {
-      const dist = Math.abs(lm.index - nm.index);
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestHref = lm[1];
-      }
-    }
-  }
-  if (bestHref && bestDist < 500) return resolveUrl(bestHref, pageUrl);
-
-  throw new Error(
-    `「${systemName}」のPDFリンクが見つかりません。(ページ: ${pageUrl})`,
-  );
-}
-
-// ─── PDF URL 取得（出題の趣旨） ───────────────────────────────────────────
-async function fetchShushiPdfUrl(resultsUrl, sectionKeyword) {
-  const html = await fetchHtml(resultsUrl);
-
-  if (sectionKeyword) {
-    const kw = reEscape(sectionKeyword);
-    const p = new RegExp(
-      `href="([^"#]+\\.pdf)"[^>]*>[^<]*(?:出題の趣旨[^<]*${kw}|${kw}[^<]*出題の趣旨)`,
-    );
-    const m = p.exec(html);
-    if (m) return resolveUrl(m[1], resultsUrl);
-  }
-
-  // サブページへのリンクは相対（/jinji/...）と絶対（https://www.moj.go.jp/jinji/...）
-  // の両方の書き方が混在する（例: 令和元年は絶対URL）
-  const subM =
-    /href="((?:https?:\/\/www\.moj\.go\.jp)?\/jinji[^"]+\.html)"[^>]*>[^<]*出題の趣旨/.exec(
-      html,
-    );
-
-  if (subM && sectionKeyword) {
-    const subUrl = resolveUrl(subM[1], resultsUrl);
-    const subHtml = await fetchHtml(subUrl);
-    const kw = reEscape(sectionKeyword);
-    let m2 = new RegExp(`href="([^"#]+\\.pdf)"[^>]*>[^<]*${kw}`).exec(subHtml);
-    if (m2) return resolveUrl(m2[1], subUrl);
-    m2 = /href="([^"#]+\.pdf)"[^>]*>[^<]*選択科目/.exec(subHtml);
-    if (m2) return resolveUrl(m2[1], subUrl);
-  }
-
-  const p1 = /href="([^"#]+\.pdf)"[^>]*>[^<]*出題の趣旨/.exec(html);
-  if (p1) return resolveUrl(p1[1], resultsUrl);
-
-  if (subM) {
-    const subUrl = resolveUrl(subM[1], resultsUrl);
-    const subHtml = await fetchHtml(subUrl);
-    const m2 = /href="([^"#]+\.pdf)"/.exec(subHtml);
-    if (m2) return resolveUrl(m2[1], subUrl);
-  }
-
-  throw new Error(
-    `出題の趣旨PDFが見つかりません。(ページ: ${resultsUrl})`,
-  );
-}
-
-// ─── PDF URL 取得（採点実感） ─────────────────────────────────────────────
-async function fetchSaitenPdfUrl(resultsUrl, systemName, sectionKeyword) {
-  const html = await fetchHtml(resultsUrl);
-
-  if (sectionKeyword) {
-    const kw = reEscape(sectionKeyword);
-    const p = new RegExp(
-      `href="([^"#]+\\.pdf)"[^>]*>[^<]*(?:採点実感[^<]*${kw}|${kw}[^<]*採点実感)`,
-    );
-    const m = p.exec(html);
-    if (m) return resolveUrl(m[1], resultsUrl);
-  }
-
-  const directM = /href="([^"#]+\.pdf)"[^>]*>[^<]*採点実感/.exec(html);
-  // 相対・絶対どちらの URL 表記でもサブページを拾う（令和元年は絶対URL）
-  const subM =
-    /href="((?:https?:\/\/www\.moj\.go\.jp)?\/jinji[^"]+\.html)"[^>]*>[^<]*採点実感/.exec(
-      html,
-    );
-
-  if (subM) {
-    const subUrl = resolveUrl(subM[1], resultsUrl);
-    const subHtml = await fetchHtml(subUrl);
-    const target = sectionKeyword || systemName;
-    const escaped = reEscape(target);
-
-    let m2 = new RegExp(`href="([^"#]+\\.pdf)"[^>]*>[^<]*${escaped}`).exec(
-      subHtml,
-    );
-    if (m2) return resolveUrl(m2[1], subUrl);
-
-    if (sectionKeyword) {
-      m2 = /href="([^"#]+\.pdf)"[^>]*>[^<]*選択科目/.exec(subHtml);
-      if (m2) return resolveUrl(m2[1], subUrl);
-    }
-
-    m2 = /href="([^"#]+\.pdf)"[^>]*>[^<]*採点実感/.exec(subHtml);
-    if (m2) return resolveUrl(m2[1], subUrl);
-
-    m2 = /href="([^"#]+\.pdf)"/.exec(subHtml);
-    if (m2) return resolveUrl(m2[1], subUrl);
-  }
-
-  if (directM) return resolveUrl(directM[1], resultsUrl);
-
-  throw new Error(
-    `採点実感PDFが見つかりません。(ページ: ${resultsUrl})`,
-  );
-}
-
-// ─── PDF.js のロード ─────────────────────────────────────────────────────
-let _pdfjsPromise = null;
-async function loadPdfjs() {
-  if (_pdfjsPromise) return _pdfjsPromise;
-  _pdfjsPromise = (async () => {
-    const mod = await import(`${PDFJS_CDN}/pdf.min.mjs`);
-    mod.GlobalWorkerOptions.workerSrc = `${PDFJS_CDN}/pdf.worker.min.mjs`;
-    return mod;
-  })();
-  return _pdfjsPromise;
-}
-
-// ─── PDF → boxes 抽出 ─────────────────────────────────────────────────────
-// pdfminer の LTTextBox 相当のデータを PDF.js から構築する。
-// 各 box = { x0, x1, y1, text } で、ページ内で y1 降順。
-//
-// PDF.js は行単位（テキスト run 単位）の細かいアイテムしか返さない一方、
-// pdfminer は近接する行を 1 つの LTTextBox（≒段落）にまとめて返す。
-// 本コードでは
-//   1) アイテムを行にまとめ
-//   2) ベースライン間隔が行高の 1.5 倍未満なら同一段落として「ブロック」に集約
-//   3) ブロックを 1 ボックスに統合して返す
-// ことで pdfminer の挙動を近似する。
-async function extractBoxes(pdfBytes, onProgress) {
-  const pdfjsLib = await loadPdfjs();
-  const pdf = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
-  const boxes = [];
-
-  for (let pn = 1; pn <= pdf.numPages; pn++) {
-    const page = await pdf.getPage(pn);
-    const content = await page.getTextContent();
-
-    const items = content.items
-      .filter((it) => it && it.str)
-      .map((it) => ({
-        text: it.str,
-        x: it.transform[4],
-        y: it.transform[5],
-        width: it.width || 0,
-        height: it.height || 10,
-      }));
-
-    if (items.length === 0) {
-      onProgress && onProgress(pn / pdf.numPages);
-      continue;
-    }
-
-    const lines = groupItemsIntoLines(items);
-    const pageBoxes = groupLinesIntoBlocks(lines);
-    pageBoxes.sort((a, b) => b.y1 - a.y1);
-    for (const b of pageBoxes) b.page = pn;
-    boxes.push(...pageBoxes);
-
-    onProgress && onProgress(pn / pdf.numPages);
-  }
-
-  return boxes;
-}
-
-// アイテム群を「行」にまとめる。Y 座標が近いものを同一行とする。
-function groupItemsIntoLines(items) {
-  const sorted = [...items].sort((a, b) => {
-    if (Math.abs(a.y - b.y) > 1) return b.y - a.y;
-    return a.x - b.x;
-  });
-
-  const lines = [];
-  let cur = [];
-  let curY = null;
-  let curH = null;
-
-  for (const it of sorted) {
-    if (!it.text) continue;
-    if (curY === null) {
-      cur = [it];
-      curY = it.y;
-      curH = it.height;
-      continue;
-    }
-    const tol = Math.max(curH || it.height, 6) * 0.5;
-    if (Math.abs(it.y - curY) <= tol) {
-      cur.push(it);
-      if (it.height > curH) curH = it.height;
-    } else {
-      lines.push(makeLine(cur));
-      cur = [it];
-      curY = it.y;
-      curH = it.height;
-    }
-  }
-  if (cur.length) lines.push(makeLine(cur));
-  return lines;
-}
-
-function makeLine(items) {
-  items.sort((a, b) => a.x - b.x);
-  const text = items
-    .map((it) => it.text)
-    .join("")
-    .replace(/\s+$/, "")
-    .replace(/^\s+/, "");
-  const heights = items.map((it) => it.height).filter((h) => h > 0);
-  return {
-    text,
-    x0: Math.min(...items.map((it) => it.x)),
-    x1: Math.max(...items.map((it) => it.x + it.width)),
-    yBaseline: items[0].y,
-    yTop: Math.max(...items.map((it) => it.y + it.height)),
-    height: heights.length ? Math.max(...heights) : 10,
-  };
-}
-
-// 行群を「ブロック（≒pdfminer の LTTextBox）」にまとめて 1 ボックスにする。
-// ベースライン間距離が行高の 1.5 倍未満なら同一ブロックと判定（pdfminer
-// 既定の line_margin=0.5 と等価）。ルビ（短い & 全部ひらがな）は単独ボックス
-// として後段の isRuby() で除外させる。
-function groupLinesIntoBlocks(lines) {
-  const boxes = [];
-  let cur = [];
-
-  const flush = () => {
-    if (cur.length === 0) return;
-    const text = cur.map((l) => l.text).join("");
-    if (text) {
-      boxes.push({
-        x0: Math.min(...cur.map((l) => l.x0)),
-        x1: Math.max(...cur.map((l) => l.x1)),
-        y1: Math.max(...cur.map((l) => l.yTop)),
-        text,
-      });
-    }
-    cur = [];
-  };
-
-  const isRubyLine = (l) =>
-    l.x1 - l.x0 < 80 && /^[ぁ-ん\s]+$/.test(l.text);
-
-  // 行単体でヘッダー扱いすべき形（【...】単独 / 〔...〕単独 等）。
-  // これらは前後の行と結合せず、単独ボックスとして扱う。
-  const isStandaloneHeader = (l) => {
-    const t = l.text.trim();
-    if (/^【[^【】]+】$/.test(t)) return true;
-    if (/^〔[^〔〕]+〕$/.test(t)) return true;
-    if (/^〔第[１２３]問〕/.test(t) && t.length < 120) return true;
-    if (/^〔設問[0-9０-９]*〕/.test(t) && t.length < 120) return true;
-    // 採点実感のセクションタイトル（句点で終わらないため、放置すると
-    // 直後の本文と結合されてタイトル判定に失敗する年度がある）
-    if (isSaitenTitle(t)) return true;
-    return false;
-  };
-
-  const emitSolo = (line) => {
-    flush();
-    boxes.push({
-      x0: line.x0,
-      x1: line.x1,
-      y1: line.yTop,
-      text: line.text,
-    });
-  };
-
-  // 文末記号で終わっているか（「。」「．」「！」「？」、後続に閉じカッコや空白を許容）
-  const SENTENCE_END = /[。．！？!?][」』）)\s]*$/;
-
-  // 法律案・資料・事例などの構造マーカー行（「第１ ○○」「１ ○○」「１．○○」）。
-  // この行から新しいブロックを開始する（行自体は後続と結合してよい）。
-  const isStructureMarker = (l) =>
-    /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ．.]/.test(l.text);
-
-  // 会話文の開始行（「甲：」「Ｘ：」のような短い話者名＋全角コロン）
-  const isDialogueLine = (l) => /^[^\s。、．：]{1,4}：/.test(l.text);
-
-  for (const line of lines) {
-    if (!line.text) continue;
-
-    if (isRubyLine(line)) {
-      // ルビは段落に混ぜず単独ボックスとして残す（後段の isRuby で除外）
-      emitSolo(line);
-      continue;
-    }
-
-    if (isStandaloneHeader(line)) {
-      emitSolo(line);
-      continue;
-    }
-
-    if (isStructureMarker(line) || isDialogueLine(line)) {
-      flush();
-      cur = [line];
-      continue;
-    }
-
-    if (cur.length === 0) {
-      cur = [line];
-      continue;
-    }
-
-    const prev = cur[cur.length - 1];
-    const bbd = prev.yBaseline - line.yBaseline; // 上の行ほど y が大きい
-    const avgH = (prev.height + line.height) / 2;
-
-    // (1) 前の行が文末記号で終わっていなければほぼ確実に継続行 → 結合する。
-    //     PDF の行間が広めで近接判定が外れても拾えるよう、行高の 3 倍まで許容。
-    const prevEndsSentence = SENTENCE_END.test(prev.text);
-    if (!prevEndsSentence && bbd > 0 && bbd < avgH * 3) {
-      cur.push(line);
-      continue;
-    }
-
-    // (2) 文末で終わる場合は通常の近接判定。
-    //     pdfminer 既定（line_margin=0.5）よりやや広めの 1.7 倍。
-    const threshold = avgH * 1.7;
-    if (bbd > 0 && bbd < threshold) {
-      cur.push(line);
-    } else {
-      flush();
-      cur = [line];
-    }
-  }
-  flush();
-
-  return boxes;
-}
-
-// ─── フィルタ判定 ─────────────────────────────────────────────────────────
-function isRuby(b) {
-  return b.x1 - b.x0 < 80 && /^[ぁ-ん\s]+$/.test(b.text);
-}
-function isPagenum(b) {
-  return /^-\s*\d+\s*-$/.test(b.text);
-}
-function isHeader(b) {
-  return /^(論文式試験問題集|［公法系科目］|［民事系科目］|［刑事系科目］|［選択科目)/.test(
-    b.text,
-  );
-}
-function isSaitenTitle(t) {
-  // 平成23年以前は「新司法試験」表記
-  return (
-    /^[令平].{1,8}年新?司法試験/.test(t) &&
-    t.includes("採点実感") &&
-    t.length < 80
-  );
-}
-
-// 抽出対象ボックス群が占めるページ範囲 [開始, 終了] を返す（1 始まり）
-function pageRangeOf(boxes) {
-  const pages = boxes.map((b) => b.page).filter((p) => Number.isInteger(p));
-  if (!pages.length) return null;
-  return [Math.min(...pages), Math.max(...pages)];
-}
-
-// ─── 段落抽出（試験問題用、X 座標インデント判定） ───────────────────────
-function parseParagraphs(boxes, startMarker, endMarker) {
-  const si = boxes.findIndex((b) => b.text.includes(startMarker));
-  if (si === -1) throw new Error(`開始マーカー「${startMarker}」が見つかりません。`);
-  let ei = boxes.length;
-  if (endMarker) {
-    const idx = boxes.findIndex((b) => b.text.includes(endMarker));
-    if (idx !== -1) ei = idx;
-  }
-
-  const paras = [];
-  let cur = "";
-  let prevX = null;
-  let inLaw = false;
-
-  for (let i = si; i < ei; i++) {
-    const b = boxes[i];
-    if (isRuby(b) || isPagenum(b) || isHeader(b)) continue;
-    const t = b.text;
-    const x0 = b.x0;
-
-    if (/^〔設問[0-9０-９]*〕/.test(t)) {
-      if (cur) paras.push(cur);
-      cur = "";
-      paras.push(t);
-      prevX = x0;
-      inLaw = false;
-      continue;
-    }
-    if (/^【.+】/.test(t)) {
-      if (cur) paras.push(cur);
-      cur = "";
-      paras.push(t);
-      prevX = x0;
-      inLaw = false;
-      continue;
-    }
-    // 【資料】等の見出し直後の短いタイトル行（例: 法律案の骨子の題名）は
-    // 見出しと同じ行に結合する
-    if (
-      !cur &&
-      paras.length &&
-      /^【[^【】]+】$/.test(paras[paras.length - 1]) &&
-      t.length < 40 &&
-      !/[。．！？]$/.test(t) &&
-      !/^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ]/.test(t)
-    ) {
-      paras[paras.length - 1] += t;
-      prevX = x0;
-      continue;
-    }
-    if (/^第\d+条/.test(t)) {
-      if (cur) paras.push(cur);
-      cur = t;
-      prevX = 999;
-      inLaw = true;
-      continue;
-    }
-    if (inLaw) {
-      cur += t;
-      continue;
-    }
-    // 構造マーカー（「第１ ○○」「１ ○○」「１．○○」）や会話文の開始
-    // （「甲：」「Ｘ：」）は新しい段落を開始する
-    if (
-      /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ．.]/.test(t) ||
-      /^[^\s。、．：]{1,4}：/.test(t)
-    ) {
-      if (cur) paras.push(cur);
-      cur = t;
-      prevX = x0;
-      continue;
-    }
-
-    // 会話の発言が改ページ等で分断された場合の継続
-    // （発言が文末記号で終わっていなければ続きとみなして結合する）
-    if (
-      cur &&
-      /^[^\s。、．：]{1,4}：/.test(cur) &&
-      !/[。．！？!?][」』）)\s]*$/.test(cur)
-    ) {
-      cur += t;
-      prevX = x0;
-      continue;
-    }
-
-    if (prevX === null || x0 > prevX + 5) {
-      if (cur) paras.push(cur);
-      cur = t;
-    } else {
-      cur += t;
-    }
-    prevX = x0;
-  }
-  if (cur) paras.push(cur);
-  return { paras, pageRange: pageRangeOf(boxes.slice(si, ei)) };
-}
-
-// ─── narrative（出題の趣旨・採点実感）見出し判定 ───────────────────────
-function isNarrativeHeading(t) {
-  const ts = t.trim();
-  if (!ts) return false;
-  if (isSaitenTitle(ts)) return true;
-  if (/^〔第[１２３]問〕\s*$/.test(ts)) return true;
-  if (/^【.+】\s*$/.test(ts)) return true;
-  if (/^第[一二三四五六七八九十\d]+[　\s]/.test(ts) && ts.length < 50)
-    return true;
-  if (
-    /^[１２３４５６７８９\d]+[　\s]/.test(ts) &&
-    ts.length < 35 &&
-    !ts.includes("\n")
-  )
-    return true;
-  return false;
-}
-
-function parseNarrativeParagraphs(secBoxes, extraSkip) {
-  const paras = [];
-  let cur = "";
-  let prevX = null;
-
-  for (const b of secBoxes) {
-    if (isPagenum(b) || isRuby(b)) continue;
-    if (extraSkip && extraSkip(b)) continue;
-    const t = b.text;
-    const x0 = b.x0;
-
-    if (isNarrativeHeading(t)) {
-      if (cur) paras.push(cur);
-      cur = "";
-      paras.push(t.trim());
-      prevX = x0;
-      continue;
-    }
-
-    if (prevX === null || x0 > prevX + 5) {
-      if (cur) paras.push(cur);
-      cur = t;
-    } else {
-      cur += t;
-    }
-    prevX = x0;
-  }
-  if (cur) paras.push(cur);
-  return paras;
-}
-
-function parseShushiSection(boxes, systemName, qNum) {
-  const sysHeader = `【${systemName}】`;
-  const sysNosp = nosp(sysHeader);
-
-  const secSi = boxes.findIndex((b) => nosp(b.text).includes(sysNosp));
-  if (secSi === -1) throw new Error(`「${sysHeader}」が見つかりません。`);
-
-  let secEi = boxes.length;
-  for (let i = secSi + 1; i < boxes.length; i++) {
-    const tx = boxes[i].text.trim();
-    if (/^【.+】$/.test(tx) && !nosp(tx).includes(sysNosp)) {
-      secEi = i;
-      break;
-    }
-  }
-  const secBoxes = boxes.slice(secSi, secEi);
-
-  const qMarker = `〔第${Q_KANJI[qNum]}問〕`;
-  const qSi = secBoxes.findIndex((b) => b.text.includes(qMarker));
-  if (qSi === -1)
-    throw new Error(`「${qMarker}」が出題の趣旨PDF内に見つかりません。`);
-
-  let qEi = secBoxes.length;
-  if (Q_KANJI[qNum + 1]) {
-    const nxt = `〔第${Q_KANJI[qNum + 1]}問〕`;
-    for (let i = qSi + 1; i < secBoxes.length; i++) {
-      if (secBoxes[i].text.includes(nxt)) {
-        qEi = i;
-        break;
-      }
-    }
-  }
-
-  const skip = (b) => {
-    const t = b.text;
-    return nosp(t).includes(sysNosp) && t.length < 20;
-  };
-  const qBoxes = secBoxes.slice(qSi, qEi);
-  return { paras: parseNarrativeParagraphs(qBoxes, skip), pageRange: pageRangeOf(qBoxes) };
-}
-
-function parseShushiSectionSelect(boxes, sectionKeyword, qNum) {
-  const kwNosp = nosp(sectionKeyword);
-  const otherNosp = SELECT_SUBJECTS.map((s) => nosp(s)).filter(
-    (s) => s !== kwNosp,
-  );
-
-  const isSubjectHeader = (b, nameNosp) => {
-    const ts = b.text.trim();
-    return ts.length < 30 && nosp(ts).includes(nameNosp);
-  };
-
-  let secSi = boxes.findIndex((b) => isSubjectHeader(b, kwNosp));
-  let secEi = boxes.length;
-  if (secSi === -1) {
-    secSi = 0; // 個別 PDF と仮定
-  } else {
-    for (let i = secSi + 1; i < boxes.length; i++) {
-      if (otherNosp.some((on) => isSubjectHeader(boxes[i], on))) {
-        secEi = i;
-        break;
-      }
-    }
-  }
-  const secBoxes = boxes.slice(secSi, secEi);
-
-  const qMarker = `〔第${Q_KANJI[qNum]}問〕`;
-  const qSi = secBoxes.findIndex((b) => b.text.includes(qMarker));
-  if (qSi === -1)
-    throw new Error(
-      `出題の趣旨PDF内の「${sectionKeyword}」セクションに「${qMarker}」が見つかりません。`,
-    );
-
-  let qEi = secBoxes.length;
-  if (Q_KANJI[qNum + 1]) {
-    const nxt = `〔第${Q_KANJI[qNum + 1]}問〕`;
-    for (let i = qSi + 1; i < secBoxes.length; i++) {
-      if (secBoxes[i].text.includes(nxt)) {
-        qEi = i;
-        break;
-      }
-    }
-  }
-
-  const skip = (b) => {
-    const ts = b.text.trim();
-    return ts.length < 10 && kwNosp === nosp(ts);
-  };
-  const qBoxes = secBoxes.slice(qSi, qEi);
-  return { paras: parseNarrativeParagraphs(qBoxes, skip), pageRange: pageRangeOf(qBoxes) };
-}
-
-function parseSaitenSection(boxes, systemName, qNum, sectionKeyword, subjectLabel) {
-  const qKanji = Q_KANJI[qNum];
-  const target = sectionKeyword || systemName;
-  const escaped = reEscape(target);
-
-  // タイトルの書式は年度・科目で異なる:
-  //   問別:     令和７年司法試験の採点実感（公法系科目第１問）
-  //   科目単位: 令和７年司法試験の採点実感（労働法）          ← 選択科目
-  //   系列単位: 平成２３年新司法試験の採点実感等に関する意見（公法系科目）
-  //   科目名:   平成２２年新司法試験の採点実感等に関する意見（憲法）
-  // 問別タイトルを優先し、なければ科目・系列単位のセクション全体を返す
-  // （その場合は第１問・第２問が分かれていないため両方を含む）。
-  const patterns = [
-    new RegExp(`${escaped}[^第]{0,5}?第${reEscape(qKanji)}問`),
-    new RegExp(`[（(]${escaped}[）)]`),
-  ];
-  // 表示ラベル（例: 公法系第１問（憲法））から科目名を取り出してフォールバックに使う
-  const subjM = /（(.+)）/.exec(subjectLabel || "");
-  if (subjM && subjM[1] !== target) {
-    patterns.push(new RegExp(`[（(]${reEscape(subjM[1])}[）)]`));
-  }
-
-  for (const pattern of patterns) {
-    const si = boxes.findIndex(
-      (b) => isSaitenTitle(b.text) && pattern.test(b.text),
-    );
-    if (si === -1) continue;
-    let ei = boxes.length;
-    for (let i = si + 1; i < boxes.length; i++) {
-      if (isSaitenTitle(boxes[i].text)) {
-        ei = i;
-        break;
-      }
-    }
-    const targetBoxes = boxes.slice(si, ei);
-    return {
-      paras: parseNarrativeParagraphs(targetBoxes),
-      pageRange: pageRangeOf(targetBoxes),
-    };
-  }
-
-  throw new Error(
-    `採点実感「${target}第${qKanji}問」のタイトルが見つかりません。`,
-  );
-}
-
-// ─── テキスト出力（ノーマル / Scrapbox 記法） ──────────────────────────────
-// decorate=true のときだけ Scrapbox の装飾（[* ] [** ] #タグ）を付ける
-// 公共データ利用規約（PDL1.0）に基づく出典・加工の表示
-function sourceLine(pdfUrl) {
-  return `出典：法務省ウェブサイト（${pdfUrl}）を加工して作成`;
-}
-
-function toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate) {
-  const out = [`${yearLabel}司法試験　${subjectLabel}`];
-  if (pdfUrl) out.push(sourceLine(pdfUrl));
-  if (decorate) {
-    const m = /（(.+)）/.exec(subjectLabel);
-    const tag = m ? m[1] : subjectLabel;
-    out.push(`#司法試験 #${tag} #論文式 #${yearLabel}`);
-  }
-  out.push("");
-  // 構造マーカー行（「第１ ○○」「１ ○○」「１．○○」）と会話文
-  // （「甲：」「Ｘ：」）は空行なしの連続行として出力する
-  const isMarker = (p) =>
-    /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ．.]/.test(p);
-  const isDialogue = (p) => /^[^\s。、．：]{1,4}：/.test(p);
-  let inDialogue = false;
-  let inMarkerBlock = false;
-  for (const p of paras) {
-    const dialogue = isDialogue(p);
-    const marker = !dialogue && isMarker(p);
-    // 連続行ブロック（会話・番号付き項目）の終わりには空行を1つ入れる
-    if ((inDialogue && !dialogue) || (inMarkerBlock && !marker && !dialogue))
-      out.push("");
-    if (/^〔設問[0-9０-９]*〕/.test(p)) {
-      // 設問見出しは前に空行を1つ足し（計2行空け）、直後の本文は次行に続ける
-      out.push("");
-      out.push(decorate ? `[** ${p}]` : p);
-    } else if (/^【.+】/.test(p)) {
-      out.push(decorate ? `[* ${p}]` : p);
-      // 【資料】は直後に題名・条項が続くため空行を入れない
-      if (!p.includes("資料")) out.push("");
-    } else if (dialogue) {
-      // 直前の段落・発言と空行なしで詰める
-      if (out[out.length - 1] === "") out.pop();
-      out.push(p);
-    } else if (marker) {
-      out.push(p);
-    } else {
-      out.push(p);
-      out.push("");
-    }
-    inDialogue = dialogue;
-    inMarkerBlock = marker;
-  }
-  return out.join("\n").replace(/\s+$/, "") + "\n";
-}
-
-function toScrapboxNarrative(
-  paras,
-  yearLabel,
-  subjectLabel,
-  docType,
-  pdfUrl,
-  decorate,
-) {
-  const out = [`${yearLabel}司法試験　${subjectLabel}　${docType}`];
-  if (pdfUrl) out.push(sourceLine(pdfUrl));
-  if (decorate) {
-    const m = /（(.+)）/.exec(subjectLabel);
-    const tag = m ? m[1] : subjectLabel;
-    out.push(`#司法試験 #${tag} #論文式 #${yearLabel} #${docType}`);
-  }
-  out.push("");
-  for (const p of paras) {
-    const ps = p.trim();
-    if (isSaitenTitle(p)) out.push(decorate ? `[** ${p}]` : p);
-    else if (/^〔第[１２３]問〕$/.test(ps)) out.push(decorate ? `[** ${ps}]` : ps);
-    else if (/^【.+】$/.test(ps)) out.push(decorate ? `[* ${ps}]` : ps);
-    else if (
-      p.length < 30 &&
-      /^[１２３４５６７８９\d]+[　\s]/.test(p) &&
-      !p.includes("\n")
-    )
-      out.push(decorate ? `[* ${p}]` : p);
-    else out.push(p);
-    out.push("");
-  }
-  return out.join("\n").replace(/\s+$/, "") + "\n";
-}
-
-// ─── 実行ディスパッチ ─────────────────────────────────────────────────────
-function parseYearKey(key) {
-  if (key.startsWith("r")) return { key, label: `令和${key.slice(1)}年` };
-  return { key, label: `平成${key.slice(1)}年` };
-}
-
-// 年度×科目×種類ごとの処理結果キャッシュ。
-// テキスト変換と原典PDF保存（単体・一括zip）が同じ取得・解析結果を
-// 共有し、二重処理を防ぐ。
-const sourceCache = new Map();
-const SOURCE_CACHE_MAX = 12;
-
-function cachePut(key, entry) {
-  sourceCache.delete(key);
-  sourceCache.set(key, entry);
-  if (sourceCache.size > SOURCE_CACHE_MAX) {
-    sourceCache.delete(sourceCache.keys().next().value);
-  }
-}
-
-// キャッシュエントリから呼び出し元向けの結果を組み立てる
-function assembleResult(entry, docType, decorate) {
-  const { yearLabel, subjectLabel, paras, pdfUrl, pageRange, pdfBytes } = entry;
-  const result =
-    docType === "試験問題"
-      ? toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate)
-      : toScrapboxNarrative(
-          paras,
-          yearLabel,
-          subjectLabel,
-          docType,
-          pdfUrl,
-          decorate,
-        );
-  return { yearLabel, subjectLabel, docType, result, pdfUrl, pageRange, pdfBytes };
-}
-
-async function runConversion({ yearKey, subject, docType, decorate }, ctx) {
-  const { log, setProgress } = ctx;
-  if (!(yearKey in YEAR_URL_MAP)) throw new Error(`未対応の年度: ${yearKey}`);
-  if (!(subject in SUBJECT_MAP)) throw new Error(`未対応の科目: ${subject}`);
-
-  // 同じ年度・科目・種類を処理済みなら再取得せずキャッシュを使う
-  const cacheId = `${yearKey}|${subject}|${docType}`;
-  const cached = sourceCache.get(cacheId);
-  if (cached) {
-    log(`処理済みのため再取得を省略: ${cached.yearLabel} ${cached.subjectLabel} ${docType}`);
-    setProgress(1.0);
-    return assembleResult(cached, docType, decorate);
-  }
-
-  const { label: yearLabel } = parseYearKey(yearKey);
-  const entry = SUBJECT_MAP[subject];
-  const [systemName, qNum, subjectLabel, sectionKeyword] = entry;
-
-  let pdfUrl;
-  let referer;
-  if (docType === "試験問題") {
-    const pageUrl = YEAR_URL_MAP[yearKey];
-    log(`取得中: ${yearLabel} ${subjectLabel}`);
-    setProgress(0.05);
-    pdfUrl = await fetchExamPdfUrl(pageUrl, systemName);
-    referer = pageUrl;
-  } else if (docType === "出題の趣旨") {
-    if (!(yearKey in RESULTS_URL_MAP))
-      throw new Error(`${yearLabel} は出題の趣旨に未対応です。`);
-    const resultsUrl = RESULTS_URL_MAP[yearKey];
-    log(`取得中: ${yearLabel} ${subjectLabel} 出題の趣旨`);
-    setProgress(0.05);
-    pdfUrl = await fetchShushiPdfUrl(resultsUrl, sectionKeyword);
-    referer = resultsUrl;
-  } else if (docType === "採点実感") {
-    if (!(yearKey in RESULTS_URL_MAP))
-      throw new Error(`${yearLabel} は採点実感に未対応です。`);
-    if (NO_SAITEN.has(yearKey))
-      throw new Error(`${yearLabel} の採点実感は法務省ウェブに掲載されていません。`);
-    const resultsUrl = RESULTS_URL_MAP[yearKey];
-    log(`取得中: ${yearLabel} ${subjectLabel} 採点実感`);
-    setProgress(0.05);
-    pdfUrl = await fetchSaitenPdfUrl(resultsUrl, systemName, sectionKeyword);
-    referer = resultsUrl;
-  } else {
-    throw new Error(`未対応の種類: ${docType}`);
-  }
-
-  log(`  PDF: ${pdfUrl}`);
-  setProgress(0.2);
-  const pdfBytes = await fetchPdf(pdfUrl);
-  log(`  ${pdfBytes.byteLength.toLocaleString()} バイト`);
-  setProgress(0.4);
-
-  // PDF.js は渡した ArrayBuffer を worker に移譲（detach）するため、
-  // 原典PDF保存用にコピーを確保しておく。
-  const pdfBytesCopy = pdfBytes.slice(0);
-
-  let boxes = await extractBoxes(pdfBytes, (f) => {
-    setProgress(0.4 + 0.4 * f);
-  });
-
-  // 選択科目の試験問題: セクションを絞り込む
-  if (docType === "試験問題" && sectionKeyword) {
-    const kwNosp = nosp(sectionKeyword);
-    let secStart = boxes.findIndex(
-      (b) => nosp(b.text).includes(kwNosp) && isHeader(b),
-    );
-    if (secStart === -1)
-      secStart = boxes.findIndex((b) => nosp(b.text).includes(kwNosp));
-    if (secStart === -1)
-      throw new Error(
-        `選択科目PDFに「${sectionKeyword}」が見つかりません。`,
-      );
-    let secEnd = boxes.length;
-    for (let i = secStart + 1; i < boxes.length; i++) {
-      if (
-        boxes[i].text.includes("論文式試験問題集") &&
-        !nosp(boxes[i].text).includes(kwNosp)
-      ) {
-        secEnd = i;
-        break;
-      }
-    }
-    boxes = boxes.slice(secStart, secEnd);
-  }
-
-  setProgress(0.85);
-
-  let paras, pageRange;
-  if (docType === "試験問題") {
-    let startMarker = `〔第${Q_KANJI[qNum]}問〕`;
-    let endMarker = null;
-    if (Q_KANJI[qNum + 1]) {
-      if (sectionKeyword) {
-        const cand2 = `〔第${Q_KANJI[qNum + 1]}問〕`;
-        if (boxes.some((b) => b.text.includes(cand2))) endMarker = cand2;
-      } else {
-        const cand = `論文式試験問題集［${systemName}第${Q_KANJI[qNum + 1]}問］`;
-        if (boxes.some((b) => b.text.includes(cand))) endMarker = cand;
-        else {
-          const cand2 = `〔第${Q_KANJI[qNum + 1]}問〕`;
-          if (boxes.some((b) => b.text.includes(cand2))) endMarker = cand2;
-        }
-      }
-    }
-    ({ paras, pageRange } = parseParagraphs(boxes, startMarker, endMarker));
-  } else if (docType === "出題の趣旨") {
-    if (sectionKeyword)
-      ({ paras, pageRange } = parseShushiSectionSelect(
-        boxes,
-        sectionKeyword,
-        qNum,
-      ));
-    else ({ paras, pageRange } = parseShushiSection(boxes, systemName, qNum));
-  } else {
-    ({ paras, pageRange } = parseSaitenSection(
-      boxes,
-      systemName,
-      qNum,
-      sectionKeyword,
-      subjectLabel,
-    ));
-  }
-
-  setProgress(0.95);
-
-  const cacheEntry = {
-    yearLabel,
-    subjectLabel,
-    paras,
-    pdfUrl,
-    pageRange,
-    pdfBytes: pdfBytesCopy,
-  };
-  cachePut(cacheId, cacheEntry);
-
-  setProgress(1.0);
-  return assembleResult(cacheEntry, docType, decorate);
-}
-
-// =============================================================================
-// ─── UI ─────────────────────────────────────────────────────────────────────
-// =============================================================================
 const $ = (id) => document.getElementById(id);
 
+// ─── 画面初期化 ───────────────────────────────────────────────────────────
 function initSelectors() {
   const yearSelect = $("year");
   const keys = Object.keys(YEAR_URL_MAP).reverse();
   for (const k of keys) {
-    const label = k.startsWith("r") ? `令和${k.slice(1)}年` : `平成${k.slice(1)}年`;
+    const label = k.startsWith("r")
+      ? `令和${k.slice(1)}年`
+      : `平成${k.slice(1)}年`;
     const opt = document.createElement("option");
     opt.value = k;
     opt.textContent = label;
@@ -1067,14 +57,21 @@ function initNews() {
   }
 }
 
+// ─── タブ・ログ・進捗 ─────────────────────────────────────────────────────
+function activatePane(target) {
+  document.querySelectorAll(".tab").forEach((t) => {
+    const active = t.dataset.target === target;
+    t.classList.toggle("active", active);
+    t.setAttribute("aria-selected", String(active));
+  });
+  document
+    .querySelectorAll(".pane")
+    .forEach((p) => p.classList.toggle("active", p.id === target));
+}
+
 function setupTabs() {
   document.querySelectorAll(".tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-      document.querySelectorAll(".pane").forEach((p) => p.classList.remove("active"));
-      tab.classList.add("active");
-      document.getElementById(tab.dataset.target).classList.add("active");
-    });
+    tab.addEventListener("click", () => activatePane(tab.dataset.target));
   });
 }
 
@@ -1083,7 +80,13 @@ function appendLog(msg, kind = "info") {
   const line = document.createElement("span");
   line.className = kind;
   const prefix =
-    kind === "ok" ? "[OK] " : kind === "err" ? "[NG] " : kind === "warn" ? "[!] " : "";
+    kind === "ok"
+      ? "[OK] "
+      : kind === "err"
+        ? "[NG] "
+        : kind === "warn"
+          ? "[!] "
+          : "";
   line.textContent = prefix + msg + "\n";
   log.appendChild(line);
   log.scrollTop = log.scrollHeight;
@@ -1098,16 +101,37 @@ function setStatus(text, kind = "") {
 function setProgressBar(frac) {
   const pct = Math.max(0, Math.min(100, Math.round(frac * 100)));
   $("bar-fill").style.width = pct + "%";
+  $("bar").setAttribute("aria-valuenow", String(pct));
   if (pct >= 100) setStatus("100% 完了", "ok");
   else if (pct === 0) setStatus("待機中");
   else setStatus(`${pct}% 進行中`);
 }
 
+// 変換・保存処理の排他制御。処理中は実行系ボタンをすべて無効化する
+function setBusy(busy) {
+  for (const id of ["run", "source", "source-zip"]) {
+    $(id).disabled = busy;
+  }
+}
+
+const convertCtx = () => ({
+  log: (m) => appendLog(m, "info"),
+  setProgress: setProgressBar,
+});
+
+// ─── 変換実行・テキスト出力 ───────────────────────────────────────────────
 let lastResult = "";
 
 function selectedFormat() {
   const el = document.querySelector('input[name="format"]:checked');
   return el ? el.value : "plain";
+}
+
+function currentYearLabel() {
+  const yearKey = $("year").value;
+  return yearKey.startsWith("r")
+    ? `令和${yearKey.slice(1)}年`
+    : `平成${yearKey.slice(1)}年`;
 }
 
 async function onRun() {
@@ -1121,46 +145,26 @@ async function onRun() {
   lastResult = "";
   $("copy").disabled = true;
   $("download").disabled = true;
-  $("run").disabled = true;
+  setBusy(true);
   setProgressBar(0);
   setStatus("開始");
-
-  // 結果タブを表示
-  document.querySelectorAll(".tab").forEach((t) =>
-    t.classList.toggle("active", t.dataset.target === "log"),
-  );
-  document
-    .querySelectorAll(".pane")
-    .forEach((p) => p.classList.toggle("active", p.id === "log"));
+  activatePane("log");
 
   try {
     const { yearLabel, subjectLabel, docType: dt, result } =
-      await runConversion(
-        { yearKey, subject, docType, decorate },
-        {
-          log: (m) => appendLog(m, "info"),
-          setProgress: setProgressBar,
-        },
-      );
+      await runConversion({ yearKey, subject, docType, decorate }, convertCtx());
     lastResult = result;
     $("result").textContent = result;
     $("copy").disabled = false;
     $("download").disabled = false;
     appendLog(`完了: ${yearLabel} ${subjectLabel} ${dt}`, "ok");
     setStatus("完了", "ok");
-
-    // 結果タブに切替
-    document
-      .querySelectorAll(".tab")
-      .forEach((t) => t.classList.toggle("active", t.dataset.target === "result"));
-    document
-      .querySelectorAll(".pane")
-      .forEach((p) => p.classList.toggle("active", p.id === "result"));
+    activatePane("result");
   } catch (e) {
     appendLog(e.message, "err");
     setStatus("エラー", "error");
   } finally {
-    $("run").disabled = false;
+    setBusy(false);
   }
 }
 
@@ -1176,107 +180,21 @@ async function onCopy() {
 
 function onDownload() {
   if (!lastResult) return;
-  const yearKey = $("year").value;
   const subject = $("subject").value;
   const docType = $("type").value;
-  const yearLabel = yearKey.startsWith("r")
-    ? `令和${yearKey.slice(1)}年`
-    : `平成${yearKey.slice(1)}年`;
   const suffix =
     docType === "試験問題"
       ? "司法試験問題"
       : docType === "出題の趣旨"
         ? "出題の趣旨"
         : "採点実感";
-  const formatSuffix = selectedFormat() === "scrapbox" ? "（scrapbox記法）" : "";
-  const filename = `${yearLabel}${subject}${suffix}${formatSuffix}.txt`;
-  const blob = new Blob([lastResult], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-// ─── 原典PDF（該当ページのみ）保存 ──────────────────────────────────────
-let _pdfLibPromise = null;
-async function loadPdfLib() {
-  if (!_pdfLibPromise)
-    _pdfLibPromise = import("https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm");
-  return _pdfLibPromise;
-}
-
-// ファイル名をヘッダー用の透過 PNG として描画する（PDF への日本語テキスト
-// 埋め込みは日本語フォントの同梱が必要になるため、Canvas 描画で代替する）
-function makeTextStampPng(text) {
-  const fontPx = 48;
-  const font = `${fontPx}px -apple-system, "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif`;
-  const canvas = document.createElement("canvas");
-  let ctx = canvas.getContext("2d");
-  ctx.font = font;
-  canvas.width = Math.ceil(ctx.measureText(text).width) + 8;
-  canvas.height = Math.ceil(fontPx * 1.4);
-  ctx = canvas.getContext("2d"); // サイズ変更で状態が初期化されるため再設定
-  ctx.font = font;
-  ctx.fillStyle = "#555555";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, 4, canvas.height / 2);
-  return { dataUrl: canvas.toDataURL("image/png"), aspect: canvas.width / canvas.height };
-}
-
-// 原典PDFから該当ページを抜き出し、出典・ファイル名スタンプを付けた
-// PDF バイト列を生成する
-async function buildStampedPdf(pdfBytes, pageRange, baseName, pdfUrl) {
-  const { PDFDocument } = await loadPdfLib();
-  const src = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
-  const total = src.getPageCount();
-
-  let out;
-  let rangeLabel = `全${total}ページ`;
-  if (pageRange) {
-    const start = Math.max(1, pageRange[0]);
-    const end = Math.min(total, pageRange[1]);
-    const indices = [];
-    for (let p = start; p <= end; p++) indices.push(p - 1);
-    out = await PDFDocument.create();
-    const pages = await out.copyPages(src, indices);
-    for (const pg of pages) out.addPage(pg);
-    rangeLabel =
-      start === end ? `${start}ページのみ` : `${start}〜${end}ページ`;
-  } else {
-    out = src;
-  }
-
-  // 各ページのフッターにファイル名（右）と出典・加工表示（左）を記載
-  const stamp = makeTextStampPng(baseName);
-  const stampImg = await out.embedPng(stamp.dataUrl);
-  const stampH = 9; // pt
-  const stampW = stampH * stamp.aspect;
-  const srcStamp = makeTextStampPng(sourceLine(pdfUrl));
-  const srcImg = await out.embedPng(srcStamp.dataUrl);
-  const srcH = 7; // pt
-  const srcW = srcH * srcStamp.aspect;
-  for (const page of out.getPages()) {
-    page.drawImage(stampImg, {
-      x: page.getWidth() - stampW - 28,
-      y: 16,
-      width: stampW,
-      height: stampH,
-      opacity: 0.85,
-    });
-    page.drawImage(srcImg, {
-      x: 28,
-      y: 17,
-      width: srcW,
-      height: srcH,
-      opacity: 0.85,
-    });
-  }
-
-  return { bytes: await out.save(), rangeLabel, total };
+  const formatSuffix =
+    selectedFormat() === "scrapbox" ? "（scrapbox記法）" : "";
+  const filename = `${currentYearLabel()}${subject}${suffix}${formatSuffix}.txt`;
+  triggerDownload(
+    new Blob([lastResult], { type: "text/plain;charset=utf-8" }),
+    filename,
+  );
 }
 
 function triggerDownload(blob, filename) {
@@ -1290,38 +208,19 @@ function triggerDownload(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-function currentYearLabel() {
-  const yearKey = $("year").value;
-  return yearKey.startsWith("r")
-    ? `令和${yearKey.slice(1)}年`
-    : `平成${yearKey.slice(1)}年`;
-}
-
-let _fflatePromise = null;
-async function loadFflate() {
-  if (!_fflatePromise)
-    _fflatePromise = import("https://cdn.jsdelivr.net/npm/fflate@0.8.2/+esm");
-  return _fflatePromise;
-}
-
-function setSaveButtonsDisabled(disabled) {
-  $("run").disabled = disabled;
-  $("source").disabled = disabled;
-  $("source-zip").disabled = disabled;
-}
-
+// ─── 原典PDF保存 ─────────────────────────────────────────────────────────
 // 選択中の種類の原典PDF（該当ページのみ）を保存する。
 // 変換実行済みならキャッシュを再利用し、未処理なら自動で取得する。
 async function onSaveSourcePdf() {
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const docType = $("type").value;
-  setSaveButtonsDisabled(true);
+  setBusy(true);
   let fallbackUrl = "";
   try {
     const { pdfUrl, pageRange, pdfBytes } = await runConversion(
       { yearKey, subject, docType, decorate: false },
-      { log: (m) => appendLog(m, "info"), setProgress: setProgressBar },
+      convertCtx(),
     );
     fallbackUrl = pdfUrl;
     const baseName = `${currentYearLabel()}司法試験${subject}${docType}`;
@@ -1348,7 +247,7 @@ async function onSaveSourcePdf() {
     }
     setStatus("エラー", "error");
   } finally {
-    setSaveButtonsDisabled(false);
+    setBusy(false);
   }
 }
 
@@ -1357,7 +256,7 @@ async function onSaveSourceZip() {
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const yearLabel = currentYearLabel();
-  setSaveButtonsDisabled(true);
+  setBusy(true);
   setStatus("一括取得中");
   try {
     // zip 内は「[年度]司法試験[科目名]一式」フォルダにまとめる
@@ -1368,7 +267,7 @@ async function onSaveSourceZip() {
         appendLog(`一括取得: ${docType}`);
         const { pdfUrl, pageRange, pdfBytes } = await runConversion(
           { yearKey, subject, docType, decorate: false },
-          { log: (m) => appendLog(m, "info"), setProgress: setProgressBar },
+          convertCtx(),
         );
         const baseName = `${yearLabel}司法試験${subject}${docType}`;
         const { bytes, rangeLabel, total } = await buildStampedPdf(
@@ -1390,7 +289,8 @@ async function onSaveSourceZip() {
     }
 
     const { zipSync } = await loadFflate();
-    const zipped = zipSync(files);
+    // PDF は圧縮済みなので再圧縮せず格納のみ（level: 0）
+    const zipped = zipSync(files, { level: 0 });
     triggerDownload(
       new Blob([zipped], { type: "application/zip" }),
       `${folder}.zip`,
@@ -1401,7 +301,7 @@ async function onSaveSourceZip() {
     appendLog(`一括保存に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
   } finally {
-    setSaveButtonsDisabled(false);
+    setBusy(false);
   }
 }
 

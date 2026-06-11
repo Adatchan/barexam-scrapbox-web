@@ -38,9 +38,15 @@ jobs:
           git commit -m "chore: 法務省ウェブの巡回により年度対応表・更新情報を自動更新"
           git push
 
+      # 全年度×全種類で PDF リンク探索が機能するか検査する。
+      # 法務省サイトの構造変更や中継 Worker の障害をここで検知する
+      - name: リンク探索の健全性チェック
+        run: node scripts/check-links.mjs
+
       # リポジトリに60日間コミットがないと GitHub が定期実行を自動停止する
       # ため、実行のたびに再有効化してタイマーをリセットする
       - name: 定期実行の自動停止を防止
+        if: always()
         run: gh workflow enable update-years.yml --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ github.token }}
