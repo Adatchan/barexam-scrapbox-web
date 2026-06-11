@@ -28,4 +28,5 @@ export const CRAWL_STATE = {
   r5: { shushi: true, saiten: true },
   r6: { shushi: true, saiten: true },
   r7: { shushi: true, saiten: true },
+  r8: { shushi: false, saiten: false },
 };

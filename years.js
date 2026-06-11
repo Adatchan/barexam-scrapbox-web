@@ -43,4 +43,5 @@ export const RESULTS_URL_MAP = {
   r5: "https://www.moj.go.jp/jinji/shihoushiken/jinji08_00196.html",
   r6: "https://www.moj.go.jp/jinji/shihoushiken/jinji08_00236.html",
   r7: "https://www.moj.go.jp/jinji/shihoushiken/jinji08_00265.html",
+  r8: "https://www.moj.go.jp/jinji/shihoushiken/jinji08_00290.html",
 };
