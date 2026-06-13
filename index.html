@@ -23,7 +23,7 @@
       content="https://adatchan.github.io/barexam-scrapbox-web/"
     />
     <title>しほしけコンバーター（β版）– 司法試験論文式過去問テキスト変換</title>
-    <link rel="stylesheet" href="./style.css?v=20260613.1347" />
+    <link rel="stylesheet" href="./style.css?v=20260613.1409" />
   </head>
   <body>
     <main class="app">
@@ -97,6 +97,13 @@
           <summary>「一式zip保存」は何をしますか？</summary>
           <p>
             選択中の年度・科目について、試験問題・出題の趣旨・採点実感の3点の抜粋PDFを「[年度]司法試験[科目]一式」フォルダにまとめ、zipで保存します。処理済みの種類は再利用されるため、変換実行のあとに押すと速く完了します。未掲載の種類がある年度では、取得できた分だけが入ります。
+          </p>
+        </details>
+
+        <details>
+          <summary>「LLM用に保存」は何をしますか？</summary>
+          <p>
+            選択中の年度・科目について、試験問題・出題の趣旨・採点実感を1つのMarkdownファイルにまとめて保存します。冒頭に「これは司法試験論文式の過去問である」というメタ情報と出典（原典PDFのURL）が入るので、ChatGPTやClaudeなどのLLMにそのまま貼り付け・添付して、答案の添削や解説を依頼するのに使えます。
           </p>
         </details>
 
@@ -194,6 +201,14 @@
           >
             一式zip保存
           </button>
+          <button
+            id="llm"
+            class="btn-secondary"
+            type="button"
+            title="試験問題・出題の趣旨・採点実感を、メタ情報・出典付きの1つのMarkdownにまとめて保存します（LLMに渡す用）"
+          >
+            LLM用に保存
+          </button>
         </div>
       </section>
 
@@ -277,6 +292,6 @@
       src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20260613.1347"></script>
+    <script type="module" src="./app.js?v=20260613.1409"></script>
   </body>
 </html>

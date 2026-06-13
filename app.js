@@ -106,7 +106,7 @@ function setProgressBar(frac) {
 
 // 変換・保存処理の排他制御。処理中は実行系ボタンをすべて無効化する
 function setBusy(busy) {
-  for (const id of ["run", "source", "source-zip"]) {
+  for (const id of ["run", "source", "source-zip", "llm"]) {
     $(id).disabled = busy;
   }
 }
@@ -307,6 +307,90 @@ function invalidateResult() {
   $("download").disabled = true;
 }
 
+// 試験問題・出題の趣旨・採点実感を1つの Markdown にまとめて保存する。
+// LLM が文脈を把握できるよう、冒頭にメタ情報と出典を付ける。
+async function onSaveLlm() {
+  const yearKey = $("year").value;
+  const subject = $("subject").value;
+  const yearLabel = currentYearLabel();
+  setBusy(true);
+  setStatus("LLM用ファイルを作成中");
+  try {
+    const sections = [];
+    const sourceUrls = {};
+    for (const docType of ["試験問題", "出題の趣旨", "採点実感"]) {
+      try {
+        appendLog(`LLM用ファイル: ${docType} を取得`);
+        const { result, pdfUrl, subjectLabel } = await runConversion(
+          { yearKey, subject, docType, decorate: false },
+          convertCtx(),
+        );
+        // 変換結果の1行目（タイトル）と2行目（出典）を除き本文だけ取り出す
+        const body = result.split("\n").slice(2).join("\n").trim();
+        sections.push({ docType, body, subjectLabel });
+        if (pdfUrl) sourceUrls[docType] = pdfUrl;
+        appendLog(`  ${docType}: OK`, "ok");
+      } catch (e) {
+        appendLog(`  ${docType} は取得できませんでした: ${e.message}`, "warn");
+      }
+    }
+
+    if (sections.length === 0)
+      throw new Error("いずれの種類も取得できませんでした。");
+
+    const subjectLabel = sections[0].subjectLabel;
+    const md = [];
+    md.push(`# ${yearLabel}司法試験 論文式 ${subjectLabel}`);
+    md.push("");
+    md.push("> この文書は、日本の司法試験（法科大学院修了者等を対象とする");
+    md.push("> 国家試験）の論文式試験の過去問題と、その出題趣旨・採点実感を");
+    md.push("> まとめたものです。法律答案の作成・添削・解説の参考資料として");
+    md.push("> 利用できます。");
+    md.push("");
+    md.push("## 書誌情報");
+    md.push("");
+    md.push(`- 試験: ${yearLabel}司法試験 論文式試験`);
+    md.push(`- 科目: ${subjectLabel}`);
+    md.push("- 出典: 法務省ウェブサイト（原典PDFを加工して作成）");
+    for (const docType of ["試験問題", "出題の趣旨", "採点実感"]) {
+      if (sourceUrls[docType])
+        md.push(`  - ${docType}: ${sourceUrls[docType]}`);
+    }
+    md.push("");
+    md.push(
+      "※ PDFからの自動抽出のため、原文と細部が異なる場合があります。",
+    );
+    md.push("");
+    const headingOf = {
+      試験問題: "試験問題",
+      出題の趣旨: "出題の趣旨",
+      採点実感: "採点実感",
+    };
+    for (const sec of sections) {
+      md.push(`## ${headingOf[sec.docType]}`);
+      md.push("");
+      md.push(sec.body);
+      md.push("");
+    }
+
+    const filename = `${yearLabel}司法試験${subject}_LLM用.md`;
+    triggerDownload(
+      new Blob([md.join("\n")], { type: "text/markdown;charset=utf-8" }),
+      filename,
+    );
+    appendLog(
+      `LLM用ファイルを保存しました（${sections.length}種類を統合）。`,
+      "ok",
+    );
+    setStatus("完了", "ok");
+  } catch (e) {
+    appendLog(`LLM用ファイルの作成に失敗: ${e.message}`, "err");
+    setStatus("エラー", "error");
+  } finally {
+    setBusy(false);
+  }
+}
+
 // ── 起動 ─────────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   initSelectors();
@@ -320,6 +404,7 @@ window.addEventListener("DOMContentLoaded", () => {
   $("download").addEventListener("click", onDownload);
   $("source").addEventListener("click", onSaveSourcePdf);
   $("source-zip").addEventListener("click", onSaveSourceZip);
+  $("llm").addEventListener("click", onSaveLlm);
 
   // ヘルプダイアログ（背景クリックでも閉じる）
   const helpDialog = $("help-dialog");
