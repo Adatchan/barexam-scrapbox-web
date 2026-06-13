@@ -15,7 +15,7 @@
 import { YEAR_URL_MAP } from "./years.js";
 import { NEWS } from "./news.js";
 import { SUBJECT_MAP, yearKeyToLabel } from "./data.js";
-import { runConversion } from "./convert.js";
+import { runConversion, resolveSourceUrls } from "./convert.js";
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
 
 const $ = (id) => document.getElementById(id);
@@ -214,11 +214,12 @@ async function onSaveSourcePdf() {
     );
     fallbackUrl = pdfUrl;
     const baseName = `${currentYearLabel()}司法試験${subject}${docType}`;
+    const sourceUrls = await resolveSourceUrls(yearKey, subject);
     const { bytes, rangeLabel, total } = await buildStampedPdf(
       pdfBytes,
       pageRange,
       baseName,
-      pdfUrl,
+      sourceUrls,
     );
     triggerDownload(
       new Blob([bytes], { type: "application/pdf" }),
@@ -251,11 +252,13 @@ async function onSaveSourceZip() {
   try {
     // zip 内は「[年度]司法試験[科目名]一式」フォルダにまとめる
     const folder = `${yearLabel}司法試験${subject}一式`;
+    // フッターのリンク用に3種類のURLを先に1回だけ解決して共有する
+    const sourceUrls = await resolveSourceUrls(yearKey, subject);
     const files = {};
     for (const docType of ["試験問題", "出題の趣旨", "採点実感"]) {
       try {
         appendLog(`一括取得: ${docType}`);
-        const { pdfUrl, pageRange, pdfBytes } = await runConversion(
+        const { pageRange, pdfBytes } = await runConversion(
           { yearKey, subject, docType, decorate: false },
           convertCtx(),
         );
@@ -264,7 +267,7 @@ async function onSaveSourceZip() {
           pdfBytes,
           pageRange,
           baseName,
-          pdfUrl,
+          sourceUrls,
         );
         files[`${folder}/${baseName}.pdf`] = new Uint8Array(bytes);
         appendLog(`  ${docType}: ${rangeLabel}（原典 全${total}ページ）`, "ok");

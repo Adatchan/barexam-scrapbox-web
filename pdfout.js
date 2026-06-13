@@ -5,8 +5,6 @@
 // ファイル名（右）と出典・加工表示（左）を印字する。zip 生成用の fflate
 // ローダーもここに置く。
 // =============================================================================
-import { sourceLine } from "./format.js";
-
 let _pdfLibPromise = null;
 async function loadPdfLib() {
   if (!_pdfLibPromise)
@@ -21,31 +19,93 @@ export async function loadFflate() {
   return _fflatePromise;
 }
 
-// ファイル名をフッター用の透過 PNG として描画する（PDF への日本語テキスト
-// 埋め込みは日本語フォントの同梱が必要になるため、Canvas 描画で代替する）
-function makeTextStampPng(text) {
+// テキストをフッター用の透過 PNG として描画する（PDF への日本語テキスト
+// 埋め込みは日本語フォントの同梱が必要になるため、Canvas 描画で代替する）。
+// underline=true でリンク風の下線を付ける。
+function makeTextStampPng(text, color = "#555555", underline = false) {
   const fontPx = 48;
   const font = `${fontPx}px -apple-system, "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif`;
   const canvas = document.createElement("canvas");
   let ctx = canvas.getContext("2d");
   ctx.font = font;
-  canvas.width = Math.ceil(ctx.measureText(text).width) + 8;
+  const textW = Math.ceil(ctx.measureText(text).width);
+  canvas.width = textW + 8;
   canvas.height = Math.ceil(fontPx * 1.4);
   ctx = canvas.getContext("2d"); // サイズ変更で状態が初期化されるため再設定
   ctx.font = font;
-  ctx.fillStyle = "#555555";
+  ctx.fillStyle = color;
   ctx.textBaseline = "middle";
   ctx.fillText(text, 4, canvas.height / 2);
+  if (underline) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(2, fontPx / 18);
+    const uy = canvas.height / 2 + fontPx * 0.42;
+    ctx.beginPath();
+    ctx.moveTo(4, uy);
+    ctx.lineTo(4 + textW, uy);
+    ctx.stroke();
+  }
   return {
     dataUrl: canvas.toDataURL("image/png"),
     aspect: canvas.width / canvas.height,
   };
 }
 
-// 原典PDFから該当ページを抜き出し、出典・ファイル名スタンプを付けた
-// PDF バイト列を生成する
-export async function buildStampedPdf(pdfBytes, pageRange, baseName, pdfUrl) {
-  const { PDFDocument } = await loadPdfLib();
+// 各ページのフッターに、ファイル名（右）と出典＋3種類の原典PDF直リンク
+// （左）を印字する。リンク部分には URI 注釈を付与してクリック可能にする。
+async function drawFooter(out, PDFString, baseName, sourceUrls) {
+  // 右下: ファイル名
+  const nameStamp = makeTextStampPng(baseName);
+  const nameImg = await out.embedPng(nameStamp.dataUrl);
+  const nameH = 9; // pt
+  const nameW = nameH * nameStamp.aspect;
+
+  // 左下: 「出典：法務省ウェブサイト（原典を加工）」＋ ［種類］リンク群
+  const segH = 7; // pt
+  const segs = [
+    { ...makeTextStampPng("出典：法務省ウェブサイト（原典を加工）　"), url: null },
+  ];
+  for (const docType of ["試験問題", "出題の趣旨", "採点実感"]) {
+    const url = sourceUrls?.[docType] || null;
+    const color = url ? "#1a4f8a" : "#aaaaaa";
+    segs.push({ ...makeTextStampPng(`［${docType}］`, color, !!url), url });
+  }
+  for (const s of segs) s.img = await out.embedPng(s.dataUrl);
+
+  for (const page of out.getPages()) {
+    page.drawImage(nameImg, {
+      x: page.getWidth() - nameW - 28,
+      y: 16,
+      width: nameW,
+      height: nameH,
+      opacity: 0.85,
+    });
+
+    let x = 28;
+    const y = 16;
+    for (const s of segs) {
+      const w = segH * s.aspect;
+      page.drawImage(s.img, { x, y, width: w, height: segH, opacity: 0.9 });
+      if (s.url) {
+        const annot = out.context.obj({
+          Type: "Annot",
+          Subtype: "Link",
+          Rect: [x, y - 1, x + w, y + segH + 1],
+          Border: [0, 0, 0],
+          A: { Type: "Action", S: "URI", URI: PDFString.of(s.url) },
+        });
+        page.node.addAnnot(out.context.register(annot));
+      }
+      x += w;
+    }
+  }
+}
+
+// 原典PDFから該当ページを抜き出し、フッターにファイル名と出典リンクを
+// 付けた PDF バイト列を生成する。
+// sourceUrls = { 試験問題, 出題の趣旨, 採点実感 }（各 URL か null）
+export async function buildStampedPdf(pdfBytes, pageRange, baseName, sourceUrls) {
+  const { PDFDocument, PDFString } = await loadPdfLib();
   const src = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
   const total = src.getPageCount();
 
@@ -65,31 +125,7 @@ export async function buildStampedPdf(pdfBytes, pageRange, baseName, pdfUrl) {
     out = src;
   }
 
-  // 各ページのフッターにファイル名（右）と出典・加工表示（左）を記載
-  const stamp = makeTextStampPng(baseName);
-  const stampImg = await out.embedPng(stamp.dataUrl);
-  const stampH = 9; // pt
-  const stampW = stampH * stamp.aspect;
-  const srcStamp = makeTextStampPng(sourceLine(pdfUrl));
-  const srcImg = await out.embedPng(srcStamp.dataUrl);
-  const srcH = 7; // pt
-  const srcW = srcH * srcStamp.aspect;
-  for (const page of out.getPages()) {
-    page.drawImage(stampImg, {
-      x: page.getWidth() - stampW - 28,
-      y: 16,
-      width: stampW,
-      height: stampH,
-      opacity: 0.85,
-    });
-    page.drawImage(srcImg, {
-      x: 28,
-      y: 17,
-      width: srcW,
-      height: srcH,
-      opacity: 0.85,
-    });
-  }
+  await drawFooter(out, PDFString, baseName, sourceUrls);
 
   return { bytes: await out.save(), rangeLabel, total };
 }

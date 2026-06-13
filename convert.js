@@ -73,6 +73,39 @@ function assembleResult(entry, docType, decorate) {
   };
 }
 
+// 試験問題・出題の趣旨・採点実感のPDF直URLをまとめて解決する
+// （PDF本体はダウンロードせずリンク特定のみ。HTMLキャッシュで軽量。
+// 取得できない種類は null）。原典PDFフッターのリンク表示に使う。
+export async function resolveSourceUrls(yearKey, subject) {
+  const urls = { 試験問題: null, 出題の趣旨: null, 採点実感: null };
+  if (!(yearKey in YEAR_URL_MAP) || !(subject in SUBJECT_MAP)) return urls;
+  const [systemName, , , sectionKeyword] = SUBJECT_MAP[subject];
+
+  try {
+    urls["試験問題"] = await fetchExamPdfUrl(YEAR_URL_MAP[yearKey], systemName);
+  } catch {
+    /* 未掲載・取得失敗は null のまま */
+  }
+  if (yearKey in RESULTS_URL_MAP) {
+    const resultsUrl = RESULTS_URL_MAP[yearKey];
+    try {
+      urls["出題の趣旨"] = await fetchShushiPdfUrl(resultsUrl, sectionKeyword);
+    } catch {
+      /* noop */
+    }
+    try {
+      urls["採点実感"] = await fetchSaitenPdfUrl(
+        resultsUrl,
+        systemName,
+        sectionKeyword,
+      );
+    } catch {
+      /* noop */
+    }
+  }
+  return urls;
+}
+
 export async function runConversion({ yearKey, subject, docType, decorate }, ctx) {
   const { log, setProgress } = ctx;
   if (!(yearKey in YEAR_URL_MAP)) throw new Error(`未対応の年度: ${yearKey}`);
