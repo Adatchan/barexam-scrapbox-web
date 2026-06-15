@@ -15,22 +15,19 @@
 // =============================================================================
 import { YEAR_URL_MAP, RESULTS_URL_MAP } from "./years.js";
 import { yearKeyToLabel } from "./data.js";
-import { fetchHtml, fetchPdf } from "./moj.js";
+import { TANTOU_NEWS } from "./news.js";
+import { fetchPdf } from "./moj.js";
+import {
+  TANTOU_SUBJECTS as SUBJECTS,
+  TANTOU_DOC_TYPES as DOC_TYPES,
+  isThreeSubjectYear,
+  findTantouQuestionPdfUrl,
+  findTantouAnswerPdfUrl,
+  resolveTantouSourceUrls,
+} from "./tantou-moj.js";
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
 
 const $ = (id) => document.getElementById(id);
-
-// 短答式が憲法・民法・刑法の3科目別に出題されるようになったのは平成27年から。
-// それ以前（平成22〜26年）は公法系・民事系・刑事系の系列単位のため対象外。
-const SUBJECTS = ["憲法", "民法", "刑法"];
-// フッターに並べる短答式の種類（左から順に印字される）
-const DOC_TYPES = ["問題", "正答及び配点"];
-
-function isThreeSubjectYear(key) {
-  const n = Number(key.slice(1));
-  if (Number.isNaN(n)) return false;
-  return key[0] === "r" ? true : n >= 27; // 令和は全て / 平成は27年以降
-}
 
 // 対応年度: 試験問題ページ・結果ページの両方が登録済みで、かつ3科目制の年度。
 function supportedYearKeys() {
@@ -39,78 +36,23 @@ function supportedYearKeys() {
     .reverse(); // 新しい年度を先頭に
 }
 
-function resolveUrl(href, baseUrl) {
-  if (/^https?:/.test(href)) return href;
-  return new URL(href, baseUrl).toString();
+// リンク探索は yearKey から原典ページURLを引いて tantou-moj.js に委譲する
+// （巡回スクリプトと同じコードパスを共有するため、探索本体は URL を受け取る）。
+function findQuestionPdfUrl(yearKey, subject) {
+  return findTantouQuestionPdfUrl(YEAR_URL_MAP[yearKey], subject);
 }
-
-// ─── リンク探索（問題） ───────────────────────────────────────────────────
-// 試験問題ページの《短答式試験》セクション内から、科目名のアンカーに紐づく
-// PDF を探す。《論文式試験》セクション（公法系・民事系…）と混ざらないよう、
-// 短答式の見出しから論文式の見出しまでに範囲を絞る。
-async function findQuestionPdfUrl(yearKey, subject) {
-  const pageUrl = YEAR_URL_MAP[yearKey];
-  const html = await fetchHtml(pageUrl);
-  const si = html.indexOf("短答式試験");
-  if (si === -1)
-    throw new Error("試験問題ページに《短答式試験》の区分が見つかりません。");
-  const ei = html.indexOf("論文式試験", si);
-  const section = ei === -1 ? html.slice(si) : html.slice(si, ei);
-
-  const m = new RegExp(`href="([^"#]+\\.pdf)"[^>]*>\\s*${subject}\\s*<`).exec(
-    section,
-  );
-  if (!m)
-    throw new Error(`短答式「${subject}」の問題PDFリンクが見つかりません。`);
-  return resolveUrl(m[1], pageUrl);
-}
-
-// ─── リンク探索（正答及び配点） ───────────────────────────────────────────
-// 結果ページ →「短答式試験」サブページ →《正答及び配点》（年度により
-// 「正解及び配点」表記）セクション内の科目名アンカーをたどる。科目名
-// （憲法・民法・刑法）はこのサブページではこのセクションにしか現れない。
-async function findAnswerPdfUrl(yearKey, subject) {
+function findAnswerPdfUrl(yearKey, subject) {
   const resultsUrl = RESULTS_URL_MAP[yearKey];
   if (!resultsUrl)
     throw new Error(`${yearKeyToLabel(yearKey)} の結果ページが未登録です。`);
-  const html = await fetchHtml(resultsUrl);
-
-  const subM = /href="([^"#]+\.html)"[^>]*>\s*短答式試験\s*</.exec(html);
-  if (!subM)
-    throw new Error("結果ページに「短答式試験」サブページのリンクが見つかりません。");
-  const subUrl = resolveUrl(subM[1], resultsUrl);
-  const subHtml = await fetchHtml(subUrl);
-
-  let idx = -1;
-  for (const kw of ["正答及び配点", "正解及び配点", "正答", "正解"]) {
-    idx = subHtml.indexOf(kw);
-    if (idx !== -1) break;
-  }
-  const region = idx === -1 ? subHtml : subHtml.slice(idx);
-
-  const m = new RegExp(`href="([^"#]+\\.pdf)"[^>]*>\\s*${subject}\\s*<`).exec(
-    region,
-  );
-  if (!m)
-    throw new Error(`短答式「${subject}」の正答・配点PDFリンクが見つかりません。`);
-  return resolveUrl(m[1], subUrl);
+  return findTantouAnswerPdfUrl(resultsUrl, subject);
 }
-
-// 問題・正答の原典PDF直URLをまとめて解決する（フッターのリンク表示用）。
-// 取得できない種類は null。
-async function resolveSourceUrls(yearKey, subject) {
-  const urls = { 問題: null, 正答及び配点: null };
-  try {
-    urls["問題"] = await findQuestionPdfUrl(yearKey, subject);
-  } catch {
-    /* 未掲載・取得失敗は null のまま */
-  }
-  try {
-    urls["正答及び配点"] = await findAnswerPdfUrl(yearKey, subject);
-  } catch {
-    /* noop */
-  }
-  return urls;
+function resolveSourceUrls(yearKey, subject) {
+  return resolveTantouSourceUrls(
+    YEAR_URL_MAP[yearKey],
+    RESULTS_URL_MAP[yearKey],
+    subject,
+  );
 }
 
 // ─── 画面初期化 ───────────────────────────────────────────────────────────
@@ -128,6 +70,21 @@ function initSelectors() {
     opt.value = s;
     opt.textContent = s;
     subjSelect.appendChild(opt);
+  }
+}
+
+// 更新情報（短答式専用の TANTOU_NEWS を週次クロールが自動追記する）
+function initNews() {
+  const list = $("news-list");
+  if (!list) return;
+  for (const item of TANTOU_NEWS.slice(0, 5)) {
+    const li = document.createElement("li");
+    const date = document.createElement("span");
+    date.className = "news-date";
+    date.textContent = item.date;
+    li.appendChild(date);
+    li.appendChild(document.createTextNode(item.text));
+    list.appendChild(li);
   }
 }
 
@@ -287,6 +244,7 @@ async function saveZip() {
 // ── 起動 ─────────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   initSelectors();
+  initNews();
   $("q-save").addEventListener("click", () => saveSingle("問題"));
   $("a-save").addEventListener("click", () => saveSingle("正答及び配点"));
   $("zip-save").addEventListener("click", saveZip);

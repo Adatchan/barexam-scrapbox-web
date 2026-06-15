@@ -23,7 +23,7 @@
       content="https://adatchan.github.io/barexam-scrapbox-web/tantou.html"
     />
     <title>しほしけ短答ダウンローダー（β版）– 司法試験短答式 過去問PDF</title>
-    <link rel="stylesheet" href="./style.css?v=20260615.0916" />
+    <link rel="stylesheet" href="./style.css?v=20260615.0926" />
   </head>
   <body>
     <main class="app">
@@ -41,6 +41,11 @@
       <div class="help-bar">
         <button id="help" class="btn-help" type="button">？ ヘルプ</button>
       </div>
+
+      <section class="news" aria-label="更新情報">
+        <h2 class="news-title">更新情報</h2>
+        <ul id="news-list" class="news-list"></ul>
+      </section>
 
       <dialog id="help-dialog" aria-label="ヘルプ">
         <div class="help-head">
@@ -68,6 +73,13 @@
           <summary>対応している年度・科目は？</summary>
           <p>
             短答式が憲法・民法・刑法の3科目別に出題されるようになった平成27年から最新年度までです。それ以前（平成22〜26年）は公法系・民事系・刑事系の系列単位での出題のため、本ツールの対象外です。
+          </p>
+        </details>
+
+        <details>
+          <summary>新しい年度はいつ使えるようになりますか？</summary>
+          <p>
+            毎週月曜の朝に法務省ウェブサイトを自動巡回しています。短答式問題（例年7〜8月頃）と正答及び配点（例年8月頃）が法務省ウェブに掲載されると、1週間以内に自動で追加され、「更新情報」欄でお知らせします。
           </p>
         </details>
 
@@ -185,6 +197,6 @@
       })();
     </script>
 
-    <script type="module" src="./tantou.js?v=20260615.0916"></script>
+    <script type="module" src="./tantou.js?v=20260615.0926"></script>
   </body>
 </html>

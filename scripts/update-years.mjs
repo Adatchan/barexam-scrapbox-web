@@ -15,6 +15,11 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  isThreeSubjectYear,
+  findTantouQuestionPdfUrl,
+  findTantouAnswerPdfUrl,
+} from "../tantou-moj.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const YEARS_JS = join(ROOT, "years.js");
@@ -112,28 +117,50 @@ function todayJst() {
   return `${get("year")}.${get("month")}.${get("day")}`;
 }
 
-function renderNewsJs(news, state) {
-  const newsLines = news
-    .map((n) => `  { date: ${JSON.stringify(n.date)}, text: ${JSON.stringify(n.text)} },`)
-    .join("\n");
+function renderNewsJs(news, state, tantouNews, tantouState) {
+  const renderNews = (arr) =>
+    arr
+      .map(
+        (n) =>
+          `  { date: ${JSON.stringify(n.date)}, text: ${JSON.stringify(n.text)} },`,
+      )
+      .join("\n");
   const stateLines = sortKeys(Object.keys(state))
     .map((k) => `  ${k}: { shushi: ${!!state[k].shushi}, saiten: ${!!state[k].saiten} },`)
+    .join("\n");
+  const tantouStateLines = sortKeys(Object.keys(tantouState))
+    .map(
+      (k) =>
+        `  ${k}: { mondai: ${!!tantouState[k].mondai}, seikai: ${!!tantouState[k].seikai} },`,
+    )
     .join("\n");
   return `// =============================================================================
 // 更新情報
 //
 // このファイルは scripts/update-years.mjs により自動更新されます。
-// NEWS: 画面の「更新情報」欄に表示されるお知らせ（新しい順）
-// CRAWL_STATE: 年度ごとに出題の趣旨・採点実感の掲載を確認済みかの記録
-//              （未確認の項目だけを週次クロールで再チェックする）
+// NEWS / TANTOU_NEWS: 各画面の「更新情報」欄に表示されるお知らせ（新しい順）
+//   - NEWS        … 論文式（index.html）
+//   - TANTOU_NEWS … 短答式（tantou.html）
+// CRAWL_STATE / TANTOU_CRAWL_STATE: 年度ごとの掲載を確認済みかの記録
+//   （未確認の項目だけを週次クロールで再チェックする）
+//   - CRAWL_STATE        … 論文式の 出題の趣旨(shushi)・採点実感(saiten)
+//   - TANTOU_CRAWL_STATE … 短答式の 問題(mondai)・正答及び配点(seikai)
 // =============================================================================
 
 export const NEWS = [
-${newsLines}
+${renderNews(news)}
 ];
 
 export const CRAWL_STATE = {
 ${stateLines}
+};
+
+export const TANTOU_NEWS = [
+${renderNews(tantouNews)}
+];
+
+export const TANTOU_CRAWL_STATE = {
+${tantouStateLines}
 };
 `;
 }
@@ -175,15 +202,27 @@ const yearMap = { ...existing.YEAR_URL_MAP };
 const resultsMap = { ...existing.RESULTS_URL_MAP };
 
 // 更新情報と巡回状態（news.js は純粋なデータ ESM なので import で読む）
-const { NEWS: news, CRAWL_STATE: state } = await import(
-  pathToFileURL(NEWS_JS).href
-).then(
-  (m) => ({ NEWS: [...m.NEWS], CRAWL_STATE: structuredClone(m.CRAWL_STATE) }),
-  () => ({ NEWS: [], CRAWL_STATE: {} }),
+const {
+  NEWS: news,
+  CRAWL_STATE: state,
+  TANTOU_NEWS: tantouNews,
+  TANTOU_CRAWL_STATE: tantouState,
+} = await import(pathToFileURL(NEWS_JS).href).then(
+  (m) => ({
+    NEWS: [...m.NEWS],
+    CRAWL_STATE: structuredClone(m.CRAWL_STATE),
+    TANTOU_NEWS: [...(m.TANTOU_NEWS ?? [])],
+    TANTOU_CRAWL_STATE: structuredClone(m.TANTOU_CRAWL_STATE ?? {}),
+  }),
+  () => ({ NEWS: [], CRAWL_STATE: {}, TANTOU_NEWS: [], TANTOU_CRAWL_STATE: {} }),
 );
 const addNews = (text) => {
   news.unshift({ date: todayJst(), text });
   console.log(`+ NEWS: ${text}`);
+};
+const addTantouNews = (text) => {
+  tantouNews.unshift({ date: todayJst(), text });
+  console.log(`+ TANTOU_NEWS: ${text}`);
 };
 
 // 結果ハブ: 年度ページ URL をそのまま採用
@@ -231,6 +270,36 @@ for (const key of sortKeys(Object.keys(resultsMap))) {
   }
 }
 
+// 短答式（憲法・民法・刑法の3科目制 = 平成27年以降）の掲載チェック。
+// 問題は試験問題ページの《短答式試験》区分に、正答及び配点は結果ページ →
+// 「短答式試験」サブページに、それぞれ憲法のリンクが現れるかで判定する
+// （3科目同時掲載のため代表として憲法で確認）。未確認の項目だけ見に行く。
+for (const key of sortKeys(Object.keys(yearMap))) {
+  if (rank(key) < MIN_RANK || !isThreeSubjectYear(key)) continue;
+  const st = (tantouState[key] ??= { mondai: false, seikai: false });
+  if (st.mondai && st.seikai) continue;
+  if (!st.mondai) {
+    try {
+      await findTantouQuestionPdfUrl(yearMap[key], "憲法");
+      st.mondai = true;
+      addTantouNews(`${yearKeyToLabel(key)}の短答式問題が掲載されました。`);
+    } catch {
+      /* 短答式問題が未掲載のページ構造のためスキップ */
+    }
+  }
+  if (!st.seikai && resultsMap[key]) {
+    try {
+      await findTantouAnswerPdfUrl(resultsMap[key], "憲法");
+      st.seikai = true;
+      addTantouNews(
+        `${yearKeyToLabel(key)}の短答式の正答及び配点が掲載されました。`,
+      );
+    } catch {
+      /* 正答及び配点が未掲載のためスキップ */
+    }
+  }
+}
+
 // ─── 書き出し ──────────────────────────────────────────────────────────────
 let changed = false;
 const writeIfChanged = (path, next) => {
@@ -245,5 +314,5 @@ const writeIfChanged = (path, next) => {
 };
 
 writeIfChanged(YEARS_JS, renderYearsJs(yearMap, resultsMap));
-writeIfChanged(NEWS_JS, renderNewsJs(news, state));
+writeIfChanged(NEWS_JS, renderNewsJs(news, state, tantouNews, tantouState));
 console.log(changed ? "CHANGED" : "UNCHANGED");

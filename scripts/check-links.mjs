@@ -14,6 +14,11 @@ import {
   fetchShushiPdfUrl,
   fetchSaitenPdfUrl,
 } from "../moj.js";
+import {
+  isThreeSubjectYear,
+  findTantouQuestionPdfUrl,
+  findTantouAnswerPdfUrl,
+} from "../tantou-moj.js";
 
 const SELECT_KEYWORDS = ["経済法", "労働法", "倒産法"];
 
@@ -58,6 +63,22 @@ for (const [year, examUrl] of Object.entries(YEAR_URL_MAP)) {
     }
   } else {
     row.push("結果ページ未掲載のため趣旨・採点はスキップ");
+  }
+
+  // 短答式（3科目制 = 平成27年以降）の問題・正答リンク（代表として憲法）
+  if (isThreeSubjectYear(year)) {
+    row.push(
+      await check("短答問題", () =>
+        findTantouQuestionPdfUrl(examUrl, "憲法"),
+      ),
+    );
+    if (resultsUrl) {
+      row.push(
+        await check("短答正答", () =>
+          findTantouAnswerPdfUrl(resultsUrl, "憲法"),
+        ),
+      );
+    }
   }
 
   console.log(row.join("  "));
