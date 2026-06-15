@@ -34,9 +34,11 @@ export const SELECT_SUBJECTS = [
   "国際関係法（私法系）",
 ];
 
-// 年度キー（"r7" / "h22"）→ 表示ラベル（"令和7年" / "平成22年"）
+// 年度キー（"r7" / "h22"）→ 表示ラベル（"令和7年(2025年)" / "平成22年(2010年)"）
 export function yearKeyToLabel(key) {
-  return key.startsWith("r")
-    ? `令和${key.slice(1)}年`
-    : `平成${key.slice(1)}年`;
+  const n = parseInt(key.slice(1), 10);
+  if (key.startsWith("r")) {
+    return `令和${n}年(${2018 + n}年)`;
+  }
+  return `平成${n}年(${1988 + n}年)`;
 }
