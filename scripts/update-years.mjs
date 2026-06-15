@@ -24,9 +24,15 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const YEARS_JS = join(ROOT, "years.js");
 const NEWS_JS = join(ROOT, "news.js");
+const YOBI_YEARS_JS = join(ROOT, "yobi-years.js");
 
 const JISSHI_HUB = "https://www.moj.go.jp/jinji/shihoushiken/jinji08_00025.html";
 const KEKKA_HUB = "https://www.moj.go.jp/jinji/shihoushiken/jinji08_00026.html";
+// 予備試験のハブ（jinji07 系統。司法試験とは別ページ）
+const YOBI_JISSHI_HUB =
+  "https://www.moj.go.jp/jinji/shihoushiken/jinji07_00026.html";
+const YOBI_KEKKA_HUB =
+  "https://www.moj.go.jp/jinji/shihoushiken/jinji07_00027.html";
 
 async function fetchHtml(url) {
   const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
@@ -189,6 +195,34 @@ ${renderMap(resultsMap)}
 `;
 }
 
+function renderYobiYearsJs(yearMap, resultsMap) {
+  const renderMap = (map) =>
+    sortKeys(Object.keys(map))
+      .map((k) => `  ${k}: "${map[k]}",`)
+      .join("\n");
+  return `// =============================================================================
+// 司法試験予備試験  年度 → 法務省ページ URL 対応表
+//
+// このファイルは scripts/update-years.mjs により自動生成・更新されます。
+// 手で編集しても次回の自動更新で新年度の追記が行われます（既存行は保持）。
+//
+// 予備試験は司法試験（years.js / jinji08_*）とは別系統（jinji07_*）で、
+// 試験問題・正解及び配点は科目グループ別（憲法・行政法 など）に公表される。
+// 平成31年実施分は結果が「令和元年」表記のため r1 に正規化している。
+// =============================================================================
+
+// 試験問題ページ（短答式・論文式の問題PDFの掲載元）
+export const YOBI_YEAR_URL_MAP = {
+${renderMap(yearMap)}
+};
+
+// 結果ページ（短答式の正解及び配点・論文式の出題の趣旨の掲載元）
+export const YOBI_RESULTS_URL_MAP = {
+${renderMap(resultsMap)}
+};
+`;
+}
+
 // ─── メイン ────────────────────────────────────────────────────────────────
 // 既存の対応表は years.js（純粋なデータ ESM）を import で読む
 const existing = await import(pathToFileURL(YEARS_JS).href).then(
@@ -300,6 +334,52 @@ for (const key of sortKeys(Object.keys(yearMap))) {
   }
 }
 
+// ─── 予備試験の年度対応表（jinji07 系統） ───────────────────────────────────
+// 既存の予備対応表（yobi-years.js）を読み、ハブから新年度だけ追記する。
+const yobiExisting = await import(pathToFileURL(YOBI_YEARS_JS).href).then(
+  (m) => ({
+    YOBI_YEAR_URL_MAP: m.YOBI_YEAR_URL_MAP ?? {},
+    YOBI_RESULTS_URL_MAP: m.YOBI_RESULTS_URL_MAP ?? {},
+  }),
+  () => ({ YOBI_YEAR_URL_MAP: {}, YOBI_RESULTS_URL_MAP: {} }),
+);
+const yobiYearMap = { ...yobiExisting.YOBI_YEAR_URL_MAP };
+const yobiResultsMap = { ...yobiExisting.YOBI_RESULTS_URL_MAP };
+const YOBI_MIN_RANK = rank("h23"); // 予備試験は平成23年から
+
+// 結果ハブ: 年度ページ URL をそのまま採用
+const yobiKekka = parseHub(await fetchHtml(YOBI_KEKKA_HUB), YOBI_KEKKA_HUB);
+if (Object.keys(yobiKekka).length === 0)
+  throw new Error("予備試験 結果ハブから年度リンクを抽出できませんでした（ページ構造変更の可能性）");
+for (const [key, url] of Object.entries(yobiKekka)) {
+  if (rank(key) < YOBI_MIN_RANK) continue;
+  if (!(key in yobiResultsMap)) {
+    yobiResultsMap[key] = url;
+    console.log(`+ YOBI_RESULTS_URL_MAP ${key}: ${url}`);
+  }
+}
+
+// 実施ハブ: 年度ページを開いて「試験問題」リンクを解決。平成31年実施分は
+// 結果が令和元年表記のため r1 に正規化する。
+const yobiJisshi = parseHub(await fetchHtml(YOBI_JISSHI_HUB), YOBI_JISSHI_HUB);
+if (Object.keys(yobiJisshi).length === 0)
+  throw new Error("予備試験 実施ハブから年度リンクを抽出できませんでした（ページ構造変更の可能性）");
+if ("h31" in yobiJisshi && !("r1" in yobiJisshi)) {
+  yobiJisshi.r1 = yobiJisshi.h31;
+  delete yobiJisshi.h31;
+}
+for (const [key, pageUrl] of Object.entries(yobiJisshi)) {
+  if (rank(key) < YOBI_MIN_RANK) continue;
+  if (key in yobiYearMap) continue;
+  const examUrl = findExamPageUrl(await fetchHtml(pageUrl), pageUrl);
+  if (examUrl) {
+    yobiYearMap[key] = examUrl;
+    console.log(`+ YOBI_YEAR_URL_MAP ${key}: ${examUrl}`);
+  } else {
+    console.log(`  予備 ${key}: 試験問題リンク未掲載のためスキップ (${pageUrl})`);
+  }
+}
+
 // ─── 書き出し ──────────────────────────────────────────────────────────────
 let changed = false;
 const writeIfChanged = (path, next) => {
@@ -315,4 +395,5 @@ const writeIfChanged = (path, next) => {
 
 writeIfChanged(YEARS_JS, renderYearsJs(yearMap, resultsMap));
 writeIfChanged(NEWS_JS, renderNewsJs(news, state, tantouNews, tantouState));
+writeIfChanged(YOBI_YEARS_JS, renderYobiYearsJs(yobiYearMap, yobiResultsMap));
 console.log(changed ? "CHANGED" : "UNCHANGED");

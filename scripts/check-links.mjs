@@ -9,6 +9,7 @@
 // 使い方: node scripts/check-links.mjs
 // =============================================================================
 import { YEAR_URL_MAP, RESULTS_URL_MAP } from "../years.js";
+import { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } from "../yobi-years.js";
 import {
   fetchExamPdfUrl,
   fetchShushiPdfUrl,
@@ -19,6 +20,7 @@ import {
   findTantouQuestionPdfUrl,
   findTantouAnswerPdfUrl,
 } from "../tantou-moj.js";
+import { findYobiRonbunPdfUrl, findYobiShushiPdfUrl } from "../yobi-moj.js";
 
 const SELECT_KEYWORDS = ["経済法", "労働法", "倒産法"];
 
@@ -81,6 +83,27 @@ for (const [year, examUrl] of Object.entries(YEAR_URL_MAP)) {
     }
   }
 
+  console.log(row.join("  "));
+}
+
+// 予備試験（jinji07 系統・科目グループ別）。代表として「憲法・行政法」で
+// 短答問題・短答正答・論文問題・論文出題の趣旨のリンク探索を検査する。
+for (const [year, examUrl] of Object.entries(YOBI_YEAR_URL_MAP)) {
+  const row = [`予備${year}`];
+  const subj = "憲法・行政法";
+  row.push(
+    await check("短答問題", () => findTantouQuestionPdfUrl(examUrl, subj)),
+  );
+  row.push(await check("論文問題", () => findYobiRonbunPdfUrl(examUrl, subj)));
+  const resultsUrl = YOBI_RESULTS_URL_MAP[year];
+  if (resultsUrl) {
+    row.push(
+      await check("短答正答", () => findTantouAnswerPdfUrl(resultsUrl, subj)),
+    );
+    row.push(await check("論文趣旨", () => findYobiShushiPdfUrl(resultsUrl)));
+  } else {
+    row.push("結果ページ未掲載のためスキップ");
+  }
   console.log(row.join("  "));
 }
 

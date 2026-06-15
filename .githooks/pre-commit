@@ -3,6 +3,6 @@
 # キャッシュバスター（?v=）を自動更新してコミットに含める。
 # 有効化: git config core.hooksPath .githooks
 if git diff --cached --name-only |
-  grep -qE '^(app|rules|data|moj|parser|format|convert|pdfout|years|news|tantou|tantou-moj)\.js$|^style\.css$'; then
+  grep -qE '^(app|rules|data|moj|parser|format|convert|pdfout|years|news|tantou|tantou-moj|yobi-moj|yobi-years)\.js$|^style\.css$'; then
   node scripts/bump-version.mjs && git add index.html tantou.html
 fi
