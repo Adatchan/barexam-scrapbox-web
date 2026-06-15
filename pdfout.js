@@ -109,16 +109,37 @@ async function drawFooter(
   }
 }
 
+// 各ページの左上の余白に、見出しラベル（年度・科目・種類）を約20ポイントで
+// 印字する。本文は上端から十分下にあるため、上端の余白帯に収めて本文と
+// 重ならないようにする（日本語は Canvas 描画 PNG で埋め込む）。
+async function drawTopLabel(out, text) {
+  const stamp = makeTextStampPng(text, "#004679");
+  const img = await out.embedPng(stamp.dataUrl);
+  const h = 20; // pt（約20ポイント）
+  const w = h * stamp.aspect;
+  for (const page of out.getPages()) {
+    page.drawImage(img, {
+      x: 28,
+      y: page.getHeight() - 18 - h, // 上端から 18pt 下げた余白帯に配置
+      width: w,
+      height: h,
+      opacity: 0.92,
+    });
+  }
+}
+
 // 原典PDFから該当ページを抜き出し、フッターにファイル名と出典リンクを
 // 付けた PDF バイト列を生成する。
 // sourceUrls = フッターに並べる種類→URL（各 URL か null）
 // docTypes = フッターに並べる種類の見出し（省略時は論文式の3種類）
+// topLabel = 指定すると各ページ左上に約20ptの見出しスタンプを印字する
 export async function buildStampedPdf(
   pdfBytes,
   pageRange,
   baseName,
   sourceUrls,
   docTypes,
+  topLabel,
 ) {
   const { PDFDocument, PDFString } = await loadPdfLib();
   const src = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
@@ -129,18 +150,22 @@ export async function buildStampedPdf(
   if (pageRange) {
     const start = Math.max(1, pageRange[0]);
     const end = Math.min(total, pageRange[1]);
-    const indices = [];
-    for (let p = start; p <= end; p++) indices.push(p - 1);
-    out = await PDFDocument.create();
-    const pages = await out.copyPages(src, indices);
-    for (const pg of pages) out.addPage(pg);
-    rangeLabel =
-      start === end ? `${start}ページのみ` : `${start}〜${end}ページ`;
-  } else {
-    out = src;
+    if (start <= end) {
+      const indices = [];
+      for (let p = start; p <= end; p++) indices.push(p - 1);
+      out = await PDFDocument.create();
+      const pages = await out.copyPages(src, indices);
+      for (const pg of pages) out.addPage(pg);
+      rangeLabel =
+        start === end ? `${start}ページのみ` : `${start}〜${end}ページ`;
+    }
   }
+  // pageRange 未指定、または範囲が空（例: 1ページしかないのに2ページ目以降を
+  // 要求）の場合は原典全体をそのまま使う
+  if (!out) out = src;
 
   await drawFooter(out, PDFString, baseName, sourceUrls, docTypes);
+  if (topLabel) await drawTopLabel(out, topLabel);
 
-  return { bytes: await out.save(), rangeLabel, total };
+  return { bytes: await out.save(), rangeLabel, total, savedPages: out.getPageCount() };
 }

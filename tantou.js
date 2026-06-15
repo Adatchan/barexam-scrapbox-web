@@ -134,9 +134,11 @@ function triggerDownload(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// 1種類（問題 or 正答）の原典PDFを取得し、全ページに出典フッターを
-// 印字したバイト列と基本ファイル名を返す。
+// 1種類（問題 or 正答）の原典PDFを取得し、左上の見出しスタンプと出典
+// フッターを印字したバイト列と基本ファイル名を返す。問題は先頭の表紙
+// （情報量のない「短答式試験問題集［科目］」のページ）を除く。
 async function buildOnePdf(yearKey, subject, docType, sourceUrls) {
+  const yearLabel = yearKeyToLabel(yearKey);
   const pdfUrl =
     docType === "問題"
       ? await findQuestionPdfUrl(yearKey, subject)
@@ -144,15 +146,21 @@ async function buildOnePdf(yearKey, subject, docType, sourceUrls) {
   appendLog(`  ${docType} PDF: ${pdfUrl}`);
   const pdfBytes = await fetchPdf(pdfUrl);
   appendLog(`  ${pdfBytes.byteLength.toLocaleString()} バイト`);
-  const baseName = `${yearKeyToLabel(yearKey)}司法試験短答式${subject}${docType}`;
-  const { bytes, total } = await buildStampedPdf(
+  const baseName = `${yearLabel}司法試験短答式${subject}${docType}`;
+  // 左上ラベルの種類表記は「問題」か「正答」に短縮する
+  const typeShort = docType === "問題" ? "問題" : "正答";
+  const topLabel = `${yearLabel}　${subject}　${typeShort}`;
+  // 問題は表紙（1ページ目）を除いた本文のみ。正答は1ページ構成なので全体。
+  const pageRange = docType === "問題" ? [2, Number.MAX_SAFE_INTEGER] : null;
+  const { bytes, total, savedPages } = await buildStampedPdf(
     pdfBytes,
-    null, // 短答式は科目ごとに1PDFなのでページ抜き出しは不要（全ページ）
+    pageRange,
     baseName,
     sourceUrls,
     DOC_TYPES,
+    topLabel,
   );
-  return { bytes, baseName, total, pdfUrl };
+  return { bytes, baseName, total, savedPages, pdfUrl };
 }
 
 // ─── 保存処理（問題 / 正答 単体） ─────────────────────────────────────────
@@ -167,7 +175,7 @@ async function saveSingle(docType) {
     appendLog(`取得開始: ${currentYearLabel()} 短答式 ${subject} ${docType}`);
     const sourceUrls = await resolveSourceUrls(yearKey, subject);
     setProgressBar(0.4);
-    const { bytes, baseName, total } = await buildOnePdf(
+    const { bytes, baseName, total, savedPages } = await buildOnePdf(
       yearKey,
       subject,
       docType,
@@ -178,7 +186,12 @@ async function saveSingle(docType) {
       new Blob([bytes], { type: "application/pdf" }),
       `${baseName}.pdf`,
     );
-    appendLog(`保存しました（全${total}ページ・出典フッター付き）。`, "ok");
+    const note =
+      docType === "問題" ? `表紙を除く${savedPages}ページ` : `${savedPages}ページ`;
+    appendLog(
+      `保存しました（${note}・左上に見出し、下部に出典を印字）。`,
+      "ok",
+    );
     setProgressBar(1.0);
   } catch (e) {
     appendLog(`保存に失敗: ${e.message}`, "err");
