@@ -10,24 +10,98 @@
 import { fetchHtml } from "./moj.js";
 import { reEscape } from "./rules.js";
 
-// 短答式の科目グループ（全年度共通）
-export const YOBI_TANTOU_SUBJECTS = [
-  "憲法・行政法",
-  "民法・商法・民事訴訟法",
-  "刑法・刑事訴訟法",
-  "一般教養科目",
+// 予備試験は科目をまとめたPDF（憲法・行政法 など）で公表されるため、個別
+// 科目で切り出すには「どのグループPDFに入っていて、PDF内のどの角括弧見出し
+// （［憲法］等）で始まるか」を持つ。group=取得するグループPDF（科目名で探索）、
+// qHeaders=問題PDF内の見出し（null=分割せず単独PDF全体）、sHeaders=出題の
+// 趣旨PDF（全科目まとめた1ファイル）内の見出し（null=趣旨なし）。
+const SENTAKU_HEADERS = [
+  "倒産法",
+  "租税法",
+  "経済法",
+  "知的財産法",
+  "労働法",
+  "環境法",
+  "国際関係法（公法系）",
+  "国際関係法（私法系）",
 ];
 
-// 論文式の科目グループ。5科目めは令和4年以降「選択科目」、令和3年以前は
-// 「一般教養科目」。年度に無い科目を選ぶと探索時に明示エラーになる。
-export const YOBI_RONBUN_SUBJECTS = [
-  "憲法・行政法",
-  "民法・商法・民事訴訟法",
-  "刑法・刑事訴訟法",
-  "法律実務基礎科目（民事・刑事）",
-  "選択科目",
+// 境界判定（次の科目の開始＝対象科目の終端）に使う全見出し
+export const YOBI_ALL_HEADERS = [
+  "憲法",
+  "行政法",
+  "民法",
+  "商法",
+  "民事訴訟法",
+  "刑法",
+  "刑事訴訟法",
   "一般教養科目",
+  "民事",
+  "刑事",
+  "法律実務基礎科目（民事）",
+  "法律実務基礎科目（刑事）",
+  ...SENTAKU_HEADERS,
 ];
+
+// 短答式: 個別科目 → { group, qHeaders }。正答及び配点は1ページの表のため
+// 分割せずグループPDF全体を出す。
+export const YOBI_TANTOU_DEF = {
+  憲法: { group: "憲法・行政法", qHeaders: ["憲法"] },
+  行政法: { group: "憲法・行政法", qHeaders: ["行政法"] },
+  民法: { group: "民法・商法・民事訴訟法", qHeaders: ["民法"] },
+  商法: { group: "民法・商法・民事訴訟法", qHeaders: ["商法"] },
+  民事訴訟法: { group: "民法・商法・民事訴訟法", qHeaders: ["民事訴訟法"] },
+  刑法: { group: "刑法・刑事訴訟法", qHeaders: ["刑法"] },
+  刑事訴訟法: { group: "刑法・刑事訴訟法", qHeaders: ["刑事訴訟法"] },
+  一般教養科目: { group: "一般教養科目", qHeaders: null }, // 単独PDF
+};
+
+// 論文式: 個別科目 → { group, qHeaders, sHeaders }。
+export const YOBI_RONBUN_DEF = {
+  憲法: { group: "憲法・行政法", qHeaders: ["憲法"], sHeaders: ["憲法"] },
+  行政法: { group: "憲法・行政法", qHeaders: ["行政法"], sHeaders: ["行政法"] },
+  民法: {
+    group: "民法・商法・民事訴訟法",
+    qHeaders: ["民法"],
+    sHeaders: ["民法"],
+  },
+  商法: {
+    group: "民法・商法・民事訴訟法",
+    qHeaders: ["商法"],
+    sHeaders: ["商法"],
+  },
+  民事訴訟法: {
+    group: "民法・商法・民事訴訟法",
+    qHeaders: ["民事訴訟法"],
+    sHeaders: ["民事訴訟法"],
+  },
+  刑法: { group: "刑法・刑事訴訟法", qHeaders: ["刑法"], sHeaders: ["刑法"] },
+  刑事訴訟法: {
+    group: "刑法・刑事訴訟法",
+    qHeaders: ["刑事訴訟法"],
+    sHeaders: ["刑事訴訟法"],
+  },
+  "法律実務基礎科目（民事）": {
+    group: "法律実務基礎科目（民事・刑事）",
+    qHeaders: ["民事"],
+    // 趣旨の見出しは年度により「法律実務基礎科目（民事）」と「民事」の揺れあり
+    sHeaders: ["法律実務基礎科目（民事）", "民事"],
+  },
+  "法律実務基礎科目（刑事）": {
+    group: "法律実務基礎科目（民事・刑事）",
+    qHeaders: ["刑事"],
+    sHeaders: ["法律実務基礎科目（刑事）", "刑事"],
+  },
+  // 選択科目は問題が選択科目をまとめた単独PDF（分割せず全体）、趣旨は
+  // 全科目まとめたPDFの選択科目ブロック全体を切り出す。
+  選択科目: { group: "選択科目", qHeaders: null, sHeaders: SENTAKU_HEADERS },
+  // 一般教養科目（令和3年以前）。問題は単独PDF、趣旨は無い。
+  一般教養科目: { group: "一般教養科目", qHeaders: null, sHeaders: null },
+};
+
+// プルダウン用の個別科目名一覧（DEFの定義順）
+export const YOBI_TANTOU_SUBJECTS = Object.keys(YOBI_TANTOU_DEF);
+export const YOBI_RONBUN_SUBJECTS = Object.keys(YOBI_RONBUN_DEF);
 
 function resolveUrl(href, baseUrl) {
   if (/^https?:/.test(href)) return href;

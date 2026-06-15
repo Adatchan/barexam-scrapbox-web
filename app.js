@@ -20,10 +20,13 @@ import { runConversion, resolveSourceUrls } from "./convert.js";
 import { fetchPdf } from "./moj.js";
 import {
   YOBI_RONBUN_SUBJECTS,
+  YOBI_RONBUN_DEF,
+  YOBI_ALL_HEADERS,
   yobiSubjectCandidates,
   findYobiRonbunPdfUrl,
   findYobiShushiPdfUrl,
 } from "./yobi-moj.js";
+import { firstContentPage, findSubjectPageRange } from "./pdfsplit.js";
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
 
 const $ = (id) => document.getElementById(id);
@@ -439,13 +442,15 @@ function setBusyYobi(busy) {
   for (const id of ["yobi-q", "yobi-shushi", "yobi-zip"]) $(id).disabled = busy;
 }
 
-// 試験問題・出題の趣旨の原典PDF直URLをまとめて解決する（フッター用）。
+// 試験問題（科目グループPDF）・出題の趣旨（全科目まとめた1PDF）の原典直URLを
+// まとめて解決する（フッター用）。試験問題は個別科目が属するグループPDFを指す。
 async function resolveYobiSourceUrls(yearKey, subject) {
   const urls = { 試験問題: null, 出題の趣旨: null };
+  const def = YOBI_RONBUN_DEF[subject];
   try {
     urls["試験問題"] = await findYobiRonbunPdfUrl(
       YOBI_YEAR_URL_MAP[yearKey],
-      yobiSubjectCandidates(subject),
+      yobiSubjectCandidates(def.group),
     );
   } catch {
     /* 未掲載・取得失敗は null のまま */
@@ -460,32 +465,66 @@ async function resolveYobiSourceUrls(yearKey, subject) {
   return urls;
 }
 
-// 1種類（試験問題 or 出題の趣旨）の原典PDFを取得し、左上の見出しと出典
-// フッターを印字したバイト列と基本ファイル名を返す。
+// 1種類（試験問題 or 出題の趣旨）の原典PDFを取得し、当該科目だけを切り出して
+// （科目グループPDF・全科目まとめた趣旨PDFから）、左上の見出しと出典フッターを
+// 印字したバイト列と基本ファイル名を返す。
 async function buildYobiPdf(yearKey, subject, docType, sourceUrls) {
   const yearLabel = currentYearLabel();
-  const pdfUrl =
-    docType === "試験問題"
-      ? await findYobiRonbunPdfUrl(
-          YOBI_YEAR_URL_MAP[yearKey],
-          yobiSubjectCandidates(subject),
-        )
-      : await findYobiShushiPdfUrl(YOBI_RESULTS_URL_MAP[yearKey]);
+  const def = YOBI_RONBUN_DEF[subject];
+
+  let pdfUrl;
+  let pageRange = null;
+  if (docType === "試験問題") {
+    pdfUrl = await findYobiRonbunPdfUrl(
+      YOBI_YEAR_URL_MAP[yearKey],
+      yobiSubjectCandidates(def.group),
+    );
+  } else {
+    if (!def.sHeaders)
+      throw new Error(`${subject}には出題の趣旨がありません。`);
+    pdfUrl = await findYobiShushiPdfUrl(YOBI_RESULTS_URL_MAP[yearKey]);
+  }
   appendLog(`  ${docType} PDF: ${pdfUrl}`);
   const pdfBytes = await fetchPdf(pdfUrl);
   appendLog(`  ${pdfBytes.byteLength.toLocaleString()} バイト`);
-  // 出題の趣旨は全科目まとめた1PDFなので科目名を付けない
-  const baseName =
-    docType === "試験問題"
-      ? `${yearLabel}司法試験予備試験論文式${subject}試験問題`
-      : `${yearLabel}司法試験予備試験論文式出題の趣旨`;
-  const topLabel =
-    docType === "試験問題"
-      ? `${yearLabel}　予備　${subject}　問題`
-      : `${yearLabel}　予備　論文　趣旨`;
+
+  // 科目別に切り出す。問題は科目見出し（無い科目は表紙等を除いた本文全体）、
+  // 趣旨は全科目まとめたPDFから当該科目の見出しで切り出す。見出しが特定できない
+  // 年度（画像化された趣旨PDFなど）は全体にフォールバックして警告を出す。
+  const headers = docType === "試験問題" ? def.qHeaders : def.sHeaders;
+  if (headers) {
+    pageRange = await findSubjectPageRange(
+      pdfBytes.slice(0),
+      headers,
+      YOBI_ALL_HEADERS,
+    );
+    if (!pageRange) {
+      if (docType === "試験問題") {
+        const start = await firstContentPage(pdfBytes.slice(0));
+        pageRange = [start, Number.MAX_SAFE_INTEGER];
+        appendLog(
+          `  「${subject}」の区分を特定できず、グループ全体を保存します（画像PDF等の可能性）。`,
+          "warn",
+        );
+      } else {
+        pageRange = null; // 趣旨は全科目をそのまま
+        appendLog(
+          `  「${subject}」の区分を特定できず、出題の趣旨は全体（全科目）を保存します（画像PDF等の可能性）。`,
+          "warn",
+        );
+      }
+    }
+  } else if (docType === "試験問題") {
+    const start = await firstContentPage(pdfBytes.slice(0));
+    pageRange = [start, Number.MAX_SAFE_INTEGER];
+  }
+
+  const typeShort = docType === "試験問題" ? "問題" : "趣旨";
+  const baseName = `${yearLabel}司法試験予備試験論文式${subject}${docType}`;
+  const topLabel = `${yearLabel}　予備　${subject}　${typeShort}`;
   const { bytes, savedPages } = await buildStampedPdf(
     pdfBytes,
-    null,
+    pageRange,
     baseName,
     sourceUrls,
     YOBI_DOC_TYPES,

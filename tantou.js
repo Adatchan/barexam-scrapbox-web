@@ -26,42 +26,16 @@ import {
   findTantouAnswerPdfUrl,
   resolveTantouSourceUrls,
 } from "./tantou-moj.js";
-import { YOBI_TANTOU_SUBJECTS, yobiSubjectCandidates } from "./yobi-moj.js";
+import {
+  YOBI_TANTOU_SUBJECTS,
+  YOBI_TANTOU_DEF,
+  YOBI_ALL_HEADERS,
+  yobiSubjectCandidates,
+} from "./yobi-moj.js";
+import { firstContentPage, findSubjectPageRange } from "./pdfsplit.js";
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
 
 const $ = (id) => document.getElementById(id);
-
-// ─── 表紙等の先頭ページ除去 ───────────────────────────────────────────────
-// 問題PDFは先頭に表紙・白紙・章扉が付き、その枚数が年度・科目・試験で
-// まちまち（司法は表紙1枚、予備の法律科目は表紙＋白紙＋章扉、予備の一般
-// 教養や旧年度は章扉1枚など）。最初の設問〔第○問〕が現れるページまでを
-// 除くため、PDF.js でテキストを走査して本文開始ページを特定する。
-const PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379";
-let _pdfjsPromise = null;
-function loadPdfjs() {
-  if (!_pdfjsPromise)
-    _pdfjsPromise = (async () => {
-      const mod = await import(`${PDFJS_CDN}/pdf.min.mjs`);
-      mod.GlobalWorkerOptions.workerSrc = `${PDFJS_CDN}/pdf.worker.min.mjs`;
-      return mod;
-    })();
-  return _pdfjsPromise;
-}
-const Q_MARKER_RE = /〔第[0-9０-９一二三四五六七八九十]+問〕/;
-// 最初に設問マーカーを含むページ番号（1始まり）を返す。見つからなければ1
-// （＝除去しない）。pdfBytes は PDF.js が detach するためコピーを渡すこと。
-async function firstContentPage(pdfBytes) {
-  const pdfjs = await loadPdfjs();
-  const pdf = await pdfjs.getDocument({ data: pdfBytes }).promise;
-  for (let pn = 1; pn <= pdf.numPages; pn++) {
-    const page = await pdf.getPage(pn);
-    const text = (await page.getTextContent()).items
-      .map((i) => i.str)
-      .join("");
-    if (Q_MARKER_RE.test(text)) return pn;
-  }
-  return 1;
-}
 
 // ─── 試験種別（司法試験 / 予備試験） ─────────────────────────────────────
 // 予備試験は科目グループ別（憲法・行政法 など）・jinji07 系統で、短答式の
@@ -82,9 +56,12 @@ function resultsMap() {
 function subjects() {
   return isYobi() ? YOBI_TANTOU_SUBJECTS : TANTOU_SUBJECTS;
 }
-// 予備は科目名の表記揺れ（一般教養科目／一般教養）に備えて別名候補を渡す
+// 取得対象。予備は個別科目が属するグループPDF（憲法・行政法 など）を取得し、
+// 科目名の表記揺れ（一般教養科目／一般教養）に備えて別名候補を渡す。司法は
+// 科目がそのままPDF単位なので科目名をそのまま使う。
 function subjectArg(subject) {
-  return isYobi() ? yobiSubjectCandidates(subject) : subject;
+  if (!isYobi()) return subject;
+  return yobiSubjectCandidates(YOBI_TANTOU_DEF[subject].group);
 }
 
 // 対応年度: 試験問題ページ・結果ページの両方が登録済みの年度。司法試験は
@@ -214,12 +191,34 @@ async function buildOnePdf(yearKey, subject, docType, sourceUrls) {
   // 左上ラベルの種類表記は「問題」か「正答」に短縮する
   const typeShort = docType === "問題" ? "問題" : "正答";
   const topLabel = `${yearLabel}　${isYobi() ? "予備　" : ""}${subject}　${typeShort}`;
-  // 問題は表紙・白紙・章扉を除いた本文（最初の設問のページ以降）のみ。
-  // 正答及び配点は表紙が無いので全体を使う。
+  // 問題のページ範囲を決める。予備の分割科目はグループPDFから当該科目だけを
+  // 切り出す。それ以外（司法、予備の一般教養）は表紙・白紙・章扉を除いた本文
+  // （最初の設問のページ以降）のみ。正答及び配点は表紙が無いので全体。
   let pageRange = null;
+  let split = false;
   if (docType === "問題") {
-    const start = await firstContentPage(pdfBytes.slice(0));
-    pageRange = [start, Number.MAX_SAFE_INTEGER];
+    const def = isYobi() ? YOBI_TANTOU_DEF[subject] : null;
+    if (def && def.qHeaders) {
+      pageRange = await findSubjectPageRange(
+        pdfBytes.slice(0),
+        def.qHeaders,
+        YOBI_ALL_HEADERS,
+      );
+      if (pageRange) {
+        split = true;
+      } else {
+        // 切り出せない（画像PDF等）→ グループ全体（表紙等を除く）にフォールバック
+        const start = await firstContentPage(pdfBytes.slice(0));
+        pageRange = [start, Number.MAX_SAFE_INTEGER];
+        appendLog(
+          `  「${subject}」の区分を特定できず、グループ全体を保存します。`,
+          "warn",
+        );
+      }
+    } else {
+      const start = await firstContentPage(pdfBytes.slice(0));
+      pageRange = [start, Number.MAX_SAFE_INTEGER];
+    }
   }
   const { bytes, total, savedPages } = await buildStampedPdf(
     pdfBytes,
@@ -229,7 +228,7 @@ async function buildOnePdf(yearKey, subject, docType, sourceUrls) {
     DOC_TYPES,
     topLabel,
   );
-  return { bytes, baseName, total, savedPages, pdfUrl };
+  return { bytes, baseName, total, savedPages, split, pdfUrl };
 }
 
 // ─── 保存処理（問題 / 正答 単体） ─────────────────────────────────────────
@@ -244,7 +243,7 @@ async function saveSingle(docType) {
     appendLog(`取得開始: ${currentYearLabel()} 短答式 ${subject} ${docType}`);
     const sourceUrls = await resolveSourceUrls(yearKey, subject);
     setProgressBar(0.4);
-    const { bytes, baseName, total, savedPages } = await buildOnePdf(
+    const { bytes, baseName, total, savedPages, split } = await buildOnePdf(
       yearKey,
       subject,
       docType,
@@ -256,8 +255,9 @@ async function saveSingle(docType) {
       `${baseName}.pdf`,
     );
     const removed = total - savedPages;
-    const note =
-      docType === "問題" && removed > 0
+    const note = split
+      ? `${subject}の部分（${savedPages}ページ）を抜き出し`
+      : docType === "問題" && removed > 0
         ? `表紙等${removed}ページを除く${savedPages}ページ`
         : `${savedPages}ページ`;
     appendLog(
