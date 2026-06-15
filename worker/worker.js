@@ -6,41 +6,68 @@
  *
  * セキュリティ:
  *   - moj.go.jp 配下の URL のみ許可（オープンプロキシ化防止）
+ *   - Origin 制限: 他サイトからのブラウザ埋め込み流用を拒否する。
+ *     ただし Origin ヘッダを送らないサーバー間アクセス（検証スクリプト
+ *     scripts/*.mjs や GitHub Actions の Node 実行）は許可する。
+ *     ※ curl 等は Origin を偽装できるため完全な防御ではない。大量
+ *       アクセス対策は Cloudflare のレート制限で別途行うこと。
  *   - レスポンスは Content-Type をそのまま中継
  *
  * デプロイ:
- *   1. https://dash.cloudflare.com → Workers & Pages → Create Worker
- *   2. このファイルの内容を貼り付けて Deploy
- *   3. 払い出された URL（例: https://moj-proxy.your-name.workers.dev）を
- *      web/app.js の WORKER_URL に設定
+ *   1. https://dash.cloudflare.com → Workers & Pages → 対象 Worker
+ *   2. このファイルの内容を貼り付けて Deploy（Quick edit / Save and deploy）
+ *   3. 新規作成時は払い出された URL を web/moj.js の WORKER_URL に設定
+ *
+ * 公開先を変えたら ALLOWED_ORIGINS を更新すること。
  */
 
 const ALLOWED_PREFIX = "https://www.moj.go.jp/";
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-  "Access-Control-Max-Age": "86400",
-};
+// ブラウザからの利用を許可するオリジン（公開先 + ローカル開発）
+const ALLOWED_ORIGINS = ["https://adatchan.github.io"];
+
+export function isOriginAllowed(origin) {
+  if (!origin) return true; // Origin なし（サーバー間・検証スクリプト）は許可
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  return false;
+}
+
+function corsHeaders(origin) {
+  const h = {
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
+  };
+  // 許可されたブラウザ Origin にのみ ACAO を反映（サーバー間は CORS 不要）
+  if (origin) h["Access-Control-Allow-Origin"] = origin;
+  return h;
+}
 
 export default {
   async fetch(request) {
+    const origin = request.headers.get("Origin");
+    if (!isOriginAllowed(origin)) {
+      return jsonError("このエンドポイントの利用は許可されていません。", 403, origin);
+    }
+
     // CORS preflight
     if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: CORS_HEADERS });
+      return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
 
     const reqUrl = new URL(request.url);
     const target = reqUrl.searchParams.get("url");
 
     if (!target) {
-      return jsonError("Missing 'url' query parameter.", 400);
+      return jsonError("Missing 'url' query parameter.", 400, origin);
     }
     if (!target.startsWith(ALLOWED_PREFIX)) {
       return jsonError(
         `Only ${ALLOWED_PREFIX}* is allowed (got: ${target}).`,
         403,
+        origin,
       );
     }
 
@@ -60,7 +87,8 @@ export default {
       const headers = new Headers();
       const contentType = upstream.headers.get("Content-Type");
       if (contentType) headers.set("Content-Type", contentType);
-      for (const [k, v] of Object.entries(CORS_HEADERS)) headers.set(k, v);
+      for (const [k, v] of Object.entries(corsHeaders(origin)))
+        headers.set(k, v);
       // ブラウザ側でキャッシュしてもらう
       headers.set("Cache-Control", "public, max-age=3600");
 
@@ -70,17 +98,17 @@ export default {
         headers,
       });
     } catch (e) {
-      return jsonError(`Fetch failed: ${e.message}`, 502);
+      return jsonError(`Fetch failed: ${e.message}`, 502, origin);
     }
   },
 };
 
-function jsonError(message, status) {
+function jsonError(message, status, origin) {
   return new Response(JSON.stringify({ error: message }), {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      ...CORS_HEADERS,
+      ...corsHeaders(origin),
     },
   });
 }
