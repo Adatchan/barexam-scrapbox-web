@@ -23,7 +23,7 @@
       content="https://adatchan.github.io/barexam-scrapbox-web/"
     />
     <title>しほしけコンバーター（β版）– 司法試験論文式過去問テキスト変換</title>
-    <link rel="stylesheet" href="./style.css?v=20260615.0934" />
+    <link rel="stylesheet" href="./style.css?v=20260615.1955" />
   </head>
   <body>
     <main class="app">
@@ -33,7 +33,7 @@
           司法試験論文式の試験問題・出題の趣旨・採点実感を、法務省ウェブの公表PDFからテキストに変換します
         </p>
         <p class="subtitle" style="margin-top: 6px">
-          短答式（憲法・民法・刑法）の問題・正答PDFを年度別に保存したい場合は
+          短答式（司法試験・予備試験）の問題・正答PDFを年度別に保存したい場合は
           <a href="./tantou.html">しほしけ短答ダウンローダー</a> をどうぞ。
         </p>
       </header>
@@ -73,6 +73,15 @@
           <summary>対応している年度・科目は？</summary>
           <p>
             平成22年から最新年度までの論文式です。科目は基本7科目（憲法・行政法・民法・商法・民訴・刑法・刑訴）と、選択科目のうち経済法・労働法・倒産法（各第１問・第２問）に対応しています。
+          </p>
+        </details>
+
+        <details>
+          <summary>予備試験にも対応していますか？</summary>
+          <p>
+            画面上部の「試験」で予備試験に切り替えると、論文式の試験問題（科目グループ別）と出題の趣旨を原典PDFで保存できます（平成23年〜最新年度）。予備試験は科目をまとめたPDFで公表され、出題の趣旨は全科目を1つにまとめたPDF、採点実感はありません。これらの事情からテキスト変換は行わず、出典フッター・見出し付きのPDF保存に対応しています。短答式は
+            <a href="./tantou.html">しほしけ短答ダウンローダー</a>
+            が司法試験・予備試験の両方に対応しています。
           </p>
         </details>
 
@@ -149,6 +158,20 @@
 
       <section class="form">
         <div class="field">
+          <label>試験</label>
+          <div class="radio-group">
+            <label class="radio">
+              <input type="radio" name="exam" value="shihou" checked />
+              司法試験
+            </label>
+            <label class="radio">
+              <input type="radio" name="exam" value="yobi" />
+              予備試験
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
           <label for="year">年度</label>
           <select id="year"></select>
         </div>
@@ -158,7 +181,7 @@
           <select id="subject"></select>
         </div>
 
-        <div class="field">
+        <div class="field" id="type-field">
           <label for="type">種類</label>
           <select id="type">
             <option value="試験問題">試験問題</option>
@@ -167,7 +190,7 @@
           </select>
         </div>
 
-        <div class="field">
+        <div class="field" id="format-field">
           <label>出力形式</label>
           <div class="radio-group">
             <label class="radio">
@@ -181,7 +204,7 @@
           </div>
         </div>
 
-        <div class="actions">
+        <div class="actions" id="shihou-actions">
           <button id="run" class="btn-primary" type="button">変換実行</button>
           <button id="copy" class="btn-secondary" type="button" disabled>
             結果をコピー
@@ -212,6 +235,19 @@
             title="試験問題・出題の趣旨・採点実感を、メタ情報・出典付きの1つのMarkdownにまとめて保存します（LLMに渡す用）"
           >
             LLM用に保存
+          </button>
+        </div>
+
+        <!-- 予備試験モードのアクション（PDF収集）。司法試験モードでは隠す -->
+        <div class="actions" id="yobi-actions" hidden>
+          <button id="yobi-q" class="btn-primary" type="button">
+            試験問題PDFを保存
+          </button>
+          <button id="yobi-shushi" class="btn-secondary" type="button">
+            出題の趣旨PDFを保存
+          </button>
+          <button id="yobi-zip" class="btn-secondary" type="button">
+            問題＋趣旨をzip保存
           </button>
         </div>
       </section>
@@ -296,6 +332,6 @@
       src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20260615.0934"></script>
+    <script type="module" src="./app.js?v=20260615.1955"></script>
   </body>
 </html>

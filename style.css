@@ -208,6 +208,13 @@ textarea {
   display: contents;
 }
 
+/* hidden 属性での非表示。.field{display:contents} / .actions{display:flex}
+   と同特異度で負けるため、属性付きセレクタで明示的に打ち消す */
+.field[hidden],
+.actions[hidden] {
+  display: none;
+}
+
 .field label {
   font-weight: 700;
   color: var(--primary);

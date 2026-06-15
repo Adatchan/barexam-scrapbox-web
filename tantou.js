@@ -14,50 +14,113 @@
 // リンク探索は論文式（moj.js）とは別にここで行う。
 // =============================================================================
 import { YEAR_URL_MAP, RESULTS_URL_MAP } from "./years.js";
+import { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } from "./yobi-years.js";
 import { yearKeyToLabel } from "./data.js";
 import { TANTOU_NEWS } from "./news.js";
 import { fetchPdf } from "./moj.js";
 import {
-  TANTOU_SUBJECTS as SUBJECTS,
+  TANTOU_SUBJECTS,
   TANTOU_DOC_TYPES as DOC_TYPES,
   isThreeSubjectYear,
   findTantouQuestionPdfUrl,
   findTantouAnswerPdfUrl,
   resolveTantouSourceUrls,
 } from "./tantou-moj.js";
+import { YOBI_TANTOU_SUBJECTS, yobiSubjectCandidates } from "./yobi-moj.js";
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
 
 const $ = (id) => document.getElementById(id);
 
-// 対応年度: 試験問題ページ・結果ページの両方が登録済みで、かつ3科目制の年度。
+// ─── 表紙等の先頭ページ除去 ───────────────────────────────────────────────
+// 問題PDFは先頭に表紙・白紙・章扉が付き、その枚数が年度・科目・試験で
+// まちまち（司法は表紙1枚、予備の法律科目は表紙＋白紙＋章扉、予備の一般
+// 教養や旧年度は章扉1枚など）。最初の設問〔第○問〕が現れるページまでを
+// 除くため、PDF.js でテキストを走査して本文開始ページを特定する。
+const PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379";
+let _pdfjsPromise = null;
+function loadPdfjs() {
+  if (!_pdfjsPromise)
+    _pdfjsPromise = (async () => {
+      const mod = await import(`${PDFJS_CDN}/pdf.min.mjs`);
+      mod.GlobalWorkerOptions.workerSrc = `${PDFJS_CDN}/pdf.worker.min.mjs`;
+      return mod;
+    })();
+  return _pdfjsPromise;
+}
+const Q_MARKER_RE = /〔第[0-9０-９一二三四五六七八九十]+問〕/;
+// 最初に設問マーカーを含むページ番号（1始まり）を返す。見つからなければ1
+// （＝除去しない）。pdfBytes は PDF.js が detach するためコピーを渡すこと。
+async function firstContentPage(pdfBytes) {
+  const pdfjs = await loadPdfjs();
+  const pdf = await pdfjs.getDocument({ data: pdfBytes }).promise;
+  for (let pn = 1; pn <= pdf.numPages; pn++) {
+    const page = await pdf.getPage(pn);
+    const text = (await page.getTextContent()).items
+      .map((i) => i.str)
+      .join("");
+    if (Q_MARKER_RE.test(text)) return pn;
+  }
+  return 1;
+}
+
+// ─── 試験種別（司法試験 / 予備試験） ─────────────────────────────────────
+// 予備試験は科目グループ別（憲法・行政法 など）・jinji07 系統で、短答式の
+// ページ構造は司法試験と同じため、URLと科目だけ予備のものに差し替える。
+function isYobi() {
+  const el = document.querySelector('input[name="exam"]:checked');
+  return !!el && el.value === "yobi";
+}
+function examLabel() {
+  return isYobi() ? "司法試験予備試験" : "司法試験";
+}
+function yearMap() {
+  return isYobi() ? YOBI_YEAR_URL_MAP : YEAR_URL_MAP;
+}
+function resultsMap() {
+  return isYobi() ? YOBI_RESULTS_URL_MAP : RESULTS_URL_MAP;
+}
+function subjects() {
+  return isYobi() ? YOBI_TANTOU_SUBJECTS : TANTOU_SUBJECTS;
+}
+// 予備は科目名の表記揺れ（一般教養科目／一般教養）に備えて別名候補を渡す
+function subjectArg(subject) {
+  return isYobi() ? yobiSubjectCandidates(subject) : subject;
+}
+
+// 対応年度: 試験問題ページ・結果ページの両方が登録済みの年度。司法試験は
+// さらに3科目制（平成27年以降）に限る。予備試験は平成23年以降。
 function supportedYearKeys() {
-  return Object.keys(YEAR_URL_MAP)
-    .filter((k) => k in RESULTS_URL_MAP && isThreeSubjectYear(k))
+  const ym = yearMap();
+  const rm = resultsMap();
+  return Object.keys(ym)
+    .filter((k) => k in rm && (isYobi() || isThreeSubjectYear(k)))
     .reverse(); // 新しい年度を先頭に
 }
 
 // リンク探索は yearKey から原典ページURLを引いて tantou-moj.js に委譲する
 // （巡回スクリプトと同じコードパスを共有するため、探索本体は URL を受け取る）。
 function findQuestionPdfUrl(yearKey, subject) {
-  return findTantouQuestionPdfUrl(YEAR_URL_MAP[yearKey], subject);
+  return findTantouQuestionPdfUrl(yearMap()[yearKey], subjectArg(subject));
 }
 function findAnswerPdfUrl(yearKey, subject) {
-  const resultsUrl = RESULTS_URL_MAP[yearKey];
+  const resultsUrl = resultsMap()[yearKey];
   if (!resultsUrl)
     throw new Error(`${yearKeyToLabel(yearKey)} の結果ページが未登録です。`);
-  return findTantouAnswerPdfUrl(resultsUrl, subject);
+  return findTantouAnswerPdfUrl(resultsUrl, subjectArg(subject));
 }
 function resolveSourceUrls(yearKey, subject) {
   return resolveTantouSourceUrls(
-    YEAR_URL_MAP[yearKey],
-    RESULTS_URL_MAP[yearKey],
-    subject,
+    yearMap()[yearKey],
+    resultsMap()[yearKey],
+    subjectArg(subject),
   );
 }
 
 // ─── 画面初期化 ───────────────────────────────────────────────────────────
+// 試験種別の切替時にも呼ぶため、年度・科目のリストを作り直す。
 function initSelectors() {
   const yearSelect = $("year");
+  yearSelect.innerHTML = "";
   for (const k of supportedYearKeys()) {
     const opt = document.createElement("option");
     opt.value = k;
@@ -65,7 +128,8 @@ function initSelectors() {
     yearSelect.appendChild(opt);
   }
   const subjSelect = $("subject");
-  for (const s of SUBJECTS) {
+  subjSelect.innerHTML = "";
+  for (const s of subjects()) {
     const opt = document.createElement("option");
     opt.value = s;
     opt.textContent = s;
@@ -146,12 +210,17 @@ async function buildOnePdf(yearKey, subject, docType, sourceUrls) {
   appendLog(`  ${docType} PDF: ${pdfUrl}`);
   const pdfBytes = await fetchPdf(pdfUrl);
   appendLog(`  ${pdfBytes.byteLength.toLocaleString()} バイト`);
-  const baseName = `${yearLabel}司法試験短答式${subject}${docType}`;
+  const baseName = `${yearLabel}${examLabel()}短答式${subject}${docType}`;
   // 左上ラベルの種類表記は「問題」か「正答」に短縮する
   const typeShort = docType === "問題" ? "問題" : "正答";
-  const topLabel = `${yearLabel}　${subject}　${typeShort}`;
-  // 問題は表紙（1ページ目）を除いた本文のみ。正答は1ページ構成なので全体。
-  const pageRange = docType === "問題" ? [2, Number.MAX_SAFE_INTEGER] : null;
+  const topLabel = `${yearLabel}　${isYobi() ? "予備　" : ""}${subject}　${typeShort}`;
+  // 問題は表紙・白紙・章扉を除いた本文（最初の設問のページ以降）のみ。
+  // 正答及び配点は表紙が無いので全体を使う。
+  let pageRange = null;
+  if (docType === "問題") {
+    const start = await firstContentPage(pdfBytes.slice(0));
+    pageRange = [start, Number.MAX_SAFE_INTEGER];
+  }
   const { bytes, total, savedPages } = await buildStampedPdf(
     pdfBytes,
     pageRange,
@@ -186,8 +255,11 @@ async function saveSingle(docType) {
       new Blob([bytes], { type: "application/pdf" }),
       `${baseName}.pdf`,
     );
+    const removed = total - savedPages;
     const note =
-      docType === "問題" ? `表紙を除く${savedPages}ページ` : `${savedPages}ページ`;
+      docType === "問題" && removed > 0
+        ? `表紙等${removed}ページを除く${savedPages}ページ`
+        : `${savedPages}ページ`;
     appendLog(
       `保存しました（${note}・左上に見出し、下部に出典を印字）。`,
       "ok",
@@ -211,7 +283,7 @@ async function saveZip() {
   setProgressBar(0.05);
   setStatus("一括取得中");
   try {
-    const folder = `${yearLabel}司法試験短答式${subject}一式`;
+    const folder = `${yearLabel}${examLabel()}短答式${subject}一式`;
     const sourceUrls = await resolveSourceUrls(yearKey, subject);
     setProgressBar(0.3);
     const files = {};
@@ -258,6 +330,14 @@ async function saveZip() {
 window.addEventListener("DOMContentLoaded", () => {
   initSelectors();
   initNews();
+  // 試験種別の切替で年度・科目リストを作り直し、ログ・進捗をリセットする
+  for (const r of document.querySelectorAll('input[name="exam"]')) {
+    r.addEventListener("change", () => {
+      initSelectors();
+      $("log").textContent = "";
+      setProgressBar(0);
+    });
+  }
   $("q-save").addEventListener("click", () => saveSingle("問題"));
   $("a-save").addEventListener("click", () => saveSingle("正答及び配点"));
   $("zip-save").addEventListener("click", saveZip);

@@ -23,14 +23,14 @@
       content="https://adatchan.github.io/barexam-scrapbox-web/tantou.html"
     />
     <title>しほしけ短答ダウンローダー（β版）– 司法試験短答式 過去問PDF</title>
-    <link rel="stylesheet" href="./style.css?v=20260615.0934" />
+    <link rel="stylesheet" href="./style.css?v=20260615.1955" />
   </head>
   <body>
     <main class="app">
       <header class="hero">
         <h1>しほしけ短答ダウンローダー<span class="beta">（β版）</span></h1>
         <p class="subtitle">
-          司法試験短答式（憲法・民法・刑法）の問題と正答及び配点を、年度別・科目別に法務省ウェブの公表PDFから保存します
+          司法試験・予備試験の短答式の問題と正答及び配点を、年度別・科目別に法務省ウェブの公表PDFから保存します
         </p>
         <p class="subtitle" style="margin-top: 6px">
           論文式の試験問題・出題の趣旨・採点実感をテキスト化したい場合は
@@ -72,7 +72,9 @@
         <details>
           <summary>対応している年度・科目は？</summary>
           <p>
-            短答式が憲法・民法・刑法の3科目別に出題されるようになった平成27年から最新年度までです。それ以前（平成22〜26年）は公法系・民事系・刑事系の系列単位での出題のため、本ツールの対象外です。
+            画面上部の「試験」で司法試験・予備試験を切り替えられます。<br />
+            ・司法試験: 短答式が憲法・民法・刑法の3科目別に出題されるようになった平成27年から最新年度まで（それ以前は系列単位の出題のため対象外）。<br />
+            ・予備試験: 平成23年から最新年度まで。科目は憲法・行政法／民法・商法・民事訴訟法／刑法・刑事訴訟法／一般教養科目の4グループ（予備試験は科目をまとめたPDFで公表されます）。
           </p>
         </details>
 
@@ -115,6 +117,20 @@
       </dialog>
 
       <section class="form">
+        <div class="field">
+          <label>試験</label>
+          <div class="radio-group">
+            <label class="radio">
+              <input type="radio" name="exam" value="shihou" checked />
+              司法試験
+            </label>
+            <label class="radio">
+              <input type="radio" name="exam" value="yobi" />
+              予備試験
+            </label>
+          </div>
+        </div>
+
         <div class="field">
           <label for="year">年度</label>
           <select id="year"></select>
@@ -197,6 +213,6 @@
       })();
     </script>
 
-    <script type="module" src="./tantou.js?v=20260615.0934"></script>
+    <script type="module" src="./tantou.js?v=20260615.1955"></script>
   </body>
 </html>

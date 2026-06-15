@@ -11,10 +11,22 @@
 // （平成22〜26年）は公法系・民事系・刑事系の系列単位のため対象外。
 // =============================================================================
 import { fetchHtml } from "./moj.js";
+import { reEscape } from "./rules.js";
 
 export const TANTOU_SUBJECTS = ["憲法", "民法", "刑法"];
 // フッター等に並べる短答式の種類（左から順）
 export const TANTOU_DOC_TYPES = ["問題", "正答及び配点"];
+
+// 科目名は単一文字列でも別名配列でも受け付ける（予備の「一般教養科目／
+// 一般教養」のように年度で表記が揺れる科目に対応）。アンカー本文に対する
+// 選択肢（長い順に並べて先にマッチさせる）正規表現断片を返す。
+function subjectAlt(subject) {
+  const arr = Array.isArray(subject) ? subject : [subject];
+  return arr.map(reEscape).join("|");
+}
+function subjectLabel(subject) {
+  return Array.isArray(subject) ? subject.join("／") : subject;
+}
 
 // 3科目別出題の年度か（令和は全て / 平成は27年以降）
 export function isThreeSubjectYear(key) {
@@ -39,11 +51,13 @@ export async function findTantouQuestionPdfUrl(examPageUrl, subject) {
   const ei = html.indexOf("論文式試験", si);
   const section = ei === -1 ? html.slice(si) : html.slice(si, ei);
 
-  const m = new RegExp(`href="([^"#]+\\.pdf)"[^>]*>\\s*${subject}\\s*<`).exec(
-    section,
-  );
+  const m = new RegExp(
+    `href="([^"#]+\\.pdf)"[^>]*>\\s*(?:${subjectAlt(subject)})\\s*<`,
+  ).exec(section);
   if (!m)
-    throw new Error(`短答式「${subject}」の問題PDFリンクが見つかりません。`);
+    throw new Error(
+      `短答式「${subjectLabel(subject)}」の問題PDFリンクが見つかりません。`,
+    );
   return resolveUrl(m[1], examPageUrl);
 }
 
@@ -69,12 +83,12 @@ export async function findTantouAnswerPdfUrl(resultsPageUrl, subject) {
   }
   const region = idx === -1 ? subHtml : subHtml.slice(idx);
 
-  const m = new RegExp(`href="([^"#]+\\.pdf)"[^>]*>\\s*${subject}\\s*<`).exec(
-    region,
-  );
+  const m = new RegExp(
+    `href="([^"#]+\\.pdf)"[^>]*>\\s*(?:${subjectAlt(subject)})\\s*<`,
+  ).exec(region);
   if (!m)
     throw new Error(
-      `短答式「${subject}」の正答・配点PDFリンクが見つかりません。`,
+      `短答式「${subjectLabel(subject)}」の正答・配点PDFリンクが見つかりません。`,
     );
   return resolveUrl(m[1], subUrl);
 }

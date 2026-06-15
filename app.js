@@ -13,18 +13,40 @@
 //   pdfout.js  原典PDFの抜き出し・スタンプ印字・zip
 // =============================================================================
 import { YEAR_URL_MAP } from "./years.js";
+import { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } from "./yobi-years.js";
 import { NEWS } from "./news.js";
 import { SUBJECT_MAP, yearKeyToLabel } from "./data.js";
 import { runConversion, resolveSourceUrls } from "./convert.js";
+import { fetchPdf } from "./moj.js";
+import {
+  YOBI_RONBUN_SUBJECTS,
+  yobiSubjectCandidates,
+  findYobiRonbunPdfUrl,
+  findYobiShushiPdfUrl,
+} from "./yobi-moj.js";
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
 
 const $ = (id) => document.getElementById(id);
 
+// 試験種別（司法試験 / 予備試験）。予備は PDF収集モード（jinji07 系統・
+// 科目グループ別・出題の趣旨は全科目まとめた1PDF・採点実感なし）。
+function isYobi() {
+  const el = document.querySelector('input[name="exam"]:checked');
+  return !!el && el.value === "yobi";
+}
+
 // ─── 画面初期化 ───────────────────────────────────────────────────────────
+// 試験種別の切替時にも呼ぶため、年度・科目のリストを作り直す。
 function initSelectors() {
+  const yobi = isYobi();
   const yearSelect = $("year");
-  const keys = Object.keys(YEAR_URL_MAP).reverse();
-  for (const k of keys) {
+  yearSelect.innerHTML = "";
+  const yearKeys = yobi
+    ? Object.keys(YOBI_YEAR_URL_MAP)
+        .filter((k) => k in YOBI_RESULTS_URL_MAP)
+        .reverse()
+    : Object.keys(YEAR_URL_MAP).reverse();
+  for (const k of yearKeys) {
     const opt = document.createElement("option");
     opt.value = k;
     opt.textContent = yearKeyToLabel(k);
@@ -32,12 +54,29 @@ function initSelectors() {
   }
 
   const subjSelect = $("subject");
-  for (const s of Object.keys(SUBJECT_MAP)) {
+  subjSelect.innerHTML = "";
+  const subs = yobi ? YOBI_RONBUN_SUBJECTS : Object.keys(SUBJECT_MAP);
+  for (const s of subs) {
     const opt = document.createElement("option");
     opt.value = s;
     opt.textContent = s;
     subjSelect.appendChild(opt);
   }
+}
+
+// 試験種別の切替: 予備モードでは種類・出力形式とテキスト変換系ボタンを隠し、
+// PDF収集ボタンを出す。年度・科目も作り直す。
+function applyExamMode() {
+  const yobi = isYobi();
+  $("type-field").hidden = yobi;
+  $("format-field").hidden = yobi;
+  $("shihou-actions").hidden = yobi;
+  $("yobi-actions").hidden = !yobi;
+  initSelectors();
+  invalidateResult();
+  $("log").textContent = "";
+  $("result").textContent = "";
+  setProgressBar(0);
 }
 
 function initNews() {
@@ -391,6 +430,162 @@ async function onSaveLlm() {
   }
 }
 
+// ─── 予備試験モード（PDF収集） ───────────────────────────────────────────
+// 予備試験はテキスト変換せず、試験問題（科目グループ別）と出題の趣旨
+// （全科目まとめた1PDF）を出典フッター・左上見出し付きで保存する。
+const YOBI_DOC_TYPES = ["試験問題", "出題の趣旨"];
+
+function setBusyYobi(busy) {
+  for (const id of ["yobi-q", "yobi-shushi", "yobi-zip"]) $(id).disabled = busy;
+}
+
+// 試験問題・出題の趣旨の原典PDF直URLをまとめて解決する（フッター用）。
+async function resolveYobiSourceUrls(yearKey, subject) {
+  const urls = { 試験問題: null, 出題の趣旨: null };
+  try {
+    urls["試験問題"] = await findYobiRonbunPdfUrl(
+      YOBI_YEAR_URL_MAP[yearKey],
+      yobiSubjectCandidates(subject),
+    );
+  } catch {
+    /* 未掲載・取得失敗は null のまま */
+  }
+  try {
+    urls["出題の趣旨"] = await findYobiShushiPdfUrl(
+      YOBI_RESULTS_URL_MAP[yearKey],
+    );
+  } catch {
+    /* noop */
+  }
+  return urls;
+}
+
+// 1種類（試験問題 or 出題の趣旨）の原典PDFを取得し、左上の見出しと出典
+// フッターを印字したバイト列と基本ファイル名を返す。
+async function buildYobiPdf(yearKey, subject, docType, sourceUrls) {
+  const yearLabel = currentYearLabel();
+  const pdfUrl =
+    docType === "試験問題"
+      ? await findYobiRonbunPdfUrl(
+          YOBI_YEAR_URL_MAP[yearKey],
+          yobiSubjectCandidates(subject),
+        )
+      : await findYobiShushiPdfUrl(YOBI_RESULTS_URL_MAP[yearKey]);
+  appendLog(`  ${docType} PDF: ${pdfUrl}`);
+  const pdfBytes = await fetchPdf(pdfUrl);
+  appendLog(`  ${pdfBytes.byteLength.toLocaleString()} バイト`);
+  // 出題の趣旨は全科目まとめた1PDFなので科目名を付けない
+  const baseName =
+    docType === "試験問題"
+      ? `${yearLabel}司法試験予備試験論文式${subject}試験問題`
+      : `${yearLabel}司法試験予備試験論文式出題の趣旨`;
+  const topLabel =
+    docType === "試験問題"
+      ? `${yearLabel}　予備　${subject}　問題`
+      : `${yearLabel}　予備　論文　趣旨`;
+  const { bytes, savedPages } = await buildStampedPdf(
+    pdfBytes,
+    null,
+    baseName,
+    sourceUrls,
+    YOBI_DOC_TYPES,
+    topLabel,
+  );
+  return { bytes, baseName, savedPages, pdfUrl };
+}
+
+async function onSaveYobiSingle(docType) {
+  const yearKey = $("year").value;
+  const subject = $("subject").value;
+  $("log").textContent = "";
+  $("result").textContent = "";
+  setBusyYobi(true);
+  setProgressBar(0.05);
+  setStatus("取得中");
+  activatePane("log");
+  try {
+    appendLog(
+      `取得開始: ${currentYearLabel()} 予備試験 論文式 ${subject} ${docType}`,
+    );
+    const sourceUrls = await resolveYobiSourceUrls(yearKey, subject);
+    setProgressBar(0.4);
+    const { bytes, baseName, savedPages } = await buildYobiPdf(
+      yearKey,
+      subject,
+      docType,
+      sourceUrls,
+    );
+    setProgressBar(0.95);
+    triggerDownload(
+      new Blob([bytes], { type: "application/pdf" }),
+      `${baseName}.pdf`,
+    );
+    appendLog(
+      `保存しました（${savedPages}ページ・左上に見出し、下部に出典を印字）。`,
+      "ok",
+    );
+    setProgressBar(1.0);
+  } catch (e) {
+    appendLog(`保存に失敗: ${e.message}`, "err");
+    setStatus("エラー", "error");
+  } finally {
+    setBusyYobi(false);
+  }
+}
+
+async function onSaveYobiZip() {
+  const yearKey = $("year").value;
+  const subject = $("subject").value;
+  const yearLabel = currentYearLabel();
+  $("log").textContent = "";
+  setBusyYobi(true);
+  setProgressBar(0.05);
+  setStatus("一括取得中");
+  activatePane("log");
+  try {
+    const folder = `${yearLabel}司法試験予備試験論文式${subject}一式`;
+    const sourceUrls = await resolveYobiSourceUrls(yearKey, subject);
+    setProgressBar(0.3);
+    const files = {};
+    let done = 0;
+    for (const docType of YOBI_DOC_TYPES) {
+      try {
+        appendLog(`一括取得: ${docType}`);
+        const { bytes, baseName } = await buildYobiPdf(
+          yearKey,
+          subject,
+          docType,
+          sourceUrls,
+        );
+        files[`${folder}/${baseName}.pdf`] = new Uint8Array(bytes);
+        appendLog(`  ${docType}: OK`, "ok");
+      } catch (e) {
+        appendLog(`  ${docType} は取得できませんでした: ${e.message}`, "warn");
+      }
+      done++;
+      setProgressBar(0.3 + 0.6 * (done / YOBI_DOC_TYPES.length));
+    }
+
+    const names = Object.keys(files);
+    if (names.length === 0)
+      throw new Error("いずれのPDFも取得できませんでした。");
+
+    const { zipSync } = await loadFflate();
+    const zipped = zipSync(files, { level: 0 });
+    triggerDownload(
+      new Blob([zipped], { type: "application/zip" }),
+      `${folder}.zip`,
+    );
+    appendLog(`一括保存完了（${names.length}件を zip に格納）`, "ok");
+    setProgressBar(1.0);
+  } catch (e) {
+    appendLog(`一括保存に失敗: ${e.message}`, "err");
+    setStatus("エラー", "error");
+  } finally {
+    setBusyYobi(false);
+  }
+}
+
 // ── 起動 ─────────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   initSelectors();
@@ -399,12 +594,20 @@ window.addEventListener("DOMContentLoaded", () => {
   for (const id of ["year", "subject", "type"]) {
     $(id).addEventListener("change", invalidateResult);
   }
+  for (const r of document.querySelectorAll('input[name="exam"]')) {
+    r.addEventListener("change", applyExamMode);
+  }
   $("run").addEventListener("click", onRun);
   $("copy").addEventListener("click", onCopy);
   $("download").addEventListener("click", onDownload);
   $("source").addEventListener("click", onSaveSourcePdf);
   $("source-zip").addEventListener("click", onSaveSourceZip);
   $("llm").addEventListener("click", onSaveLlm);
+  $("yobi-q").addEventListener("click", () => onSaveYobiSingle("試験問題"));
+  $("yobi-shushi").addEventListener("click", () =>
+    onSaveYobiSingle("出題の趣旨"),
+  );
+  $("yobi-zip").addEventListener("click", onSaveYobiZip);
 
   // ヘルプダイアログ（背景クリックでも閉じる）
   const helpDialog = $("help-dialog");
