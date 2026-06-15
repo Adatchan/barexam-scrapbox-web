@@ -51,9 +51,17 @@ function makeTextStampPng(text, color = "#555555", underline = false) {
   };
 }
 
-// 各ページのフッターに、ファイル名（右）と出典＋3種類の原典PDF直リンク
+// 各ページのフッターに、ファイル名（右）と出典＋原典PDF直リンク群
 // （左）を印字する。リンク部分には URI 注釈を付与してクリック可能にする。
-async function drawFooter(out, PDFString, baseName, sourceUrls) {
+// docTypes は左下に並べる種類の見出し（論文式は試験問題・出題の趣旨・採点実感、
+// 短答式は問題・正答及び配点）。sourceUrls は各見出し→URL（無い種類は null）。
+async function drawFooter(
+  out,
+  PDFString,
+  baseName,
+  sourceUrls,
+  docTypes = ["試験問題", "出題の趣旨", "採点実感"],
+) {
   // 右下: ファイル名
   const nameStamp = makeTextStampPng(baseName);
   const nameImg = await out.embedPng(nameStamp.dataUrl);
@@ -65,7 +73,7 @@ async function drawFooter(out, PDFString, baseName, sourceUrls) {
   const segs = [
     { ...makeTextStampPng("出典：法務省ウェブサイト（原典を加工）　"), url: null },
   ];
-  for (const docType of ["試験問題", "出題の趣旨", "採点実感"]) {
+  for (const docType of docTypes) {
     const url = sourceUrls?.[docType] || null;
     const color = url ? "#1a4f8a" : "#aaaaaa";
     segs.push({ ...makeTextStampPng(`［${docType}］`, color, !!url), url });
@@ -103,8 +111,15 @@ async function drawFooter(out, PDFString, baseName, sourceUrls) {
 
 // 原典PDFから該当ページを抜き出し、フッターにファイル名と出典リンクを
 // 付けた PDF バイト列を生成する。
-// sourceUrls = { 試験問題, 出題の趣旨, 採点実感 }（各 URL か null）
-export async function buildStampedPdf(pdfBytes, pageRange, baseName, sourceUrls) {
+// sourceUrls = フッターに並べる種類→URL（各 URL か null）
+// docTypes = フッターに並べる種類の見出し（省略時は論文式の3種類）
+export async function buildStampedPdf(
+  pdfBytes,
+  pageRange,
+  baseName,
+  sourceUrls,
+  docTypes,
+) {
   const { PDFDocument, PDFString } = await loadPdfLib();
   const src = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
   const total = src.getPageCount();
@@ -125,7 +140,7 @@ export async function buildStampedPdf(pdfBytes, pageRange, baseName, sourceUrls)
     out = src;
   }
 
-  await drawFooter(out, PDFString, baseName, sourceUrls);
+  await drawFooter(out, PDFString, baseName, sourceUrls, docTypes);
 
   return { bytes: await out.save(), rangeLabel, total };
 }

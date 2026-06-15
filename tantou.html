@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#004679" />
+    <meta name="color-scheme" content="light" />
+    <meta
+      name="description"
+      content="司法試験短答式（憲法・民法・刑法）の問題と正答及び配点を、年度別・科目別に法務省ウェブの公表PDFから保存する非公式ツール"
+    />
+    <meta property="og:title" content="しほしけ短答ダウンローダー（β版）" />
+    <meta
+      property="og:description"
+      content="司法試験短答式（憲法・民法・刑法）の問題と正答及び配点を、年度別・科目別に法務省ウェブの公表PDFから保存する非公式ツール"
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://adatchan.github.io/barexam-scrapbox-web/tantou.html"
+    />
+    <title>しほしけ短答ダウンローダー（β版）– 司法試験短答式 過去問PDF</title>
+    <link rel="stylesheet" href="./style.css?v=20260615.0916" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="hero">
+        <h1>しほしけ短答ダウンローダー<span class="beta">（β版）</span></h1>
+        <p class="subtitle">
+          司法試験短答式（憲法・民法・刑法）の問題と正答及び配点を、年度別・科目別に法務省ウェブの公表PDFから保存します
+        </p>
+        <p class="subtitle" style="margin-top: 6px">
+          論文式の試験問題・出題の趣旨・採点実感をテキスト化したい場合は
+          <a href="./index.html">しほしけコンバーター（論文式）</a> をどうぞ。
+        </p>
+      </header>
+
+      <div class="help-bar">
+        <button id="help" class="btn-help" type="button">？ ヘルプ</button>
+      </div>
+
+      <dialog id="help-dialog" aria-label="ヘルプ">
+        <div class="help-head">
+          <h2>ヘルプ（よくある質問）</h2>
+          <button id="help-close" class="btn-secondary" type="button">
+            閉じる
+          </button>
+        </div>
+
+        <details open>
+          <summary>このツールは何ですか？</summary>
+          <p>
+            司法試験「短答式」の問題と正答及び配点を、法務省ウェブサイトで公表されているPDFから取得して保存する、法務省非公式の個人開発ツールです。各PDFには出典・加工表示のフッターを付けて保存します。処理はすべてブラウザ内で行われ、登録やデータ収集はありません。
+          </p>
+        </details>
+
+        <details>
+          <summary>基本的な使い方は？</summary>
+          <p>
+            年度・科目を選んで「問題PDFを保存」または「正答・配点PDFを保存」を押すと、原典PDFを取得し、出典フッターを付けて保存します。「問題＋正答をzip保存」で2点をまとめて保存できます。
+          </p>
+        </details>
+
+        <details>
+          <summary>対応している年度・科目は？</summary>
+          <p>
+            短答式が憲法・民法・刑法の3科目別に出題されるようになった平成27年から最新年度までです。それ以前（平成22〜26年）は公法系・民事系・刑事系の系列単位での出題のため、本ツールの対象外です。
+          </p>
+        </details>
+
+        <details>
+          <summary>論文式の「出題の趣旨」「採点実感」はありますか？</summary>
+          <p>
+            短答式には出題の趣旨・採点実感はありません。短答式について公表されるのは、問題と「正答及び配点」です。論文式の出題の趣旨・採点実感が必要な場合は
+            <a href="./index.html">しほしけコンバーター（論文式）</a>
+            をご利用ください。
+          </p>
+        </details>
+
+        <details>
+          <summary>「正答及び配点」とは？</summary>
+          <p>
+            短答式各問の正解と配点をまとめた、法務省公表のPDFです。年度により見出しが「正答及び配点」または「正解及び配点」と表記されています。本ツールはどちらの表記でも自動で探します。
+          </p>
+        </details>
+
+        <details>
+          <summary>テキストには変換しないのですか？</summary>
+          <p>
+            短答式は選択式（マークシート）で、図表や選択肢の配置が多くテキスト化に適さないため、本ツールは原典PDFのダウンロードに特化しています。論文式の文章はテキスト化に対応しています（しほしけコンバーター）。
+          </p>
+        </details>
+
+        <details>
+          <summary>著作権は大丈夫ですか？学内などで共有してもよいですか？</summary>
+          <p>
+            法務省ウェブサイトのコンテンツには「公共データ利用規約（PDL1.0）」が適用されており、出典の記載と加工した旨の表示を条件に、複製・共有・加工が認められています。本ツールが保存するPDFには出典・加工表示のフッターが自動で付くので、そのまま保持して共有してください。本ツール自体の共有も自由です。
+          </p>
+        </details>
+      </dialog>
+
+      <section class="form">
+        <div class="field">
+          <label for="year">年度</label>
+          <select id="year"></select>
+        </div>
+
+        <div class="field">
+          <label for="subject">科目</label>
+          <select id="subject"></select>
+        </div>
+
+        <div class="actions">
+          <button id="q-save" class="btn-primary" type="button">
+            問題PDFを保存
+          </button>
+          <button id="a-save" class="btn-secondary" type="button">
+            正答・配点PDFを保存
+          </button>
+          <button id="zip-save" class="btn-secondary" type="button">
+            問題＋正答をzip保存
+          </button>
+        </div>
+      </section>
+
+      <section class="progress" aria-live="polite">
+        <div
+          id="bar"
+          class="bar"
+          role="progressbar"
+          aria-label="取得の進捗"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="0"
+        >
+          <div id="bar-fill" class="bar-fill"></div>
+        </div>
+        <div id="status" class="status">待機中</div>
+      </section>
+
+      <section class="output">
+        <div class="tabs" role="tablist">
+          <button class="tab active" type="button" role="tab" aria-selected="true">
+            ログ
+          </button>
+        </div>
+        <pre id="log" class="pane active" role="tabpanel"></pre>
+      </section>
+
+      <footer class="foot">
+        <p class="disclaimer">
+          本サービスは法務省非公式の個人開発ツールです。保存されるPDFは
+          <a
+            href="https://www.moj.go.jp/jinji/shihoushiken/shihoushiken_index.html"
+            target="_blank"
+            rel="noopener"
+            >法務省ウェブサイト</a
+          >掲載のコンテンツに出典・加工表示を付して複製したものです。学習の際は原典をご確認ください。
+        </p>
+      </footer>
+    </main>
+
+    <!-- モジュール初期化失敗や想定外のエラーをログ欄に表示する（調査支援） -->
+    <script>
+      (function () {
+        function report(msg) {
+          var log = document.getElementById("log");
+          if (log) log.textContent += "[NG] 内部エラー: " + msg + "\n";
+          var status = document.getElementById("status");
+          if (status) {
+            status.textContent = "エラー";
+            status.className = "status error";
+          }
+        }
+        window.addEventListener("error", function (e) {
+          report(e.message || "スクリプトの読み込みに失敗しました");
+        });
+        window.addEventListener("unhandledrejection", function (e) {
+          var r = e.reason;
+          report((r && r.message) || String(r));
+        });
+      })();
+    </script>
+
+    <script type="module" src="./tantou.js?v=20260615.0916"></script>
+  </body>
+</html>
