@@ -113,7 +113,7 @@ async function drawFooter(
 // 印字する。本文は上端から十分下にあるため、上端の余白帯に収めて本文と
 // 重ならないようにする（日本語は Canvas 描画 PNG で埋め込む）。
 async function drawTopLabel(out, text) {
-  const stamp = makeTextStampPng(text, "#004679");
+  const stamp = makeTextStampPng(text, "#000000");
   const img = await out.embedPng(stamp.dataUrl);
   const h = 20; // pt（約20ポイント）
   const w = h * stamp.aspect;
@@ -123,7 +123,7 @@ async function drawTopLabel(out, text) {
       y: page.getHeight() - 18 - h, // 上端から 18pt 下げた余白帯に配置
       width: w,
       height: h,
-      opacity: 0.92,
+      opacity: 1,
     });
   }
 }
