@@ -21,15 +21,29 @@ export function loadPdfjs() {
 
 const nosp = (s) => s.replace(/[\s　]+/g, "");
 
+// 扉ページ（「論文式試験問題集［経済法］」のような科目名だけの中央寄せ
+// ページ）を本文ページと区別する閾値。これ以下の文字数なら扉・白紙とみなす。
+// 扉(最長でも約24字)と本文(最短でも約200字)の間には十分な開きがある。
+const DOORPAGE_MAX_LEN = 40;
+
 // ページ先頭帯（上端から30%）のテキストを連結して空白除去した配列を返す。
 // 科目見出しは必ずページ先頭にあるため、本文中の角括弧（［No.１］等）を
 // 誤検出しないよう先頭帯に絞る。
+// ただし選択科目PDFは各科目が扉ページ（科目名のみ・中央寄せ）から始まり、
+// 上端帯には文字が無いため top では拾えない。この扉を境界に使わないと前の
+// 科目の末尾に次科目の扉が混入する。そこで文字数が極端に少ないページ
+// （扉・白紙）に限り全文を見出し判定の対象にする。
 async function pageTopTexts(pdf) {
   const out = [];
   for (let pn = 1; pn <= pdf.numPages; pn++) {
     const page = await pdf.getPage(pn);
     const H = page.getViewport({ scale: 1 }).height;
     const items = (await page.getTextContent()).items.filter((i) => i.str);
+    const all = nosp(items.map((i) => i.str).join(""));
+    if (all.length <= DOORPAGE_MAX_LEN) {
+      out.push(all); // 扉・白紙ページは全文で見出しを拾う
+      continue;
+    }
     const top = items
       .filter((i) => i.transform[5] > H * 0.7)
       .sort((a, b) => b.transform[5] - a.transform[5] || a.transform[4] - b.transform[4])
