@@ -28,6 +28,7 @@ import {
 } from "./yobi-moj.js";
 import { firstContentPage, findSubjectPageRange } from "./pdfsplit.js";
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
+import { enhanceSubjectSelect } from "./colorselect.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -67,6 +68,8 @@ function initSelectors() {
     if (sys) opt.style.backgroundColor = SYSTEM_BG[sys];
     subjSelect.appendChild(opt);
   }
+  // 科目リストを作り直したらカスタムドロップダウンを再同期する
+  if (subjSelect._cs) subjSelect._cs.refresh();
 }
 
 // 試験種別の切替: 予備モードでは種類・出力形式とテキスト変換系ボタンを隠し、
@@ -630,6 +633,7 @@ async function onSaveYobiZip() {
 // ── 起動 ─────────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   initSelectors();
+  enhanceSubjectSelect($("subject"));
   initNews();
   setupTabs();
   for (const id of ["year", "subject", "type"]) {

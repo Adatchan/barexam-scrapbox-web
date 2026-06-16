@@ -34,6 +34,7 @@ import {
 } from "./yobi-moj.js";
 import { firstContentPage, findSubjectPageRange } from "./pdfsplit.js";
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
+import { enhanceSubjectSelect } from "./colorselect.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -114,6 +115,8 @@ function initSelectors() {
     if (sys) opt.style.backgroundColor = SYSTEM_BG[sys];
     subjSelect.appendChild(opt);
   }
+  // 科目リストを作り直したらカスタムドロップダウンを再同期する
+  if (subjSelect._cs) subjSelect._cs.refresh();
 }
 
 // 更新情報（短答式専用の TANTOU_NEWS を週次クロールが自動追記する）
@@ -331,6 +334,7 @@ async function saveZip() {
 // ── 起動 ─────────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   initSelectors();
+  enhanceSubjectSelect($("subject"));
   initNews();
   // 試験種別の切替で年度・科目リストを作り直し、ログ・進捗をリセットする
   for (const r of document.querySelectorAll('input[name="exam"]')) {

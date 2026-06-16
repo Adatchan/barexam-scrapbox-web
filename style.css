@@ -244,6 +244,63 @@ textarea {
   border-color: var(--primary-mid);
 }
 
+/* ─── 系統色つきカスタムドロップダウン（科目選択 colorselect.js）─────────────
+   macOS のネイティブ select は開いたリストの option 背景色を反映しないため、
+   科目だけ独自実装のドロップダウンに置き換えて各項目を系統色で塗り分ける。 */
+.cs {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+}
+.cs-native {
+  display: none; /* 値の保持先として残し、見た目は trigger/list で描く */
+}
+.cs-trigger {
+  width: 100%;
+  text-align: left;
+  padding: 8px 32px 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: #fff;
+  color: var(--text);
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%23004679' d='M6 8L0 0h12z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+.cs-trigger:focus-visible {
+  outline: 2px solid var(--primary-light);
+  outline-offset: 1px;
+  border-color: var(--primary-mid);
+}
+.cs-list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+.cs-option {
+  padding: 8px 10px;
+  cursor: pointer;
+}
+/* ホバー／キーボードの現在項目は系統色を活かしたまま枠で示す */
+.cs-option.active {
+  box-shadow: inset 0 0 0 2px var(--primary-mid);
+}
+.cs-option[aria-selected="true"] {
+  font-weight: 600;
+}
+
 .radio-group {
   display: flex;
   gap: 18px;
@@ -455,6 +512,9 @@ textarea {
     margin-top: 8px;
   }
   .field select {
+    max-width: 100%;
+  }
+  .cs {
     max-width: 100%;
   }
   .actions {
