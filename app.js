@@ -28,7 +28,7 @@ import {
 } from "./yobi-moj.js";
 import { firstContentPage, findSubjectPageRange } from "./pdfsplit.js";
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
-import { enhanceSubjectSelect } from "./colorselect.js";
+import { enhanceSelect } from "./colorselect.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -56,6 +56,7 @@ function initSelectors() {
     opt.textContent = yearKeyToLabel(k);
     yearSelect.appendChild(opt);
   }
+  if (yearSelect._cs) yearSelect._cs.refresh();
 
   const subjSelect = $("subject");
   subjSelect.innerHTML = "";
@@ -633,7 +634,10 @@ async function onSaveYobiZip() {
 // ── 起動 ─────────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   initSelectors();
-  enhanceSubjectSelect($("subject"));
+  // 全プルダウンを同じカスタムドロップダウンに揃える。科目だけ系統色を付ける。
+  enhanceSelect($("year"));
+  enhanceSelect($("subject"), (v) => SYSTEM_BG[subjectSystem(v)]);
+  enhanceSelect($("type"));
   initNews();
   setupTabs();
   for (const id of ["year", "subject", "type"]) {

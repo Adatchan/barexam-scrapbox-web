@@ -1,25 +1,25 @@
 // =============================================================================
-// 系統色つきカスタムドロップダウン（科目選択用）
+// カスタムドロップダウン（全プルダウン共通の見た目）
 //
 // macOS のネイティブ <select> は、開いたリストの各 <option> に背景色を反映
-// しない（OS のネイティブ描画が使われるため）。そこで科目プルダウンだけ、
-// native <select> を「値の保持先」として残したまま見た目を独自実装のドロップ
-// ダウンに置き換え、各項目を系統色（公法=緑・民事=赤・刑事=青）で塗り分ける。
-// 選択時には native select に値を反映して change を発火するので、値を読む
-// 既存処理（$("subject").value など）や change リスナーはそのまま動く。
+// しない（OS のネイティブ描画が使われるため）。また見た目を全プルダウンで
+// 揃えるため、年度・科目・種類いずれも native <select> を「値の保持先」として
+// 残したまま見た目を独自実装のドロップダウンに置き換える。選択時には native
+// select に値を反映して change を発火するので、値を読む既存処理
+// （$("subject").value など）や change リスナーはそのまま動く。
 //
-// 科目リストは試験種別の切替で作り直されるため、再構築後に refresh() を呼ぶ。
+// colorOf(value) を渡すと各項目をその色で塗り分ける（科目の系統色用）。省略
+// すると無地（年度・種類）。リストが作り直される場合は再構築後に refresh()。
 // =============================================================================
-import { subjectSystem, SYSTEM_BG } from "./data.js";
 
-function tint(el, value) {
-  const sys = subjectSystem(value);
-  el.style.backgroundColor = sys ? SYSTEM_BG[sys] : "";
-}
-
-// native <select> をラップして系統色つきドロップダウンを構築する。
+// native <select> をラップしてカスタムドロップダウンを構築する。
+// colorOf は値→CSS色を返す任意の関数（falsy なら無地）。
 // 戻り値（controller）は select._cs にも保存し、refresh() で再同期できる。
-export function enhanceSubjectSelect(select) {
+export function enhanceSelect(select, colorOf) {
+  const tint = (el, value) => {
+    el.style.backgroundColor = (colorOf && colorOf(value)) || "";
+  };
+
   const wrap = document.createElement("div");
   wrap.className = "cs";
   select.parentNode.insertBefore(wrap, select);
