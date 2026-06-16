@@ -92,9 +92,15 @@ export const YOBI_RONBUN_DEF = {
     qHeaders: ["刑事"],
     sHeaders: ["法律実務基礎科目（刑事）", "刑事"],
   },
-  // 選択科目は問題が選択科目をまとめた単独PDF（分割せず全体）、趣旨は
-  // 全科目まとめたPDFの選択科目ブロック全体を切り出す。
-  選択科目: { group: "選択科目", qHeaders: null, sHeaders: SENTAKU_HEADERS },
+  // 選択科目（倒産法・経済法 など）は、問題・趣旨とも各科目がまとめPDF内で
+  // 角括弧見出し（［経済法］等）から始まるため、科目ごとに切り出す。group は
+  // PDF探索に使うアンカー名なので、どの選択科目でも "選択科目"（まとめPDF）。
+  ...Object.fromEntries(
+    SENTAKU_HEADERS.map((s) => [
+      s,
+      { group: "選択科目", qHeaders: [s], sHeaders: [s] },
+    ]),
+  ),
   // 一般教養科目（令和3年以前）。問題は単独PDF、趣旨は無い。
   一般教養科目: { group: "一般教養科目", qHeaders: null, sHeaders: null },
 };
