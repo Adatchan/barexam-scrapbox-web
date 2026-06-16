@@ -105,11 +105,17 @@ export default {
       if (contentType) headers.set("Content-Type", contentType);
       for (const [k, v] of Object.entries(corsHeaders(origin)))
         headers.set(k, v);
-      // ブラウザ側にもキャッシュさせる（PDFは不変なので長期＋immutable、
-      // HTMLは短め）
+      // ブラウザ側にもキャッシュさせる。成功時のみで、PDFは不変なので長期＋
+      // immutable、HTMLは短め。失敗（未掲載404・一時障害5xx 等）は no-store で
+      // 焼き付けない（エッジ側は cacheTtlByStatus で既に成功時のみ保持）。
+      const ok = upstream.status >= 200 && upstream.status < 300;
       headers.set(
         "Cache-Control",
-        isPdf ? "public, max-age=31536000, immutable" : "public, max-age=3600",
+        ok
+          ? isPdf
+            ? "public, max-age=31536000, immutable"
+            : "public, max-age=3600"
+          : "no-store",
       );
       // エッジの HIT/MISS を確認できるよう中継する（運用時の検証用）
       const cacheStatus = upstream.headers.get("cf-cache-status");
