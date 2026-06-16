@@ -34,6 +34,23 @@ export const SELECT_SUBJECTS = [
   "国際関係法（私法系）",
 ];
 
+// 科目名 → 系統（科目プルダウンの背景色分け用）。公法系・民事系・刑事系の
+// 基本科目だけを色分けし、選択科目・法律実務基礎科目・一般教養科目など系統に
+// 属さないものは null（無地）。司法・予備、論文・短答の全プルダウンで共用する。
+export function subjectSystem(name) {
+  if (/^(?:憲法|行政法)/.test(name)) return "public";
+  if (/^(?:民法|商法|民訴|民事訴訟法)/.test(name)) return "civil";
+  if (/^(?:刑法|刑訴|刑事訴訟法)/.test(name)) return "criminal";
+  return null; // 選択科目・法律実務基礎科目・一般教養科目 など
+}
+
+// 系統 → プルダウン option の背景色（文字が読めるよう淡色にする）
+export const SYSTEM_BG = {
+  public: "#e6f4ea", // 公法系: 緑系
+  civil: "#fce8e6", // 民事系: 赤系
+  criminal: "#e8f0fe", // 刑事系: 青系
+};
+
 // 年度キー（"r7" / "h22"）→ 表示ラベル（"令和7年(2025年)" / "平成22年(2010年)"）
 export function yearKeyToLabel(key) {
   const n = parseInt(key.slice(1), 10);

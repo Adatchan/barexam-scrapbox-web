@@ -15,7 +15,7 @@
 import { YEAR_URL_MAP } from "./years.js";
 import { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } from "./yobi-years.js";
 import { NEWS } from "./news.js";
-import { SUBJECT_MAP, yearKeyToLabel } from "./data.js";
+import { SUBJECT_MAP, yearKeyToLabel, subjectSystem, SYSTEM_BG } from "./data.js";
 import { runConversion, resolveSourceUrls } from "./convert.js";
 import { fetchPdf } from "./moj.js";
 import {
@@ -63,6 +63,8 @@ function initSelectors() {
     const opt = document.createElement("option");
     opt.value = s;
     opt.textContent = s;
+    const sys = subjectSystem(s);
+    if (sys) opt.style.backgroundColor = SYSTEM_BG[sys];
     subjSelect.appendChild(opt);
   }
 }
