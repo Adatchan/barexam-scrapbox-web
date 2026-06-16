@@ -71,6 +71,11 @@ export default {
       );
     }
 
+    // 過去問PDFは一度公表されたら不変なので、Cloudflare のエッジに長期間
+    // キャッシュして法務省 origin への再取得を避ける（利用者をまたいで同じ
+    // PDFは実質1回しか取りに行かない＝負荷集中・ブロックリスクを抑える）。
+    // HTMLは新資料の掲載を反映するため短め。エラー応答はキャッシュしない。
+    const isPdf = /\.pdf(?:$|\?)/i.test(target);
     try {
       const upstream = await fetch(target, {
         headers: {
@@ -82,6 +87,17 @@ export default {
         },
         // 法務省サイトは redirect を返すことがあるので follow
         redirect: "follow",
+        // Cloudflare エッジキャッシュ。成功時のみ保持し、3xx/4xx/5xx は
+        // 保持しない（未掲載404や一時障害を焼き付けないため）。
+        cf: {
+          cacheEverything: true,
+          cacheTtlByStatus: {
+            "200-299": isPdf ? 31536000 : 3600,
+            "300-399": 0,
+            "400-499": 0,
+            "500-599": 0,
+          },
+        },
       });
 
       const headers = new Headers();
@@ -89,8 +105,15 @@ export default {
       if (contentType) headers.set("Content-Type", contentType);
       for (const [k, v] of Object.entries(corsHeaders(origin)))
         headers.set(k, v);
-      // ブラウザ側でキャッシュしてもらう
-      headers.set("Cache-Control", "public, max-age=3600");
+      // ブラウザ側にもキャッシュさせる（PDFは不変なので長期＋immutable、
+      // HTMLは短め）
+      headers.set(
+        "Cache-Control",
+        isPdf ? "public, max-age=31536000, immutable" : "public, max-age=3600",
+      );
+      // エッジの HIT/MISS を確認できるよう中継する（運用時の検証用）
+      const cacheStatus = upstream.headers.get("cf-cache-status");
+      if (cacheStatus) headers.set("X-MOJ-Cache", cacheStatus);
 
       return new Response(upstream.body, {
         status: upstream.status,
