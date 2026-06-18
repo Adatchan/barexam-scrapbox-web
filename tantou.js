@@ -17,7 +17,7 @@ import { YEAR_URL_MAP, RESULTS_URL_MAP } from "./years.js";
 import { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } from "./yobi-years.js";
 import { yearKeyToLabel, subjectSystem, SYSTEM_BG } from "./data.js";
 import { TANTOU_NEWS } from "./news.js";
-import { fetchPdf } from "./moj.js";
+import { fetchPdf, formatKB } from "./moj.js";
 import {
   TANTOU_SUBJECTS,
   TANTOU_DOC_TYPES as DOC_TYPES,
@@ -197,7 +197,7 @@ async function buildOnePdf(yearKey, subject, docType, sourceUrls) {
       : await findAnswerPdfUrl(yearKey, subject);
   appendLog(`  ${docType} PDF: ${pdfUrl}`);
   const pdfBytes = await fetchPdf(pdfUrl);
-  appendLog(`  ${pdfBytes.byteLength.toLocaleString()} バイト`);
+  appendLog(`  ${formatKB(pdfBytes.byteLength)}`);
   const baseName = `${yearLabel}${examLabel()}短答式${subject}${docType}`;
   // 左上ラベルの種類表記は「問題」か「正答」に短縮する
   const typeShort = docType === "問題" ? "問題" : "正答";
@@ -214,12 +214,13 @@ async function buildOnePdf(yearKey, subject, docType, sourceUrls) {
         pdfBytes.slice(0),
         def.qHeaders,
         YOBI_ALL_HEADERS,
+        pdfUrl,
       );
       if (pageRange) {
         split = true;
       } else {
         // 切り出せない（画像PDF等）→ グループ全体（表紙等を除く）にフォールバック
-        const start = await firstContentPage(pdfBytes.slice(0));
+        const start = await firstContentPage(pdfBytes.slice(0), pdfUrl);
         pageRange = [start, Number.MAX_SAFE_INTEGER];
         appendLog(
           `  「${subject}」の区分を特定できず、グループ全体を保存します。`,

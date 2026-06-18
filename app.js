@@ -17,7 +17,7 @@ import { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } from "./yobi-years.js";
 import { NEWS } from "./news.js";
 import { SUBJECT_MAP, yearKeyToLabel, subjectSystem, SYSTEM_BG } from "./data.js";
 import { runConversion, resolveSourceUrls } from "./convert.js";
-import { fetchPdf, cacheSourceLabel } from "./moj.js";
+import { fetchPdf, cacheSourceLabel, formatKB } from "./moj.js";
 import {
   YOBI_RONBUN_SUBJECTS,
   YOBI_RONBUN_DEF,
@@ -176,6 +176,12 @@ const taggedCtx = (tag) => ({
   setProgress: () => {},
 });
 
+// ボタン押下から成果物の出力までの所要時間をログに出す。各操作の先頭で
+// performance.now() を控え、完了時に logElapsed(t0) を呼ぶ。
+function logElapsed(t0) {
+  appendLog(`所要時間: ${((performance.now() - t0) / 1000).toFixed(1)} 秒`, "ok");
+}
+
 // ─── 変換実行・テキスト出力 ───────────────────────────────────────────────
 let lastResult = "";
 
@@ -189,6 +195,7 @@ function currentYearLabel() {
 }
 
 async function onRun() {
+  const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const docType = $("type").value;
@@ -212,6 +219,7 @@ async function onRun() {
     $("copy").disabled = false;
     $("download").disabled = false;
     appendLog(`完了: ${yearLabel} ${subjectLabel} ${dt}`, "ok");
+    logElapsed(t0);
     setStatus("完了", "ok");
     activatePane("result");
   } catch (e) {
@@ -262,6 +270,7 @@ function triggerDownload(blob, filename) {
 // 選択中の種類の原典PDF（該当ページのみ）を保存する。
 // 変換実行済みならキャッシュを再利用し、未処理なら自動で取得する。
 async function onSaveSourcePdf() {
+  const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const docType = $("type").value;
@@ -289,6 +298,7 @@ async function onSaveSourcePdf() {
       `原典PDFの該当ページ（${rangeLabel} / 原典 全${total}ページ）を保存しました。`,
       "ok",
     );
+    logElapsed(t0);
     setStatus("完了", "ok");
   } catch (e) {
     appendLog(`原典PDFの保存に失敗: ${e.message}`, "err");
@@ -304,6 +314,7 @@ async function onSaveSourcePdf() {
 
 // 試験問題・出題の趣旨・採点実感の3点を取得して zip で一括保存する
 async function onSaveSourceZip() {
+  const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const yearLabel = currentYearLabel();
@@ -358,6 +369,7 @@ async function onSaveSourceZip() {
     );
     setProgressBar(1.0);
     appendLog(`一括保存完了（${names.length}件を zip に格納）`, "ok");
+    logElapsed(t0);
     setStatus("完了", "ok");
   } catch (e) {
     appendLog(`一括保存に失敗: ${e.message}`, "err");
@@ -379,6 +391,7 @@ function invalidateResult() {
 // 試験問題・出題の趣旨・採点実感を1つの Markdown にまとめて保存する。
 // LLM が文脈を把握できるよう、冒頭にメタ情報と出典を付ける。
 async function onSaveLlm() {
+  const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const yearLabel = currentYearLabel();
@@ -456,6 +469,7 @@ async function onSaveLlm() {
       `LLM用ファイルを保存しました（${got.length}種類を統合）。`,
       "ok",
     );
+    logElapsed(t0);
     setStatus("完了", "ok");
   } catch (e) {
     appendLog(`LLM用ファイルの作成に失敗: ${e.message}`, "err");
@@ -521,21 +535,23 @@ async function buildYobiPdf(yearKey, subject, docType, sourceUrls) {
     const src = cacheSourceLabel(cache);
     if (src) appendLog(`  取得元: ${src}`);
   });
-  appendLog(`  ${pdfBytes.byteLength.toLocaleString()} バイト`);
+  appendLog(`  ${formatKB(pdfBytes.byteLength)}`);
 
   // 科目別に切り出す。問題は科目見出し（無い科目は表紙等を除いた本文全体）、
   // 趣旨は全科目まとめたPDFから当該科目の見出しで切り出す。見出しが特定できない
   // 年度（画像化された趣旨PDFなど）は全体にフォールバックして警告を出す。
+  // pdfUrl をキャッシュキーに渡し、別科目への切替で同じPDFの再解析を避ける。
   const headers = docType === "試験問題" ? def.qHeaders : def.sHeaders;
   if (headers) {
     pageRange = await findSubjectPageRange(
       pdfBytes.slice(0),
       headers,
       YOBI_ALL_HEADERS,
+      pdfUrl,
     );
     if (!pageRange) {
       if (docType === "試験問題") {
-        const start = await firstContentPage(pdfBytes.slice(0));
+        const start = await firstContentPage(pdfBytes.slice(0), pdfUrl);
         pageRange = [start, Number.MAX_SAFE_INTEGER];
         appendLog(
           `  「${subject}」の区分を特定できず、グループ全体を保存します（画像PDF等の可能性）。`,
@@ -569,6 +585,7 @@ async function buildYobiPdf(yearKey, subject, docType, sourceUrls) {
 }
 
 async function onSaveYobiSingle(docType) {
+  const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
   $("log").textContent = "";
@@ -598,6 +615,7 @@ async function onSaveYobiSingle(docType) {
       `保存しました（${savedPages}ページ・左上に見出し、下部に出典を印字）。`,
       "ok",
     );
+    logElapsed(t0);
     setProgressBar(1.0);
   } catch (e) {
     appendLog(`保存に失敗: ${e.message}`, "err");
@@ -608,6 +626,7 @@ async function onSaveYobiSingle(docType) {
 }
 
 async function onSaveYobiZip() {
+  const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const yearLabel = currentYearLabel();
@@ -654,6 +673,7 @@ async function onSaveYobiZip() {
       `${folder}.zip`,
     );
     appendLog(`一括保存完了（${names.length}件を zip に格納）`, "ok");
+    logElapsed(t0);
     setProgressBar(1.0);
   } catch (e) {
     appendLog(`一括保存に失敗: ${e.message}`, "err");

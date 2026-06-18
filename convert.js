@@ -14,6 +14,7 @@ import {
   fetchShushiPdfUrl,
   fetchSaitenPdfUrl,
   cacheSourceLabel,
+  formatKB,
 } from "./moj.js";
 import {
   extractBoxes,
@@ -156,7 +157,7 @@ export async function runConversion({ yearKey, subject, docType, decorate }, ctx
     const src = cacheSourceLabel(cache);
     if (src) log(`  取得元: ${src}`);
   });
-  log(`  ${pdfBytes.byteLength.toLocaleString()} バイト`);
+  log(`  ${formatKB(pdfBytes.byteLength)}`);
   setProgress(0.4);
 
   // PDF.js は渡した ArrayBuffer を worker に移譲（detach）するため、

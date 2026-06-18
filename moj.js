@@ -13,6 +13,12 @@ export const WORKER_URL =
 
 const FETCH_TIMEOUT_MS = 30000;
 
+// バイト数を読みやすい KB 表記にする（例: 2,013,817 バイト → "1,967 KB"）。
+// ログ表示の共通ヘルパ（convert.js / app.js / tantou.js から利用）。
+export function formatKB(bytes) {
+  return `${Math.round(bytes / 1024).toLocaleString()} KB`;
+}
+
 function resolveUrl(href, baseUrl) {
   if (/^https?:/.test(href)) return href;
   return new URL(href, baseUrl).toString();
