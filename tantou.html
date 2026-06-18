@@ -23,24 +23,29 @@
       content="https://adatchan.github.io/barexam-scrapbox-web/tantou.html"
     />
     <title>しほしけ短答ダウンローダー（β版）– 司法試験短答式 過去問PDF</title>
-    <link rel="stylesheet" href="./style.css?v=20260618.1944" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css?v=20260619.0032" />
   </head>
   <body>
     <main class="app">
       <header class="hero">
-        <h1>しほしけ短答ダウンローダー<span class="beta">（β版）</span></h1>
-        <p class="subtitle">
-          司法試験・予備試験の短答式の問題と正答及び配点を、年度別・科目別に法務省ウェブの公表PDFから保存します
-        </p>
-        <p class="subtitle" style="margin-top: 6px">
-          論文式の試験問題・出題の趣旨・採点実感をテキスト化したい場合は
-          <a href="./index.html">しほしけコンバーター（論文式）</a> をどうぞ。
-        </p>
-      </header>
-
-      <div class="help-bar">
+        <div class="hero-text">
+          <h1>しほしけ短答ダウンローダー<span class="beta">（β版）</span></h1>
+          <p class="subtitle">
+            司法試験・予備試験の短答式の問題と正答及び配点を、年度別・科目別に法務省ウェブの公表PDFから保存します
+          </p>
+          <p class="subtitle" style="margin-top: 6px">
+            論文式の試験問題・出題の趣旨・採点実感をテキスト化したい場合は
+            <a href="./index.html">しほしけコンバーター（論文式）</a> をどうぞ。
+          </p>
+        </div>
         <button id="help" class="btn-help" type="button">？ ヘルプ</button>
-      </div>
+      </header>
 
       <section class="news" aria-label="更新情報">
         <h2 class="news-title">更新情報</h2>
@@ -141,18 +146,29 @@
           <select id="subject"></select>
         </div>
 
-        <div class="actions">
+      </section>
+
+      <!-- ダウンロード（変換不要）カード -->
+      <div class="actions-yobi">
+        <div class="save-card">
+          <div class="lane-head">
+            <span class="lane-title-2">ダウンロード</span>
+            <span class="badge">変換不要</span>
+          </div>
+          <div class="lane-sub">押すだけで原典PDFを取得して保存します</div>
           <button id="q-save" class="btn-primary" type="button">
             問題PDFを保存
           </button>
-          <button id="a-save" class="btn-secondary" type="button">
-            正答・配点PDFを保存
-          </button>
-          <button id="zip-save" class="btn-secondary" type="button">
-            問題＋正答をzip保存
-          </button>
+          <div class="btn-row">
+            <button id="a-save" class="btn-secondary" type="button">
+              正答・配点PDFを保存
+            </button>
+            <button id="zip-save" class="btn-secondary" type="button">
+              問題＋正答をzip保存
+            </button>
+          </div>
         </div>
-      </section>
+      </div>
 
       <section class="progress" aria-live="polite">
         <div
@@ -213,6 +229,6 @@
       })();
     </script>
 
-    <script type="module" src="./tantou.js?v=20260618.1944"></script>
+    <script type="module" src="./tantou.js?v=20260619.0032"></script>
   </body>
 </html>

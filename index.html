@@ -23,24 +23,29 @@
       content="https://adatchan.github.io/barexam-scrapbox-web/"
     />
     <title>しほしけコンバーター（β版）– 司法試験論文式過去問テキスト変換</title>
-    <link rel="stylesheet" href="./style.css?v=20260618.1944" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css?v=20260619.0032" />
   </head>
   <body>
     <main class="app">
       <header class="hero">
-        <h1>しほしけコンバーター<span class="beta">（β版）</span></h1>
-        <p class="subtitle">
-          司法試験論文式の試験問題・出題の趣旨・採点実感を、法務省ウェブの公表PDFからテキストに変換します
-        </p>
-        <p class="subtitle" style="margin-top: 6px">
-          短答式（司法試験・予備試験）の問題・正答PDFを年度別に保存したい場合は
-          <a href="./tantou.html">しほしけ短答ダウンローダー</a> をどうぞ。
-        </p>
-      </header>
-
-      <div class="help-bar">
+        <div class="hero-text">
+          <h1>しほしけコンバーター<span class="beta">（β版）</span></h1>
+          <p class="subtitle">
+            司法試験論文式の試験問題・出題の趣旨・採点実感を、法務省ウェブの公表PDFからテキストに変換します
+          </p>
+          <p class="subtitle" style="margin-top: 6px">
+            短答式（司法試験・予備試験）の問題・正答PDFを年度別に保存したい場合は
+            <a href="./tantou.html">しほしけ短答ダウンローダー</a> をどうぞ。
+          </p>
+        </div>
         <button id="help" class="btn-help" type="button">？ ヘルプ</button>
-      </div>
+      </header>
 
       <section class="news" aria-label="更新情報">
         <h2 class="news-title">更新情報</h2>
@@ -204,60 +209,81 @@
           </div>
         </div>
 
-        <div class="actions" id="shihou-actions">
-          <button id="run" class="btn-primary" type="button">変換実行</button>
-          <button id="copy" class="btn-secondary" type="button" disabled>
-            結果をコピー
-          </button>
-          <button id="download" class="btn-secondary" type="button" disabled>
-            .txt 保存
-          </button>
-          <button
-            id="source"
-            class="btn-secondary"
-            type="button"
-            title="選択中の種類の該当ページだけを原典PDFから抜き出して保存します（未変換でも自動で取得します）"
-          >
-            原典PDF保存
-          </button>
-          <button
-            id="source-zip"
-            class="btn-secondary"
-            type="button"
-            title="試験問題・出題の趣旨・採点実感の原典PDF3点を一括で保存します（処理済みの種類は再利用されます）"
-          >
-            一式zip保存
-          </button>
-          <button
-            id="llm"
-            class="btn-secondary"
-            type="button"
-            title="試験問題・出題の趣旨・採点実感を、メタ情報・出典付きの1つのMarkdownにまとめて保存します（LLMに渡す用）"
-          >
-            LLM用に保存
-          </button>
-        </div>
+      </section>
 
-        <!-- 予備試験モードのアクション（PDF収集）。司法試験モードでは隠す -->
-        <div class="actions" id="yobi-actions" hidden>
+      <!-- 司法試験：① テキストに変換 / そのまま保存 の2レーン。予備モードでは隠す -->
+      <div class="lanes" id="shihou-actions">
+        <div class="lane lane-convert">
+          <div class="lane-title">テキストに変換</div>
+          <div class="lane-sub">このツールのメイン機能です</div>
+          <button id="run" class="btn-primary" type="button">変換実行</button>
+        </div>
+        <div class="lane lane-save">
+          <div class="lane-head">
+            <span class="lane-title-2">そのまま保存</span>
+            <span class="badge">変換不要</span>
+          </div>
+          <div class="lane-sub">変換せず、押すだけで保存できます</div>
+          <div class="tiles">
+            <button
+              id="source"
+              class="tile"
+              type="button"
+              title="選択中の種類の該当ページだけを原典PDFから抜き出して保存します（未変換でも自動で取得します）"
+            >
+              <span class="tile-title">原典PDF保存</span>
+              <span class="tile-desc">該当ページを原典から抜き出して保存</span>
+            </button>
+            <button
+              id="source-zip"
+              class="tile"
+              type="button"
+              title="試験問題・出題の趣旨・採点実感の原典PDF3点を一括で保存します（処理済みの種類は再利用されます）"
+            >
+              <span class="tile-title">一式zip保存</span>
+              <span class="tile-desc">問題・趣旨・採点実感の3点をzipで</span>
+            </button>
+            <button
+              id="llm"
+              class="tile"
+              type="button"
+              title="試験問題・出題の趣旨・採点実感を、メタ情報・出典付きの1つのMarkdownにまとめて保存します（LLMに渡す用）"
+            >
+              <span class="tile-title">LLM用に保存</span>
+              <span class="tile-desc">出典付き1つのMarkdownにまとめる</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 予備試験：ダウンロード（変換不要）カード。司法試験モードでは隠す -->
+      <div class="actions-yobi" id="yobi-actions" hidden>
+        <div class="save-card">
+          <div class="lane-head">
+            <span class="lane-title-2">ダウンロード</span>
+            <span class="badge">変換不要</span>
+          </div>
+          <div class="lane-sub">押すだけで原典PDFを取得して保存します</div>
           <button id="yobi-q" class="btn-primary" type="button">
             試験問題PDFを保存
           </button>
-          <button id="yobi-shushi" class="btn-secondary" type="button">
-            出題の趣旨PDFを保存
-          </button>
-          <button id="yobi-zip" class="btn-secondary" type="button">
-            問題＋趣旨をzip保存
-          </button>
+          <div class="btn-row">
+            <button id="yobi-shushi" class="btn-secondary" type="button">
+              出題の趣旨PDFを保存
+            </button>
+            <button id="yobi-zip" class="btn-secondary" type="button">
+              問題＋趣旨をzip保存
+            </button>
+          </div>
         </div>
-      </section>
+      </div>
 
       <section class="progress" aria-live="polite">
         <div
           id="bar"
           class="bar"
           role="progressbar"
-          aria-label="変換の進捗"
+          aria-label="進捗"
           aria-valuemin="0"
           aria-valuemax="100"
           aria-valuenow="0"
@@ -290,6 +316,15 @@
         </div>
         <pre id="result" class="pane active" role="tabpanel"></pre>
         <pre id="log" class="pane" role="tabpanel"></pre>
+        <div class="result-actions">
+          <span class="result-hint">変換すると使えます</span>
+          <button id="copy" class="btn-secondary" type="button" disabled>
+            結果をコピー
+          </button>
+          <button id="download" class="btn-secondary" type="button" disabled>
+            .txt 保存
+          </button>
+        </div>
       </section>
 
       <footer class="foot">
@@ -332,6 +367,6 @@
       src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20260618.1944"></script>
+    <script type="module" src="./app.js?v=20260619.0032"></script>
   </body>
 </html>
