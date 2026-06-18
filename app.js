@@ -26,7 +26,11 @@ import {
   findYobiRonbunPdfUrl,
   findYobiShushiPdfUrl,
 } from "./yobi-moj.js";
-import { firstContentPage, findSubjectPageRange } from "./pdfsplit.js";
+import {
+  firstContentPage,
+  findSubjectPageRange,
+  warmupPdfjs,
+} from "./pdfsplit.js";
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
 import { enhanceSelect } from "./colorselect.js";
 
@@ -666,6 +670,7 @@ window.addEventListener("DOMContentLoaded", () => {
   enhanceSelect($("year"));
   enhanceSelect($("subject"), (v) => SYSTEM_BG[subjectSystem(v)]);
   enhanceSelect($("type"));
+  warmupPdfjs(); // PDF.js をアイドル時に先読みし初回クリックの待ちを隠す
   initNews();
   setupTabs();
   for (const id of ["year", "subject", "type"]) {

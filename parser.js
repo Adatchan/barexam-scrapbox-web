@@ -41,15 +41,23 @@ async function loadPdfjs() {
 //   2) ベースライン間隔が行高の 1.5 倍未満なら同一段落として「ブロック」に集約
 //   3) ブロックを 1 ボックスに統合して返す
 // ことで pdfminer の挙動を近似する。
+// ページ抽出の同時実行数。PDF.js の worker は単一スレッドだが、複数ページの
+// テキスト抽出要求を投げておくと、worker の解析とメインスレッドの box 構築を
+// オーバーラップでき、ページ毎 await の往復待ちも消える。多すぎるとメモリを
+// 圧迫する（同時に保持する textContent が増える）ため 4〜6 に制限する。
+const EXTRACT_CONCURRENCY = 5;
+
 export async function extractBoxes(pdfBytes, onProgress) {
   const pdfjsLib = await loadPdfjs();
   const pdf = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
-  const boxes = [];
+  const n = pdf.numPages;
+  const perPage = new Array(n); // ページ(0始まり) → そのページの boxes[]
+  let done = 0;
 
-  for (let pn = 1; pn <= pdf.numPages; pn++) {
+  // 1ページ分を抽出して perPage[pn-1] に格納する
+  const processPage = async (pn) => {
     const page = await pdf.getPage(pn);
     const content = await page.getTextContent();
-
     const items = content.items
       .filter((it) => it && it.str)
       .map((it) => ({
@@ -60,20 +68,34 @@ export async function extractBoxes(pdfBytes, onProgress) {
         height: it.height || 10,
       }));
 
-    if (items.length === 0) {
-      onProgress && onProgress(pn / pdf.numPages);
-      continue;
+    let pageBoxes = [];
+    if (items.length > 0) {
+      const lines = groupItemsIntoLines(items);
+      pageBoxes = groupLinesIntoBlocks(lines);
+      pageBoxes.sort((a, b) => b.y1 - a.y1);
+      for (const b of pageBoxes) b.page = pn;
     }
+    perPage[pn - 1] = pageBoxes;
+    page.cleanup(); // 抽出後はページ資源を解放してメモリを抑える
+    onProgress && onProgress(++done / n);
+  };
 
-    const lines = groupItemsIntoLines(items);
-    const pageBoxes = groupLinesIntoBlocks(lines);
-    pageBoxes.sort((a, b) => b.y1 - a.y1);
-    for (const b of pageBoxes) b.page = pn;
-    boxes.push(...pageBoxes);
-
-    onProgress && onProgress(pn / pdf.numPages);
+  // 同時実行数を制限した worker プールで全ページを処理する（処理順は不定だが
+  // ページ番号で格納するため結果は決定的）
+  let next = 1;
+  const runners = [];
+  for (let i = 0; i < Math.min(EXTRACT_CONCURRENCY, n); i++) {
+    runners.push(
+      (async () => {
+        for (let pn = next++; pn <= n; pn = next++) await processPage(pn);
+      })(),
+    );
   }
+  await Promise.all(runners);
 
+  // 下流（マーカー探索・段落復元）は文書順依存なのでページ順に連結する
+  const boxes = [];
+  for (let i = 0; i < n; i++) if (perPage[i]) boxes.push(...perPage[i]);
   return boxes;
 }
 
