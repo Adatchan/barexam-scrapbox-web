@@ -295,23 +295,26 @@ async function saveZip() {
     setProgressBar(0.3);
     const files = {};
     let done = 0;
-    for (const docType of DOC_TYPES) {
-      try {
-        appendLog(`一括取得: ${docType}`);
-        const { bytes, baseName } = await buildOnePdf(
-          yearKey,
-          subject,
-          docType,
-          sourceUrls,
-        );
-        files[`${folder}/${baseName}.pdf`] = new Uint8Array(bytes);
-        appendLog(`  ${docType}: OK`, "ok");
-      } catch (e) {
-        appendLog(`  ${docType} は取得できませんでした: ${e.message}`, "warn");
-      }
-      done++;
-      setProgressBar(0.3 + 0.6 * (done / DOC_TYPES.length));
-    }
+    // 問題・正答を並列に取得・整形する（失敗は種類ごとに隔離）
+    await Promise.allSettled(
+      DOC_TYPES.map(async (docType) => {
+        try {
+          appendLog(`[${docType}] 取得開始`);
+          const { bytes, baseName } = await buildOnePdf(
+            yearKey,
+            subject,
+            docType,
+            sourceUrls,
+          );
+          files[`${folder}/${baseName}.pdf`] = new Uint8Array(bytes);
+          appendLog(`  [${docType}] OK`, "ok");
+        } catch (e) {
+          appendLog(`  [${docType}] 取得できませんでした: ${e.message}`, "warn");
+        } finally {
+          setProgressBar(0.3 + 0.6 * (++done / DOC_TYPES.length));
+        }
+      }),
+    );
 
     const names = Object.keys(files);
     if (names.length === 0)

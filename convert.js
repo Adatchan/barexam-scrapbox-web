@@ -13,6 +13,7 @@ import {
   fetchExamPdfUrl,
   fetchShushiPdfUrl,
   fetchSaitenPdfUrl,
+  cacheSourceLabel,
 } from "./moj.js";
 import {
   extractBoxes,
@@ -151,7 +152,10 @@ export async function runConversion({ yearKey, subject, docType, decorate }, ctx
 
   log(`  PDF: ${pdfUrl}`);
   setProgress(0.2);
-  const pdfBytes = await fetchPdf(pdfUrl);
+  const pdfBytes = await fetchPdf(pdfUrl, ({ cache }) => {
+    const src = cacheSourceLabel(cache);
+    if (src) log(`  取得元: ${src}`);
+  });
   log(`  ${pdfBytes.byteLength.toLocaleString()} バイト`);
   setProgress(0.4);
 

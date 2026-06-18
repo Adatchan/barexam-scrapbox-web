@@ -18,12 +18,26 @@ function resolveUrl(href, baseUrl) {
   return new URL(href, baseUrl).toString();
 }
 
-async function fetchViaProxy(url, type = "text") {
+// Worker が付ける取得元ヘッダ（X-MOJ-Cache）→ 表示ラベル。
+// HIT/REVALIDATED は Cloudflare エッジから配信（法務省へは行かない）、
+// それ以外（MISS/EXPIRED/UPDATING…）は Cloudflare が法務省 origin へ取りに行く。
+// ヘッダが読めない（旧Worker・未公開）場合は null。
+export function cacheSourceLabel(status) {
+  if (!status) return null;
+  return /^(HIT|REVALIDATED)$/i.test(status)
+    ? "⚡ Cloudflareキャッシュ"
+    : "🌐 法務省サイト";
+}
+
+async function fetchViaProxy(url, type = "text", onMeta) {
   const proxyUrl = `${WORKER_URL}/?url=${encodeURIComponent(url)}`;
   let res;
   try {
     res = await fetch(proxyUrl, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      // ブラウザHTTPキャッシュを迂回し、毎回エッジの HIT/MISS を観察できるように
+      // する（取得元ログを正確にするため。ブラウザ側の再キャッシュは行わない）
+      cache: "no-store",
     });
   } catch (e) {
     throw new Error(
@@ -35,23 +49,30 @@ async function fetchViaProxy(url, type = "text") {
   if (!res.ok) {
     throw new Error(`取得失敗 HTTP ${res.status}: ${url}`);
   }
+  if (onMeta) onMeta({ cache: res.headers.get("X-MOJ-Cache") });
   if (type === "arraybuffer") return await res.arrayBuffer();
   return await res.text();
 }
 
 // 同一ページの再取得を避けるキャッシュ（一括zip保存や検査スクリプトで、
-// 同じ結果ページを種類ごとに引き直すのを防ぐ）
+// 同じ結果ページを種類ごとに引き直すのを防ぐ）。並列取得で同じページを同時に
+// 引いても1回の取得に集約できるよう、解決済みテキストではなく取得中の Promise
+// を保持する（失敗時はエントリを消して次回の再取得を許す）。
 const htmlCache = new Map();
 
 export async function fetchHtml(url) {
   if (htmlCache.has(url)) return htmlCache.get(url);
-  const text = await fetchViaProxy(url, "text");
-  htmlCache.set(url, text);
-  return text;
+  const p = fetchViaProxy(url, "text").catch((e) => {
+    htmlCache.delete(url);
+    throw e;
+  });
+  htmlCache.set(url, p);
+  return p;
 }
 
-export async function fetchPdf(url) {
-  return await fetchViaProxy(url, "arraybuffer");
+// onMeta({ cache }) で取得元（X-MOJ-Cache）を受け取れる（ログ表示用・任意）。
+export async function fetchPdf(url, onMeta) {
+  return await fetchViaProxy(url, "arraybuffer", onMeta);
 }
 
 // ─── PDF URL 取得（試験問題） ─────────────────────────────────────────────

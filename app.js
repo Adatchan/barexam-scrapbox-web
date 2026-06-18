@@ -17,7 +17,7 @@ import { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } from "./yobi-years.js";
 import { NEWS } from "./news.js";
 import { SUBJECT_MAP, yearKeyToLabel, subjectSystem, SYSTEM_BG } from "./data.js";
 import { runConversion, resolveSourceUrls } from "./convert.js";
-import { fetchPdf } from "./moj.js";
+import { fetchPdf, cacheSourceLabel } from "./moj.js";
 import {
   YOBI_RONBUN_SUBJECTS,
   YOBI_RONBUN_DEF,
@@ -164,6 +164,14 @@ const convertCtx = () => ({
   setProgress: setProgressBar,
 });
 
+// 並列取得時の変換コンテキスト。複数の runConversion が同時にログ・進捗を
+// 出すため、各ログに種別タグを付けて交錯を読みやすくし、進捗バーは個別には
+// 動かさない（呼び出し側が完了件数で集約管理する）。
+const taggedCtx = (tag) => ({
+  log: (m) => appendLog(`[${tag}] ${m.replace(/^\s+/, "")}`, "info"),
+  setProgress: () => {},
+});
+
 // ─── 変換実行・テキスト出力 ───────────────────────────────────────────────
 let lastResult = "";
 
@@ -297,32 +305,40 @@ async function onSaveSourceZip() {
   const yearLabel = currentYearLabel();
   setBusy(true);
   setStatus("一括取得中");
+  setProgressBar(0.05);
   try {
     // zip 内は「[年度]司法試験[科目名]一式」フォルダにまとめる
     const folder = `${yearLabel}司法試験${subject}一式`;
     // フッターのリンク用に3種類のURLを先に1回だけ解決して共有する
     const sourceUrls = await resolveSourceUrls(yearKey, subject);
+    setProgressBar(0.15);
+    const docTypes = ["試験問題", "出題の趣旨", "採点実感"];
     const files = {};
-    for (const docType of ["試験問題", "出題の趣旨", "採点実感"]) {
-      try {
-        appendLog(`一括取得: ${docType}`);
-        const { pageRange, pdfBytes } = await runConversion(
-          { yearKey, subject, docType, decorate: false },
-          convertCtx(),
-        );
-        const baseName = `${yearLabel}司法試験${subject}${docType}`;
-        const { bytes, rangeLabel, total } = await buildStampedPdf(
-          pdfBytes,
-          pageRange,
-          baseName,
-          sourceUrls,
-        );
-        files[`${folder}/${baseName}.pdf`] = new Uint8Array(bytes);
-        appendLog(`  ${docType}: ${rangeLabel}（原典 全${total}ページ）`, "ok");
-      } catch (e) {
-        appendLog(`  ${docType} は取得できませんでした: ${e.message}`, "warn");
-      }
-    }
+    let done = 0;
+    // 3種類を並列に取得・整形する（失敗は種類ごとに隔離）
+    await Promise.allSettled(
+      docTypes.map(async (docType) => {
+        try {
+          const { pageRange, pdfBytes } = await runConversion(
+            { yearKey, subject, docType, decorate: false },
+            taggedCtx(docType),
+          );
+          const baseName = `${yearLabel}司法試験${subject}${docType}`;
+          const { bytes, rangeLabel, total } = await buildStampedPdf(
+            pdfBytes,
+            pageRange,
+            baseName,
+            sourceUrls,
+          );
+          files[`${folder}/${baseName}.pdf`] = new Uint8Array(bytes);
+          appendLog(`  [${docType}] ${rangeLabel}（原典 全${total}ページ）`, "ok");
+        } catch (e) {
+          appendLog(`  [${docType}] 取得できませんでした: ${e.message}`, "warn");
+        } finally {
+          setProgressBar(0.15 + 0.8 * (++done / docTypes.length));
+        }
+      }),
+    );
 
     const names = Object.keys(files);
     if (names.length === 0) {
@@ -336,6 +352,7 @@ async function onSaveSourceZip() {
       new Blob([zipped], { type: "application/zip" }),
       `${folder}.zip`,
     );
+    setProgressBar(1.0);
     appendLog(`一括保存完了（${names.length}件を zip に格納）`, "ok");
     setStatus("完了", "ok");
   } catch (e) {
@@ -363,30 +380,38 @@ async function onSaveLlm() {
   const yearLabel = currentYearLabel();
   setBusy(true);
   setStatus("LLM用ファイルを作成中");
+  setProgressBar(0.05);
   try {
-    const sections = [];
+    const docTypes = ["試験問題", "出題の趣旨", "採点実感"];
+    const byType = {}; // docType → { body, subjectLabel }
     const sourceUrls = {};
-    for (const docType of ["試験問題", "出題の趣旨", "採点実感"]) {
-      try {
-        appendLog(`LLM用ファイル: ${docType} を取得`);
-        const { result, pdfUrl, subjectLabel } = await runConversion(
-          { yearKey, subject, docType, decorate: false },
-          convertCtx(),
-        );
-        // 変換結果の1行目（タイトル）と2行目（出典）を除き本文だけ取り出す
-        const body = result.split("\n").slice(2).join("\n").trim();
-        sections.push({ docType, body, subjectLabel });
-        if (pdfUrl) sourceUrls[docType] = pdfUrl;
-        appendLog(`  ${docType}: OK`, "ok");
-      } catch (e) {
-        appendLog(`  ${docType} は取得できませんでした: ${e.message}`, "warn");
-      }
-    }
+    let done = 0;
+    // 3種類を並列取得（完了順は不定なので docType をキーに集約し、出力は固定順）
+    await Promise.allSettled(
+      docTypes.map(async (docType) => {
+        try {
+          const { result, pdfUrl, subjectLabel } = await runConversion(
+            { yearKey, subject, docType, decorate: false },
+            taggedCtx(docType),
+          );
+          // 変換結果の1行目（タイトル）と2行目（出典）を除き本文だけ取り出す
+          const body = result.split("\n").slice(2).join("\n").trim();
+          byType[docType] = { body, subjectLabel };
+          if (pdfUrl) sourceUrls[docType] = pdfUrl;
+          appendLog(`  [${docType}] OK`, "ok");
+        } catch (e) {
+          appendLog(`  [${docType}] 取得できませんでした: ${e.message}`, "warn");
+        } finally {
+          setProgressBar(0.05 + 0.9 * (++done / docTypes.length));
+        }
+      }),
+    );
 
-    if (sections.length === 0)
+    const got = docTypes.filter((d) => byType[d]);
+    if (got.length === 0)
       throw new Error("いずれの種類も取得できませんでした。");
 
-    const subjectLabel = sections[0].subjectLabel;
+    const subjectLabel = byType[got[0]].subjectLabel;
     const md = [];
     md.push(`# ${yearLabel}司法試験 論文式 ${subjectLabel}`);
     md.push("");
@@ -400,7 +425,7 @@ async function onSaveLlm() {
     md.push(`- 試験: ${yearLabel}司法試験 論文式試験`);
     md.push(`- 科目: ${subjectLabel}`);
     md.push("- 出典: 法務省ウェブサイト（原典PDFを加工して作成）");
-    for (const docType of ["試験問題", "出題の趣旨", "採点実感"]) {
+    for (const docType of docTypes) {
       if (sourceUrls[docType])
         md.push(`  - ${docType}: ${sourceUrls[docType]}`);
     }
@@ -409,15 +434,11 @@ async function onSaveLlm() {
       "※ PDFからの自動抽出のため、原文と細部が異なる場合があります。",
     );
     md.push("");
-    const headingOf = {
-      試験問題: "試験問題",
-      出題の趣旨: "出題の趣旨",
-      採点実感: "採点実感",
-    };
-    for (const sec of sections) {
-      md.push(`## ${headingOf[sec.docType]}`);
+    for (const docType of docTypes) {
+      if (!byType[docType]) continue;
+      md.push(`## ${docType}`);
       md.push("");
-      md.push(sec.body);
+      md.push(byType[docType].body);
       md.push("");
     }
 
@@ -426,8 +447,9 @@ async function onSaveLlm() {
       new Blob([md.join("\n")], { type: "text/markdown;charset=utf-8" }),
       filename,
     );
+    setProgressBar(1.0);
     appendLog(
-      `LLM用ファイルを保存しました（${sections.length}種類を統合）。`,
+      `LLM用ファイルを保存しました（${got.length}種類を統合）。`,
       "ok",
     );
     setStatus("完了", "ok");
@@ -491,7 +513,10 @@ async function buildYobiPdf(yearKey, subject, docType, sourceUrls) {
     pdfUrl = await findYobiShushiPdfUrl(YOBI_RESULTS_URL_MAP[yearKey]);
   }
   appendLog(`  ${docType} PDF: ${pdfUrl}`);
-  const pdfBytes = await fetchPdf(pdfUrl);
+  const pdfBytes = await fetchPdf(pdfUrl, ({ cache }) => {
+    const src = cacheSourceLabel(cache);
+    if (src) appendLog(`  取得元: ${src}`);
+  });
   appendLog(`  ${pdfBytes.byteLength.toLocaleString()} バイト`);
 
   // 科目別に切り出す。問題は科目見出し（無い科目は表紙等を除いた本文全体）、
@@ -593,23 +618,26 @@ async function onSaveYobiZip() {
     setProgressBar(0.3);
     const files = {};
     let done = 0;
-    for (const docType of YOBI_DOC_TYPES) {
-      try {
-        appendLog(`一括取得: ${docType}`);
-        const { bytes, baseName } = await buildYobiPdf(
-          yearKey,
-          subject,
-          docType,
-          sourceUrls,
-        );
-        files[`${folder}/${baseName}.pdf`] = new Uint8Array(bytes);
-        appendLog(`  ${docType}: OK`, "ok");
-      } catch (e) {
-        appendLog(`  ${docType} は取得できませんでした: ${e.message}`, "warn");
-      }
-      done++;
-      setProgressBar(0.3 + 0.6 * (done / YOBI_DOC_TYPES.length));
-    }
+    // 試験問題・出題の趣旨を並列に取得・整形する（失敗は種類ごとに隔離）
+    await Promise.allSettled(
+      YOBI_DOC_TYPES.map(async (docType) => {
+        try {
+          appendLog(`[${docType}] 取得開始`);
+          const { bytes, baseName } = await buildYobiPdf(
+            yearKey,
+            subject,
+            docType,
+            sourceUrls,
+          );
+          files[`${folder}/${baseName}.pdf`] = new Uint8Array(bytes);
+          appendLog(`  [${docType}] OK`, "ok");
+        } catch (e) {
+          appendLog(`  [${docType}] 取得できませんでした: ${e.message}`, "warn");
+        } finally {
+          setProgressBar(0.3 + 0.6 * (++done / YOBI_DOC_TYPES.length));
+        }
+      }),
+    );
 
     const names = Object.keys(files);
     if (names.length === 0)

@@ -37,6 +37,8 @@ function corsHeaders(origin) {
   const h = {
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    // ブラウザの JS から取得元（エッジHIT / origin取得）を読めるよう公開する
+    "Access-Control-Expose-Headers": "X-MOJ-Cache",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };
