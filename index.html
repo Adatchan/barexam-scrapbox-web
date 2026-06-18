@@ -29,7 +29,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./style.css?v=20260619.0032" />
+    <link rel="stylesheet" href="./style.css?v=20260619.0047" />
   </head>
   <body>
     <main class="app">
@@ -194,21 +194,6 @@
             <option value="採点実感">採点実感</option>
           </select>
         </div>
-
-        <div class="field" id="format-field">
-          <label>出力形式</label>
-          <div class="radio-group">
-            <label class="radio">
-              <input type="radio" name="format" value="plain" checked />
-              ノーマル
-            </label>
-            <label class="radio">
-              <input type="radio" name="format" value="scrapbox" />
-              Scrapbox記法
-            </label>
-          </div>
-        </div>
-
       </section>
 
       <!-- 司法試験：① テキストに変換 / そのまま保存 の2レーン。予備モードでは隠す -->
@@ -216,7 +201,29 @@
         <div class="lane lane-convert">
           <div class="lane-title">テキストに変換</div>
           <div class="lane-sub">このツールのメイン機能です</div>
+          <div class="field lane-format" id="format-field">
+            <label>出力形式</label>
+            <div class="radio-group">
+              <label class="radio">
+                <input type="radio" name="format" value="plain" checked />
+                ノーマル
+              </label>
+              <label class="radio">
+                <input type="radio" name="format" value="scrapbox" />
+                Scrapbox記法
+              </label>
+            </div>
+          </div>
           <button id="run" class="btn-primary" type="button">変換実行</button>
+          <div class="result-actions">
+            <span class="result-hint">変換すると使えます</span>
+            <button id="copy" class="btn-secondary" type="button" disabled>
+              結果をコピー
+            </button>
+            <button id="download" class="btn-secondary" type="button" disabled>
+              .txt 保存
+            </button>
+          </div>
         </div>
         <div class="lane lane-save">
           <div class="lane-head">
@@ -316,15 +323,6 @@
         </div>
         <pre id="result" class="pane active" role="tabpanel"></pre>
         <pre id="log" class="pane" role="tabpanel"></pre>
-        <div class="result-actions">
-          <span class="result-hint">変換すると使えます</span>
-          <button id="copy" class="btn-secondary" type="button" disabled>
-            結果をコピー
-          </button>
-          <button id="download" class="btn-secondary" type="button" disabled>
-            .txt 保存
-          </button>
-        </div>
       </section>
 
       <footer class="foot">
@@ -367,6 +365,6 @@
       src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20260619.0032"></script>
+    <script type="module" src="./app.js?v=20260619.0047"></script>
   </body>
 </html>

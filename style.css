@@ -441,6 +441,11 @@ textarea {
   width: 100%;
 }
 
+/* 「テキストに変換」カード内に移した出力形式ラジオ */
+.lane-format {
+  margin-bottom: 14px;
+}
+
 /* タイル型ボタン（タイトル＋一行説明） */
 .tiles {
   display: flex;
@@ -630,24 +635,26 @@ textarea {
   color: var(--primary);
 }
 
-/* 結果に対する操作（コピー / .txt）。デスクトップはタブ行の右上に重ねる */
+/* 結果に対する操作（コピー / .txt）。「テキストに変換」カード内に置く */
 .result-actions {
-  position: absolute;
-  top: 1px;
-  right: 0;
   display: flex;
   align-items: center;
   gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 12px;
 }
 
 .result-actions .btn-secondary {
-  padding: 7px 14px;
-  font-size: 0.8rem;
+  flex: 1 1 0;
+  padding: 9px 12px;
+  font-size: 0.82rem;
 }
 
 .result-hint {
+  flex-basis: 100%;
   font-size: 0.72rem;
-  color: var(--muted-2);
+  color: var(--primary-soft);
+  margin-bottom: -2px;
 }
 
 /* 変換が済んで #copy が有効化されたらヒントを隠す（純CSS・JS非依存） */
@@ -744,9 +751,11 @@ textarea {
     width: 100%;
   }
 
-  /* 2レーン → 縦スタック。「そのまま保存」を変換より前（設定の直下）に */
+  /* 2レーン → 縦スタック。各カードを設定カードと同じ全幅に揃える。
+     「そのまま保存」を変換より前（設定の直下）に */
   .lanes {
     flex-direction: column;
+    align-items: stretch;
     gap: 14px;
   }
   .lane-save {
