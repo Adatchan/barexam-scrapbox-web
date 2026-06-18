@@ -179,7 +179,7 @@ const taggedCtx = (tag) => ({
 // ボタン押下から成果物の出力までの所要時間をログに出す。各操作の先頭で
 // performance.now() を控え、完了時に logElapsed(t0) を呼ぶ。
 function logElapsed(t0) {
-  appendLog(`所要時間: ${((performance.now() - t0) / 1000).toFixed(1)} 秒`, "ok");
+  appendLog(`所要時間: ${((performance.now() - t0) / 1000).toFixed(4)} 秒`, "ok");
 }
 
 // ─── 変換実行・テキスト出力 ───────────────────────────────────────────────
