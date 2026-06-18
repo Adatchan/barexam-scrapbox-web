@@ -18,12 +18,14 @@ function resolveUrl(href, baseUrl) {
   return new URL(href, baseUrl).toString();
 }
 
-// Worker が付ける取得元ヘッダ（X-MOJ-Cache）→ 表示ラベル。
-// HIT/REVALIDATED は Cloudflare エッジから配信（法務省へは行かない）、
-// それ以外（MISS/EXPIRED/UPDATING…）は Cloudflare が法務省 origin へ取りに行く。
-// ヘッダが読めない（旧Worker・未公開）場合は null。
+// 取得元 → 表示ラベル。3階層を区別する:
+//   MEMORY        … このタブで取得済み（再取得せずメモリから・ネットワーク無し）
+//   HIT/REVALIDATED … Cloudflare エッジから配信（法務省へは行かない）
+//   それ以外(MISS/EXPIRED/UPDATING…) … Cloudflare が法務省 origin へ取りに行く
+// X-MOJ-Cache が読めない（旧Worker・未公開）場合は null。
 export function cacheSourceLabel(status) {
   if (!status) return null;
+  if (/^MEMORY$/i.test(status)) return "💾 メモリ（取得済み）";
   return /^(HIT|REVALIDATED)$/i.test(status)
     ? "⚡ Cloudflareキャッシュ"
     : "🌐 法務省サイト";
@@ -70,9 +72,58 @@ export async function fetchHtml(url) {
   return p;
 }
 
-// onMeta({ cache }) で取得元（X-MOJ-Cache）を受け取れる（ログ表示用・任意）。
+// 取得済みPDFバイトのメモリキャッシュ（URLキー）。予備の出題の趣旨（全科目を
+// まとめた1PDF）や科目グループの問題PDFは、同一年度で科目を変えても同じURLな
+// ので、別科目への切替時に取得し直さず再利用する。getDocument / pdf-lib は渡
+// されたバッファを detach するため、保持するのは master とし、呼び出し側へは
+// 毎回コピーを返す。容量・件数に上限を設ける（モバイル考慮）。
+const pdfCache = new Map(); // url -> Uint8Array（master）
+const pdfInflight = new Map(); // url -> Promise<Uint8Array>（取得中の集約）
+const PDF_CACHE_MAX_ENTRIES = 8;
+const PDF_CACHE_MAX_BYTES = 40 * 1024 * 1024;
+
+function pdfCacheBytes() {
+  let t = 0;
+  for (const v of pdfCache.values()) t += v.byteLength;
+  return t;
+}
+function pdfCachePut(url, u8) {
+  pdfCache.delete(url);
+  pdfCache.set(url, u8); // 末尾＝最近使用（LRU）
+  while (
+    pdfCache.size > 1 &&
+    (pdfCache.size > PDF_CACHE_MAX_ENTRIES ||
+      pdfCacheBytes() > PDF_CACHE_MAX_BYTES)
+  ) {
+    pdfCache.delete(pdfCache.keys().next().value); // 先頭＝最古を破棄
+  }
+}
+
+// onMeta({ cache }) で取得元（MEMORY / X-MOJ-Cache）を受け取れる（ログ表示用・
+// 任意）。同一URLは取得済みならメモリから返し、ネットワークへ行かない。
 export async function fetchPdf(url, onMeta) {
-  return await fetchViaProxy(url, "arraybuffer", onMeta);
+  const cached = pdfCache.get(url);
+  if (cached) {
+    pdfCachePut(url, cached); // LRU 更新
+    if (onMeta) onMeta({ cache: "MEMORY" });
+    return cached.slice().buffer; // 呼び出し側が detach するので毎回コピー
+  }
+  let inflight = pdfInflight.get(url);
+  if (inflight) {
+    // 取得中に相乗り（重複ダウンロードを避ける）。取得元はメモリ扱いにする。
+    const u8 = await inflight;
+    if (onMeta) onMeta({ cache: "MEMORY" });
+    return u8.slice().buffer;
+  }
+  inflight = (async () => {
+    const buf = await fetchViaProxy(url, "arraybuffer", onMeta);
+    const u8 = new Uint8Array(buf);
+    pdfCachePut(url, u8);
+    return u8;
+  })().finally(() => pdfInflight.delete(url));
+  pdfInflight.set(url, inflight);
+  const u8 = await inflight;
+  return u8.slice().buffer;
 }
 
 // ─── PDF URL 取得（試験問題） ─────────────────────────────────────────────
