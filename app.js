@@ -33,6 +33,7 @@ import {
 } from "./pdfsplit.js";
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
 import { enhanceSelect } from "./colorselect.js";
+import { celebrate, showToast } from "./effects.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -207,6 +208,7 @@ async function onRun() {
   $("copy").disabled = true;
   $("download").disabled = true;
   setBusy(true);
+  $("run").textContent = "処理中…";
   setProgressBar(0);
   setStatus("開始");
   activatePane("log");
@@ -222,11 +224,13 @@ async function onRun() {
     logElapsed(t0);
     setStatus("完了", "ok");
     activatePane("result");
+    celebrate("変換完了", "結果欄にテキストを表示しました");
   } catch (e) {
     appendLog(e.message, "err");
     setStatus("エラー", "error");
   } finally {
     setBusy(false);
+    $("run").textContent = "変換実行";
   }
 }
 
@@ -235,6 +239,8 @@ async function onCopy() {
   try {
     await navigator.clipboard.writeText(lastResult);
     appendLog("クリップボードにコピーしました。", "ok");
+    celebrate("コピー完了", "クリップボードにコピーしました");
+    showToast("クリップボードにコピーしました");
   } catch (e) {
     appendLog(`コピー失敗: ${e.message}`, "err");
   }
@@ -252,6 +258,8 @@ function onDownload() {
     new Blob([lastResult], { type: "text/plain;charset=utf-8" }),
     filename,
   );
+  celebrate("TXTを保存", "ダウンロードフォルダに保存しました");
+  showToast(`${filename} を保存しました`);
 }
 
 function triggerDownload(blob, filename) {
@@ -300,6 +308,8 @@ async function onSaveSourcePdf() {
     );
     logElapsed(t0);
     setStatus("完了", "ok");
+    celebrate("PDFを保存", "原典から該当ページを抜き出しました");
+    showToast("該当ページをPDFで保存しました");
   } catch (e) {
     appendLog(`原典PDFの保存に失敗: ${e.message}`, "err");
     if (fallbackUrl) {
@@ -371,6 +381,8 @@ async function onSaveSourceZip() {
     appendLog(`一括保存完了（${names.length}件を zip に格納）`, "ok");
     logElapsed(t0);
     setStatus("完了", "ok");
+    celebrate("zipを保存", "3点の抜粋PDFをまとめました");
+    showToast("一式zipを保存しました");
   } catch (e) {
     appendLog(`一括保存に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
@@ -471,6 +483,8 @@ async function onSaveLlm() {
     );
     logElapsed(t0);
     setStatus("完了", "ok");
+    celebrate("Markdownを保存", "LLMに渡せる1ファイルを作成しました");
+    showToast("LLM用Markdownを保存しました");
   } catch (e) {
     appendLog(`LLM用ファイルの作成に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
@@ -617,6 +631,8 @@ async function onSaveYobiSingle(docType) {
     );
     logElapsed(t0);
     setProgressBar(1.0);
+    celebrate("PDFを保存", `${docType}を保存しました`);
+    showToast(`${docType}のPDFを保存しました`);
   } catch (e) {
     appendLog(`保存に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
@@ -675,6 +691,8 @@ async function onSaveYobiZip() {
     appendLog(`一括保存完了（${names.length}件を zip に格納）`, "ok");
     logElapsed(t0);
     setProgressBar(1.0);
+    celebrate("zipを保存", "問題＋趣旨をまとめました");
+    showToast("zipを保存しました");
   } catch (e) {
     appendLog(`一括保存に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");

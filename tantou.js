@@ -18,6 +18,7 @@ import { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } from "./yobi-years.js";
 import { yearKeyToLabel, subjectSystem, SYSTEM_BG } from "./data.js";
 import { TANTOU_NEWS } from "./news.js";
 import { fetchPdf, formatKB } from "./moj.js";
+import { celebrate, showToast } from "./effects.js";
 import {
   TANTOU_SUBJECTS,
   TANTOU_DOC_TYPES as DOC_TYPES,
@@ -277,6 +278,8 @@ async function saveSingle(docType) {
       "ok",
     );
     setProgressBar(1.0);
+    celebrate("PDFを保存", `${docType}を保存しました`);
+    showToast(`${docType}のPDFを保存しました`);
   } catch (e) {
     appendLog(`保存に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
@@ -333,6 +336,8 @@ async function saveZip() {
     );
     appendLog(`一括保存完了（${names.length}件を zip に格納）`, "ok");
     setProgressBar(1.0);
+    celebrate("zipを保存", "問題＋正答をまとめました");
+    showToast("一式zipを保存しました");
   } catch (e) {
     appendLog(`一括保存に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
