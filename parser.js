@@ -163,6 +163,17 @@ function makeLine(items) {
   };
 }
 
+// ページ番号フッター/ヘッダー（「- 2 -」等）を箱テキストの先頭・末尾から
+// 取り除く。行全体が「- N -」の箱は isPagenum でも除けるが、本文と同じ箱に
+// 紛れ込んだもの（例「前記車両- 2 -」）はここで落として文の分断を防ぐ。
+const DASH = "[-‐‑‒–—―−ーｰ－]";
+const PAGENUM_TOKEN = `${DASH}\\s*[0-9０-９]{1,3}\\s*${DASH}`;
+const PAGENUM_HEAD = new RegExp(`^\\s*${PAGENUM_TOKEN}\\s*`);
+const PAGENUM_TAIL = new RegExp(`\\s*${PAGENUM_TOKEN}\\s*$`);
+function stripFooterPageNum(text) {
+  return text.replace(PAGENUM_HEAD, "").replace(PAGENUM_TAIL, "").trim();
+}
+
 // 行群を「ブロック（≒pdfminer の LTTextBox）」にまとめて 1 ボックスにする。
 // ベースライン間距離が行高の 1.5 倍未満なら同一ブロックと判定（pdfminer
 // 既定の line_margin=0.5 と等価）。ルビ（短い & 全部ひらがな）は単独ボックス
@@ -173,7 +184,7 @@ function groupLinesIntoBlocks(lines) {
 
   const flush = () => {
     if (cur.length === 0) return;
-    const text = cur.map((l) => l.text).join("");
+    const text = stripFooterPageNum(cur.map((l) => l.text).join(""));
     if (text) {
       boxes.push({
         x0: Math.min(...cur.map((l) => l.x0)),
@@ -365,8 +376,14 @@ export function parseParagraphs(boxes, startMarker, endMarker) {
     }
 
     if (prevX === null || x0 > prevX + 5) {
-      if (cur) paras.push(cur);
-      cur = t;
+      // 字下げに見えても、直前が文末で終わっていなければページ跨ぎ等で分割
+      // された継続とみなして結合する（文・語の途中での改行を防ぐ）
+      if (cur && !SENTENCE_END_RE.test(cur)) {
+        cur += t;
+      } else {
+        if (cur) paras.push(cur);
+        cur = t;
+      }
     } else {
       cur += t;
     }
@@ -414,8 +431,14 @@ function parseNarrativeParagraphs(secBoxes, extraSkip) {
     }
 
     if (prevX === null || x0 > prevX + 5) {
-      if (cur) paras.push(cur);
-      cur = t;
+      // 字下げに見えても、直前が文末で終わっていなければページ跨ぎ等で分割
+      // された継続とみなして結合する（文・語の途中での改行を防ぐ）
+      if (cur && !SENTENCE_END_RE.test(cur)) {
+        cur += t;
+      } else {
+        if (cur) paras.push(cur);
+        cur = t;
+      }
     } else {
       cur += t;
     }
