@@ -23,19 +23,29 @@ jobs:
         with:
           node-version: 22
 
+      # 事前変換スクリプトが使う pdfjs-dist を入れる
+      - name: 依存パッケージをインストール
+        run: npm ci
+
       - name: 法務省ページを巡回して years.js / news.js を更新
         run: node scripts/update-years.mjs
 
+      # 更新後の年度表で全年度×科目×種類を事前変換し converted/ を再生成する。
+      # 既存年度（不変PDF）は同一出力＝差分なし。新年度・新規掲載分のみ差分が出る。
+      # parser.js/format.js を改修した場合もここで自動的に再生成・反映される。
+      - name: 事前変換データ（converted/）を生成
+        run: node scripts/precompute.mjs
+
       - name: 変更があればコミットしてプッシュ
         run: |
-          if git diff --quiet years.js news.js yobi-years.js; then
+          git add years.js news.js yobi-years.js converted
+          if git diff --cached --quiet; then
             echo "変更なし"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add years.js news.js yobi-years.js
-          git commit -m "chore: 法務省ウェブの巡回により年度対応表・更新情報を自動更新"
+          git commit -m "chore: 年度対応表・更新情報・事前変換データを自動更新"
           git push
 
       # 全年度×全種類で PDF リンク探索が機能するか検査する。
