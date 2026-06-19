@@ -16,7 +16,7 @@ import { YEAR_URL_MAP } from "./years.js";
 import { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } from "./yobi-years.js";
 import { NEWS } from "./news.js";
 import { SUBJECT_MAP, yearKeyToLabel, subjectSystem, SYSTEM_BG } from "./data.js";
-import { runConversion, resolveSourceUrls } from "./convert.js";
+import { runConversion, convertText, resolveSourceUrls } from "./convert.js";
 import { fetchPdf, cacheSourceLabel, formatKB } from "./moj.js";
 import {
   YOBI_RONBUN_SUBJECTS,
@@ -215,7 +215,7 @@ async function onRun() {
 
   try {
     const { yearLabel, subjectLabel, docType: dt, result } =
-      await runConversion({ yearKey, subject, docType, decorate }, convertCtx());
+      await convertText({ yearKey, subject, docType, decorate }, convertCtx());
     lastResult = result;
     $("result").textContent = result;
     $("copy").disabled = false;

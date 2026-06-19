@@ -51,7 +51,7 @@ function cachePut(key, entry) {
 }
 
 // キャッシュエントリから呼び出し元向けの結果を組み立てる
-function assembleResult(entry, docType, decorate) {
+export function assembleResult(entry, docType, decorate) {
   const { yearLabel, subjectLabel, paras, pdfUrl, pageRange, pdfBytes } = entry;
   const result =
     docType === "試験問題"
@@ -108,21 +108,13 @@ export async function resolveSourceUrls(yearKey, subject) {
   return urls;
 }
 
-export async function runConversion({ yearKey, subject, docType, decorate }, ctx) {
-  const { log, setProgress } = ctx;
+// 年度・科目・種類から原典PDFを特定・取得し、解析して段落（paras）まで作る。
+// 戻り値は整形前のキャッシュエントリ。テキスト変換・原典PDF保存・事前変換
+// （scripts/precompute.mjs）で共有する。
+export async function buildEntry({ yearKey, subject, docType }, ctx) {
+  const { log = () => {}, setProgress = () => {} } = ctx || {};
   if (!(yearKey in YEAR_URL_MAP)) throw new Error(`未対応の年度: ${yearKey}`);
   if (!(subject in SUBJECT_MAP)) throw new Error(`未対応の科目: ${subject}`);
-
-  // 同じ年度・科目・種類を処理済みなら再取得せずキャッシュを使う
-  const cacheId = `${yearKey}|${subject}|${docType}`;
-  const cached = sourceCache.get(cacheId);
-  if (cached) {
-    log(
-      `処理済みのため再取得を省略: ${cached.yearLabel} ${cached.subjectLabel} ${docType}`,
-    );
-    setProgress(1.0);
-    return assembleResult(cached, docType, decorate);
-  }
 
   const yearLabel = yearKeyToLabel(yearKey);
   const [systemName, qNum, subjectLabel, sectionKeyword] = SUBJECT_MAP[subject];
@@ -231,7 +223,7 @@ export async function runConversion({ yearKey, subject, docType, decorate }, ctx
 
   setProgress(0.95);
 
-  const cacheEntry = {
+  return {
     yearLabel,
     subjectLabel,
     paras,
@@ -239,8 +231,78 @@ export async function runConversion({ yearKey, subject, docType, decorate }, ctx
     pageRange,
     pdfBytes: pdfBytesCopy,
   };
-  cachePut(cacheId, cacheEntry);
+}
 
+// クライアントでの変換（取得→解析→整形）。処理結果はキャッシュして
+// テキスト変換と原典PDF保存で共有する。
+export async function runConversion({ yearKey, subject, docType, decorate }, ctx) {
+  const { log, setProgress } = ctx;
+  // 同じ年度・科目・種類を処理済みなら再取得せずキャッシュを使う
+  const cacheId = `${yearKey}|${subject}|${docType}`;
+  const cached = sourceCache.get(cacheId);
+  if (cached) {
+    log(
+      `処理済みのため再取得を省略: ${cached.yearLabel} ${cached.subjectLabel} ${docType}`,
+    );
+    setProgress(1.0);
+    return assembleResult(cached, docType, decorate);
+  }
+
+  const entry = await buildEntry({ yearKey, subject, docType }, ctx);
+  cachePut(cacheId, entry);
   setProgress(1.0);
-  return assembleResult(cacheEntry, docType, decorate);
+  return assembleResult(entry, docType, decorate);
+}
+
+// ─── 事前変換（静的JSON）─────────────────────────────────────────────────
+// ビルド時に scripts/precompute.mjs が web/converted/<年度>/<科目>.json を
+// 生成する（中身は { 種類: { paras, pdfUrl } }）。あればそこから即整形でき、
+// PDF取得と PDF.js 解析を丸ごと省略できる。無ければクライアント変換へ
+// フォールバックする。
+const PRECOMP_BASE = "./converted";
+const precompCache = new Map(); // `${yearKey}|${subject}` -> data | null
+
+async function fetchPrecomputed(yearKey, subject) {
+  const key = `${yearKey}|${subject}`;
+  if (precompCache.has(key)) return precompCache.get(key);
+  let data = null;
+  try {
+    const url = `${PRECOMP_BASE}/${yearKey}/${encodeURIComponent(subject)}.json`;
+    const res = await fetch(url, { cache: "no-cache" });
+    if (res.ok) data = await res.json();
+  } catch {
+    /* 静的ファイル無し・取得失敗はフォールバック */
+  }
+  precompCache.set(key, data);
+  return data;
+}
+
+// テキスト変換（表示用）。事前変換済みなら PDF.js を使わず即時に整形・表示し、
+// 無ければ従来どおりクライアントで変換する（onRun から呼ぶ）。
+export async function convertText({ yearKey, subject, docType, decorate }, ctx) {
+  const { log = () => {}, setProgress = () => {} } = ctx || {};
+  if (!(yearKey in YEAR_URL_MAP)) throw new Error(`未対応の年度: ${yearKey}`);
+  if (!(subject in SUBJECT_MAP)) throw new Error(`未対応の科目: ${subject}`);
+
+  const pre = await fetchPrecomputed(yearKey, subject);
+  const hit = pre && pre[docType];
+  if (hit && Array.isArray(hit.paras)) {
+    log("事前変換データを使用（PDF解析を省略）");
+    setProgress(1.0);
+    const yearLabel = yearKeyToLabel(yearKey);
+    const [, , subjectLabel] = SUBJECT_MAP[subject];
+    return assembleResult(
+      {
+        yearLabel,
+        subjectLabel,
+        paras: hit.paras,
+        pdfUrl: hit.pdfUrl,
+        pageRange: null,
+        pdfBytes: null,
+      },
+      docType,
+      decorate,
+    );
+  }
+  return runConversion({ yearKey, subject, docType, decorate }, ctx);
 }

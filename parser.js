@@ -20,8 +20,19 @@ const PDFJS_VERSION = "4.0.379";
 const PDFJS_CDN = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}`;
 
 // ─── PDF.js のロード ─────────────────────────────────────────────────────
+// 通常はブラウザで CDN から読み込むが、ビルド時の事前変換（Node の
+// scripts/precompute.mjs）では pdfjs-dist を setPdfjs() で注入して同じ解析
+// パイプラインを再利用する。
 let _pdfjsPromise = null;
+let _injectedPdfjs = null;
+
+// Node 等から PDF.js モジュール（getDocument を持つ名前空間）を注入する。
+export function setPdfjs(lib) {
+  _injectedPdfjs = lib;
+}
+
 async function loadPdfjs() {
+  if (_injectedPdfjs) return _injectedPdfjs;
   if (_pdfjsPromise) return _pdfjsPromise;
   _pdfjsPromise = (async () => {
     const mod = await import(`${PDFJS_CDN}/pdf.min.mjs`);
