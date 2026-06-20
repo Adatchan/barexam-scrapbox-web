@@ -33,7 +33,11 @@ import {
   YOBI_ALL_HEADERS,
   yobiSubjectCandidates,
 } from "./yobi-moj.js";
-import { firstContentPage, findSubjectPageRange } from "./pdfsplit.js";
+import {
+  firstContentPage,
+  findSubjectPageRange,
+  warmupPdfjs,
+} from "./pdfsplit.js";
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
 import { enhanceSelect } from "./colorselect.js";
 
@@ -348,6 +352,7 @@ window.addEventListener("DOMContentLoaded", () => {
   // 全プルダウンを同じカスタムドロップダウンに揃える。科目だけ系統色を付ける。
   enhanceSelect($("year"));
   enhanceSelect($("subject"), (v) => SYSTEM_BG[subjectSystem(v)]);
+  warmupPdfjs(); // PDF.js をアイドル時に先読みし初回クリックの待ちを隠す
   initNews();
   // 試験種別の切替で年度・科目リストを作り直し、ログ・進捗をリセットする
   for (const r of document.querySelectorAll('input[name="exam"]')) {
