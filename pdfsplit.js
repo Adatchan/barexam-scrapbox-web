@@ -19,25 +19,6 @@ export function loadPdfjs() {
   return _pdfjsPromise;
 }
 
-// 初回クリック時のコールドスタート（pdf.min.mjs と pdf.worker.min.mjs を
-// 都度CDNから取得＝各~600KB）を隠すための先読み。アイドル時にバックグラウンドで
-// 本体をロードし、worker スクリプトもHTTPキャッシュに温めておく。クリック時には
-// ロード済みになる。データ節約／低速回線では無駄DLを避けてスキップする。
-// parser.js も同一CDN URLを import するため、ここで温めれば共有される。
-let _warmed = false;
-export function warmupPdfjs() {
-  if (_warmed || navigator.connection?.saveData) return;
-  _warmed = true;
-  const start = () => {
-    loadPdfjs().catch(() => {}); // 本体import（失敗は黙殺。本番取得時に再試行）
-    // worker スクリプトをHTTPキャッシュに温める（getDocument 時に即使える）
-    fetch(`${PDFJS_CDN}/pdf.worker.min.mjs`).catch(() => {});
-  };
-  if ("requestIdleCallback" in window)
-    requestIdleCallback(start, { timeout: 3000 });
-  else setTimeout(start, 1200);
-}
-
 const nosp = (s) => s.replace(/[\s　]+/g, "");
 
 // 扉ページ（「論文式試験問題集［経済法］」のような科目名だけの中央寄せ
