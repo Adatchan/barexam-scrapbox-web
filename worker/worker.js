@@ -1,8 +1,23 @@
 /**
- * Cloudflare Worker: moj.go.jp 中継プロキシ
+ * Cloudflare Worker: moj.go.jp 中継プロキシ（PDF は R2 に永続キャッシュ）
  *
  * クライアント（ブラウザ）から ?url=<URL> 形式で呼び出すと、
  * moj.go.jp 配下の HTML / PDF を取得して CORS ヘッダ付きで返す。
+ *
+ * キャッシュ方針:
+ *   - PDF: Cloudflare R2 に永続保存する。過去問PDFは一度公表されたら不変なので、
+ *     初回だけ法務省 origin から取得して R2 に保存し、以降は R2 から配信する。
+ *     エッジキャッシュ（cf.cacheTtl）と違い R2 は LRU で追い出されないため、
+ *     「一度落としたPDFは二度と法務省へ取りに行かない」を保証できる。
+ *   - HTML: 新資料の掲載を反映するためエッジに短期（1時間）キャッシュのみ。
+ *     R2 には保存しない（内容が更新されるため）。
+ *   - エラー応答はキャッシュも R2 保存もしない。
+ *
+ * 必要なバインディング:
+ *   - R2 バケットを binding 名 MOJ_PDF で割り当てること。
+ *     ダッシュボード → 対象 Worker → Settings → Variables and Secrets の
+ *     「R2 Bucket Bindings」で Variable name = MOJ_PDF, Bucket = 作成した
+ *     バケット（例: moj-pdf-cache）を選んで保存する。
  *
  * セキュリティ:
  *   - moj.go.jp 配下の URL のみ許可（オープンプロキシ化防止）
@@ -16,7 +31,7 @@
  * デプロイ:
  *   1. https://dash.cloudflare.com → Workers & Pages → 対象 Worker
  *   2. このファイルの内容を貼り付けて Deploy（Quick edit / Save and deploy）
- *   3. 新規作成時は払い出された URL を web/moj.js の WORKER_URL に設定
+ *   3. 上記 R2 バインディング（MOJ_PDF）を必ず設定しておくこと。
  *
  * 公開先を変えたら ALLOWED_ORIGINS を更新すること。
  */
@@ -37,7 +52,7 @@ function corsHeaders(origin) {
   const h = {
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
-    // ブラウザの JS から取得元（エッジHIT / origin取得）を読めるよう公開する
+    // ブラウザの JS から取得元（R2HIT / エッジHIT / origin取得）を読めるよう公開する
     "Access-Control-Expose-Headers": "X-MOJ-Cache",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -47,8 +62,14 @@ function corsHeaders(origin) {
   return h;
 }
 
+// R2 のオブジェクトキー。ALLOWED_PREFIX で www.moj.go.jp に限定済みなので
+// pathname だけで一意。先頭スラッシュを除いて "content/001234.pdf" のような形に。
+function r2KeyFor(target) {
+  return new URL(target).pathname.replace(/^\/+/, "");
+}
+
 export default {
-  async fetch(request) {
+  async fetch(request, env, ctx) {
     const origin = request.headers.get("Origin");
     if (!isOriginAllowed(origin)) {
       return jsonError("このエンドポイントの利用は許可されていません。", 403, origin);
@@ -73,60 +94,114 @@ export default {
       );
     }
 
-    // 過去問PDFは一度公表されたら不変なので、Cloudflare のエッジに長期間
-    // キャッシュして法務省 origin への再取得を避ける（利用者をまたいで同じ
-    // PDFは実質1回しか取りに行かない＝負荷集中・ブロックリスクを抑える）。
-    // HTMLは新資料の掲載を反映するため短め。エラー応答はキャッシュしない。
     const isPdf = /\.pdf(?:$|\?)/i.test(target);
+
+    // ── PDF: R2 永続キャッシュを優先 ───────────────────────────────────────
+    if (isPdf && env.MOJ_PDF) {
+      const key = r2KeyFor(target);
+      const cached = await env.MOJ_PDF.get(key);
+      if (cached) {
+        // R2 から配信（法務省へは行かない・永続）
+        const headers = new Headers();
+        const ct = cached.httpMetadata?.contentType || "application/pdf";
+        headers.set("Content-Type", ct);
+        for (const [k, v] of Object.entries(corsHeaders(origin)))
+          headers.set(k, v);
+        // ブラウザ側は短期キャッシュのみ（端末にPDFを溜め込まない）。法務省への
+        // 再取得抑制は R2 が担うので、ブラウザ短期でも影響しない。
+        headers.set("Cache-Control", "public, max-age=3600");
+        headers.set("X-MOJ-Cache", "R2HIT");
+        return new Response(cached.body, { status: 200, headers });
+      }
+
+      // R2 ミス: 法務省から取得して保存してから返す。
+      try {
+        const upstream = await fetchUpstream(target, isPdf);
+        const ok = upstream.status >= 200 && upstream.status < 300;
+        const contentType =
+          upstream.headers.get("Content-Type") || "application/pdf";
+
+        if (ok) {
+          // 本文を一度バッファし、R2 保存とクライアント返却の両方に使う。
+          const buf = await upstream.arrayBuffer();
+          // 保存はレスポンス送出を遅らせないよう waitUntil に委ねる。
+          ctx.waitUntil(
+            env.MOJ_PDF.put(key, buf, {
+              httpMetadata: { contentType },
+            }),
+          );
+          const headers = new Headers();
+          headers.set("Content-Type", contentType);
+          for (const [k, v] of Object.entries(corsHeaders(origin)))
+            headers.set(k, v);
+          headers.set("Cache-Control", "public, max-age=3600");
+          // 初回（法務省へ取りに行った）であることを示す。
+          headers.set("X-MOJ-Cache", "MISS");
+          return new Response(buf, { status: 200, headers });
+        }
+
+        // 非2xx（未掲載404・一時障害等）は保存せずそのまま中継。
+        return relay(upstream, origin, false);
+      } catch (e) {
+        return jsonError(`Fetch failed: ${e.message}`, 502, origin);
+      }
+    }
+
+    // ── HTML（および R2 未設定時の PDF）: エッジキャッシュで中継 ───────────
     try {
-      const upstream = await fetch(target, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) " +
-            "Chrome/120.0.0.0 Safari/537.36",
-          "Accept-Language": "ja,en;q=0.9",
-        },
-        // 法務省サイトは redirect を返すことがあるので follow
-        redirect: "follow",
-        // Cloudflare エッジキャッシュ。成功時のみ保持し、3xx/4xx/5xx は
-        // 保持しない（未掲載404や一時障害を焼き付けないため）。
-        cf: {
-          cacheEverything: true,
-          cacheTtlByStatus: {
-            "200-299": isPdf ? 31536000 : 3600,
-            "300-399": 0,
-            "400-499": 0,
-            "500-599": 0,
-          },
-        },
-      });
-
-      const headers = new Headers();
-      const contentType = upstream.headers.get("Content-Type");
-      if (contentType) headers.set("Content-Type", contentType);
-      for (const [k, v] of Object.entries(corsHeaders(origin)))
-        headers.set(k, v);
-      // ブラウザ側は短期キャッシュのみ（長期・immutable は利用者の端末に
-      // PDFを溜め込むため付けない）。失敗（未掲載404・一時障害5xx 等）は
-      // no-store。法務省 origin への再取得抑制は上の cf エッジキャッシュ
-      // （PDFは長期）が担うので、ブラウザ側を短期にしても影響しない。
-      const ok = upstream.status >= 200 && upstream.status < 300;
-      headers.set("Cache-Control", ok ? "public, max-age=3600" : "no-store");
-      // エッジの HIT/MISS を確認できるよう中継する（運用時の検証用）
-      const cacheStatus = upstream.headers.get("cf-cache-status");
-      if (cacheStatus) headers.set("X-MOJ-Cache", cacheStatus);
-
-      return new Response(upstream.body, {
-        status: upstream.status,
-        statusText: upstream.statusText,
-        headers,
-      });
+      const upstream = await fetchUpstream(target, isPdf);
+      return relay(upstream, origin, true);
     } catch (e) {
       return jsonError(`Fetch failed: ${e.message}`, 502, origin);
     }
   },
 };
+
+// 法務省 origin から取得。PDF は念のためエッジにも長期キャッシュ（R2 未設定の
+// フォールバック用）、HTML は短期。成功時のみ保持し 3xx/4xx/5xx は保持しない。
+function fetchUpstream(target, isPdf) {
+  return fetch(target, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+        "AppleWebKit/537.36 (KHTML, like Gecko) " +
+        "Chrome/120.0.0.0 Safari/537.36",
+      "Accept-Language": "ja,en;q=0.9",
+    },
+    redirect: "follow",
+    cf: {
+      cacheEverything: true,
+      cacheTtlByStatus: {
+        "200-299": isPdf ? 31536000 : 3600,
+        "300-399": 0,
+        "400-499": 0,
+        "500-599": 0,
+      },
+    },
+  });
+}
+
+// upstream レスポンスを CORS ヘッダ付きで中継する（本文をストリームのまま流す）。
+function relay(upstream, origin, allowBrowserCache) {
+  const headers = new Headers();
+  const contentType = upstream.headers.get("Content-Type");
+  if (contentType) headers.set("Content-Type", contentType);
+  for (const [k, v] of Object.entries(corsHeaders(origin))) headers.set(k, v);
+
+  const ok = upstream.status >= 200 && upstream.status < 300;
+  headers.set(
+    "Cache-Control",
+    ok && allowBrowserCache ? "public, max-age=3600" : "no-store",
+  );
+  const cacheStatus = upstream.headers.get("cf-cache-status");
+  if (cacheStatus) headers.set("X-MOJ-Cache", cacheStatus);
+
+  return new Response(upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers,
+  });
+}
 
 function jsonError(message, status, origin) {
   return new Response(JSON.stringify({ error: message }), {

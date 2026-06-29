@@ -26,12 +26,14 @@ function resolveUrl(href, baseUrl) {
 
 // 取得元 → 表示ラベル。3階層を区別する:
 //   MEMORY        … このタブで取得済み（再取得せずメモリから・ネットワーク無し）
+//   R2HIT         … Cloudflare R2 から配信（PDF永続キャッシュ・法務省へは行かない）
 //   HIT/REVALIDATED … Cloudflare エッジから配信（法務省へは行かない）
 //   それ以外(MISS/EXPIRED/UPDATING…) … Cloudflare が法務省 origin へ取りに行く
 // X-MOJ-Cache が読めない（旧Worker・未公開）場合は null。
 export function cacheSourceLabel(status) {
   if (!status) return null;
   if (/^MEMORY$/i.test(status)) return "💾 メモリ（取得済み）";
+  if (/^R2HIT$/i.test(status)) return "📦 Cloudflare R2（保存済み）";
   return /^(HIT|REVALIDATED)$/i.test(status)
     ? "⚡ Cloudflareキャッシュ"
     : "🌐 法務省サイト";
