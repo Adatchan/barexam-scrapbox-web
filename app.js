@@ -46,9 +46,24 @@ function isYobi() {
 }
 
 // ─── 画面初期化 ───────────────────────────────────────────────────────────
-// 試験種別の切替時にも呼ぶため、年度・科目のリストを作り直す。
+// 試験種別の切替時にも呼ぶため、年度・科目・種類のリストを作り直す。
 function initSelectors() {
   const yobi = isYobi();
+
+  // 種類: 予備に採点実感は無いため2種類。司法は3種類。
+  const typeSelect = $("type");
+  typeSelect.innerHTML = "";
+  const typeOpts = yobi
+    ? ["試験問題", "出題の趣旨"]
+    : ["試験問題", "出題の趣旨", "採点実感"];
+  for (const t of typeOpts) {
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    typeSelect.appendChild(opt);
+  }
+  if (typeSelect._cs) typeSelect._cs.refresh();
+
   const yearSelect = $("year");
   yearSelect.innerHTML = "";
   const yearKeys = yobi
@@ -79,16 +94,15 @@ function initSelectors() {
   if (subjSelect._cs) subjSelect._cs.refresh();
 }
 
-// 試験種別の切替: 予備モードでは種類・出力形式とテキスト変換系ボタンを隠し、
-// PDF収集ボタンを出す。年度・科目も作り直す。
+// 試験種別の切替: 司法・予備で画面（2レーン）は共通。年度・科目・種類を作り
+// 直し、「そのまま保存」の説明文だけ予備（採点実感なし）に合わせて差し替える。
 function applyExamMode() {
   const yobi = isYobi();
-  $("type-field").hidden = yobi; // 予備は種類別ボタンで選ぶため種類プルダウンは隠す
-  // 出力形式ラジオは司法・予備それぞれのテキスト変換カード内にあり、カードの
-  // 表示切替（shihou-actions / yobi-actions）に追従するため個別制御は不要。
-  $("shihou-actions").hidden = yobi;
-  $("yobi-actions").hidden = !yobi;
   initSelectors();
+  // 一式zip保存の説明（司法は3点、予備は問題＋趣旨の2点）
+  $("source-zip-desc").textContent = yobi
+    ? "問題・趣旨の2点をzipで"
+    : "問題・趣旨・採点実感の3点をzipで";
   invalidateResult();
   $("log").textContent = "";
   $("result").textContent = "";
@@ -190,11 +204,8 @@ let lastResult = "";
 // 直近の変換結果の .txt 保存ファイル名（司法・予備で命名が異なるため保持）。
 let lastTxtName = "";
 
-// 出力形式（ノーマル / Scrapbox記法）。司法・予備それぞれのテキスト変換カード
-// に独立したラジオを置いているため、現在のモードのラジオを読む。
 function selectedFormat() {
-  const name = isYobi() ? "yobi-format" : "format";
-  const el = document.querySelector(`input[name="${name}"]:checked`);
+  const el = document.querySelector('input[name="format"]:checked');
   return el ? el.value : "plain";
 }
 
@@ -204,6 +215,7 @@ function currentYearLabel() {
 
 async function onRun() {
   const t0 = performance.now();
+  const yobi = isYobi();
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const docType = $("type").value;
@@ -221,22 +233,29 @@ async function onRun() {
   activatePane("log");
 
   try {
-    const { yearLabel, subjectLabel, docType: dt, result } =
-      await convertText({ yearKey, subject, docType, decorate }, convertCtx());
+    // 司法は convertText、予備は convertYobiText（科目グループPDFから切り出し）。
+    const { yearLabel, subjectLabel, result } = yobi
+      ? await convertYobiText({ yearKey, subject, docType, decorate }, convertCtx())
+      : await convertText({ yearKey, subject, docType, decorate }, convertCtx());
     lastResult = result;
     const formatSuffix = decorate ? "（scrapbox記法）" : "";
-    lastTxtName = `${currentYearLabel()}司法試験${subject}${docType}${formatSuffix}.txt`;
+    const examLabel = yobi ? "司法試験予備試験論文式" : "司法試験";
+    lastTxtName = `${currentYearLabel()}${examLabel}${subject}${docType}${formatSuffix}.txt`;
     $("result").textContent = result;
     $("copy").disabled = false;
     $("download").disabled = false;
-    appendLog(`完了: ${yearLabel} ${subjectLabel} ${dt}`, "ok");
+    appendLog(
+      `完了: ${yearLabel} ${yobi ? "予備 " : ""}${subjectLabel} ${docType}`,
+      "ok",
+    );
     logElapsed(t0);
     setStatus("完了", "ok");
     activatePane("result");
     celebrate("変換完了", "結果欄にテキストを表示しました");
   } catch (e) {
-    appendLog(e.message, "err");
-    setStatus("エラー", "error");
+    // 予備の画像化PDF等は「失敗」ではなく案内（PDF保存を促す）として警告表示。
+    appendLog(e.message, yobi ? "warn" : "err");
+    setStatus(yobi ? "テキスト変換できませんでした" : "エラー", "error");
   } finally {
     setBusy(false);
     $("run").textContent = "変換実行";
@@ -284,6 +303,7 @@ function triggerDownload(blob, filename) {
 // 選択中の種類の原典PDF（該当ページのみ）を保存する。
 // 変換実行済みならキャッシュを再利用し、未処理なら自動で取得する。
 async function onSaveSourcePdf() {
+  if (isYobi()) return onSaveYobiSingle($("type").value);
   const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
@@ -330,6 +350,7 @@ async function onSaveSourcePdf() {
 
 // 試験問題・出題の趣旨・採点実感の3点を取得して zip で一括保存する
 async function onSaveSourceZip() {
+  if (isYobi()) return onSaveYobiZip();
   const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
@@ -403,13 +424,14 @@ async function onSaveSourceZip() {
 function invalidateResult() {
   lastResult = "";
   lastTxtName = "";
-  for (const id of ["copy", "download", "yobi-copy", "yobi-download"])
-    $(id).disabled = true;
+  $("copy").disabled = true;
+  $("download").disabled = true;
 }
 
 // 試験問題・出題の趣旨・採点実感を1つの Markdown にまとめて保存する。
 // LLM が文脈を把握できるよう、冒頭にメタ情報と出典を付ける。
 async function onSaveLlm() {
+  if (isYobi()) return onSaveYobiLlm();
   const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
@@ -500,64 +522,12 @@ async function onSaveLlm() {
   }
 }
 
-// ─── 予備試験モード（PDF収集） ───────────────────────────────────────────
-// 予備試験はテキスト変換せず、試験問題（科目グループ別）と出題の趣旨
-// （全科目まとめた1PDF）を出典フッター・左上見出し付きで保存する。
+// ─── 予備試験モードの保存処理 ─────────────────────────────────────────────
+// 画面・テキスト変換は司法と共通（onRun が convertYobiText を呼ぶ）。ここでは
+// 「そのまま保存」レーン（原典PDF保存・一式zip・LLM用）の予備版を担う。原典は
+// 試験問題（科目グループ別）と出題の趣旨（全科目まとめた1PDF）から当該科目を
+// 切り出し、出典フッター・左上見出し付きで保存する。採点実感は予備に無い。
 const YOBI_DOC_TYPES = ["試験問題", "出題の趣旨"];
-
-function setBusyYobi(busy) {
-  for (const id of [
-    "yobi-q",
-    "yobi-shushi",
-    "yobi-zip",
-    "yobi-text-q",
-    "yobi-text-shushi",
-  ])
-    $(id).disabled = busy;
-}
-
-// 予備試験：選択中の年度・科目の指定種類をテキスト変換し、結果欄に表示する。
-// 司法の onRun と同じく結果は lastResult に控え、コピー・.txt 保存を有効化する。
-// テキストを抽出できない（画像化PDF等）場合は警告し、PDFダウンロードを促す。
-async function onConvertYobiText(docType) {
-  const t0 = performance.now();
-  const yearKey = $("year").value;
-  const subject = $("subject").value;
-  const decorate = selectedFormat() === "scrapbox";
-  $("log").textContent = "";
-  $("result").textContent = "";
-  lastResult = "";
-  lastTxtName = "";
-  $("yobi-copy").disabled = true;
-  $("yobi-download").disabled = true;
-  setBusyYobi(true);
-  setProgressBar(0);
-  setStatus("変換中");
-  activatePane("log");
-  try {
-    const { yearLabel, subjectLabel, result } = await convertYobiText(
-      { yearKey, subject, docType, decorate },
-      convertCtx(),
-    );
-    lastResult = result;
-    const formatSuffix = decorate ? "（scrapbox記法）" : "";
-    lastTxtName = `${currentYearLabel()}司法試験予備試験論文式${subject}${docType}${formatSuffix}.txt`;
-    $("result").textContent = result;
-    $("yobi-copy").disabled = false;
-    $("yobi-download").disabled = false;
-    appendLog(`完了: ${yearLabel} 予備 ${subjectLabel} ${docType}`, "ok");
-    logElapsed(t0);
-    setStatus("完了", "ok");
-    activatePane("result");
-    celebrate("変換完了", "結果欄にテキストを表示しました");
-  } catch (e) {
-    // 画像化PDF・未対応年度などは「失敗」ではなく案内として警告表示する
-    appendLog(e.message, "warn");
-    setStatus("テキスト変換できませんでした", "error");
-  } finally {
-    setBusyYobi(false);
-  }
-}
 
 // 試験問題（科目グループPDF）・出題の趣旨（全科目まとめた1PDF）の原典直URLを
 // まとめて解決する（フッター用）。試験問題は個別科目が属するグループPDFを指す。
@@ -661,7 +631,7 @@ async function onSaveYobiSingle(docType) {
   const subject = $("subject").value;
   $("log").textContent = "";
   $("result").textContent = "";
-  setBusyYobi(true);
+  setBusy(true);
   setProgressBar(0.05);
   setStatus("取得中");
   activatePane("log");
@@ -694,7 +664,7 @@ async function onSaveYobiSingle(docType) {
     appendLog(`保存に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
   } finally {
-    setBusyYobi(false);
+    setBusy(false);
   }
 }
 
@@ -704,7 +674,7 @@ async function onSaveYobiZip() {
   const subject = $("subject").value;
   const yearLabel = currentYearLabel();
   $("log").textContent = "";
-  setBusyYobi(true);
+  setBusy(true);
   setProgressBar(0.05);
   setStatus("一括取得中");
   activatePane("log");
@@ -754,7 +724,91 @@ async function onSaveYobiZip() {
     appendLog(`一括保存に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
   } finally {
-    setBusyYobi(false);
+    setBusy(false);
+  }
+}
+
+// 予備：試験問題・出題の趣旨をテキスト化し、1つの Markdown にまとめて保存する
+// （司法の onSaveLlm の予備版。採点実感は無いので2種類）。画像化PDF等で変換
+// できない種類は警告して除外する。
+async function onSaveYobiLlm() {
+  const t0 = performance.now();
+  const yearKey = $("year").value;
+  const subject = $("subject").value;
+  const yearLabel = currentYearLabel();
+  setBusy(true);
+  setStatus("LLM用ファイルを作成中");
+  setProgressBar(0.05);
+  try {
+    const byType = {}; // docType → body
+    const sourceUrls = {};
+    let done = 0;
+    await Promise.allSettled(
+      YOBI_DOC_TYPES.map(async (docType) => {
+        try {
+          const { result, pdfUrl } = await convertYobiText(
+            { yearKey, subject, docType, decorate: false },
+            taggedCtx(docType),
+          );
+          // 1行目（タイトル）・2行目（出典）を除いた本文だけ取り出す
+          byType[docType] = result.split("\n").slice(2).join("\n").trim();
+          if (pdfUrl) sourceUrls[docType] = pdfUrl;
+          appendLog(`  [${docType}] OK`, "ok");
+        } catch (e) {
+          appendLog(`  [${docType}] 変換できませんでした: ${e.message}`, "warn");
+        } finally {
+          setProgressBar(0.05 + 0.9 * (++done / YOBI_DOC_TYPES.length));
+        }
+      }),
+    );
+
+    const got = YOBI_DOC_TYPES.filter((d) => byType[d]);
+    if (got.length === 0)
+      throw new Error("いずれの種類も変換できませんでした。");
+
+    const md = [];
+    md.push(`# ${yearLabel}司法試験予備試験 論文式 ${subject}`);
+    md.push("");
+    md.push("> この文書は、日本の司法試験予備試験（司法試験の受験資格を得る");
+    md.push("> ための国家試験）の論文式試験の過去問題と、その出題趣旨を");
+    md.push("> まとめたものです。法律答案の作成・添削・解説の参考資料として");
+    md.push("> 利用できます。");
+    md.push("");
+    md.push("## 書誌情報");
+    md.push("");
+    md.push(`- 試験: ${yearLabel}司法試験予備試験 論文式試験`);
+    md.push(`- 科目: ${subject}`);
+    md.push("- 出典: 法務省ウェブサイト（原典PDFを加工して作成）");
+    for (const docType of YOBI_DOC_TYPES) {
+      if (sourceUrls[docType]) md.push(`  - ${docType}: ${sourceUrls[docType]}`);
+    }
+    md.push("");
+    md.push("※ PDFからの自動抽出のため、原文と細部が異なる場合があります。");
+    md.push("");
+    for (const docType of YOBI_DOC_TYPES) {
+      if (!byType[docType]) continue;
+      md.push(`## ${docType}`);
+      md.push("");
+      md.push(byType[docType]);
+      md.push("");
+    }
+
+    const filename = `${yearLabel}司法試験予備試験論文式${subject}_LLM用.md`;
+    triggerDownload(
+      new Blob([md.join("\n")], { type: "text/markdown;charset=utf-8" }),
+      filename,
+    );
+    setProgressBar(1.0);
+    appendLog(`LLM用ファイルを保存しました（${got.length}種類を統合）。`, "ok");
+    logElapsed(t0);
+    setStatus("完了", "ok");
+    celebrate("Markdownを保存", "LLMに渡せる1ファイルを作成しました");
+    showToast("LLM用Markdownを保存しました");
+  } catch (e) {
+    appendLog(`LLM用ファイルの作成に失敗: ${e.message}`, "err");
+    setStatus("エラー", "error");
+  } finally {
+    setBusy(false);
   }
 }
 
@@ -774,26 +828,13 @@ window.addEventListener("DOMContentLoaded", () => {
   for (const r of document.querySelectorAll('input[name="exam"]')) {
     r.addEventListener("change", applyExamMode);
   }
+  // ボタンは司法・予備で共通。保存系ハンドラ内で isYobi() を見て分岐する。
   $("run").addEventListener("click", onRun);
   $("copy").addEventListener("click", onCopy);
   $("download").addEventListener("click", onDownload);
   $("source").addEventListener("click", onSaveSourcePdf);
   $("source-zip").addEventListener("click", onSaveSourceZip);
   $("llm").addEventListener("click", onSaveLlm);
-  $("yobi-q").addEventListener("click", () => onSaveYobiSingle("試験問題"));
-  $("yobi-shushi").addEventListener("click", () =>
-    onSaveYobiSingle("出題の趣旨"),
-  );
-  $("yobi-zip").addEventListener("click", onSaveYobiZip);
-  $("yobi-text-q").addEventListener("click", () =>
-    onConvertYobiText("試験問題"),
-  );
-  $("yobi-text-shushi").addEventListener("click", () =>
-    onConvertYobiText("出題の趣旨"),
-  );
-  // 予備のコピー・.txt保存は司法と同じ処理（lastResult / lastTxtName を使う）
-  $("yobi-copy").addEventListener("click", onCopy);
-  $("yobi-download").addEventListener("click", onDownload);
 
   // ヘルプダイアログ（背景クリックでも閉じる）
   const helpDialog = $("help-dialog");

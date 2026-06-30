@@ -29,7 +29,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./style.css?v=20260630.1018" />
+    <link rel="stylesheet" href="./style.css?v=20260630.1615" />
   </head>
   <body>
     <main class="app">
@@ -198,8 +198,8 @@
         </div>
       </section>
 
-      <!-- 司法試験：① テキストに変換 / そのまま保存 の2レーン。予備モードでは隠す -->
-      <div class="lanes" id="shihou-actions">
+      <!-- ① テキストに変換 / そのまま保存 の2レーン（司法・予備で共通）-->
+      <div class="lanes" id="actions">
         <div class="lane lane-convert">
           <div class="lane-title">テキストに変換</div>
           <div class="lane-sub">このツールのメイン機能です</div>
@@ -247,85 +247,21 @@
               id="source-zip"
               class="tile"
               type="button"
-              title="試験問題・出題の趣旨・採点実感の原典PDF3点を一括で保存します（処理済みの種類は再利用されます）"
+              title="原典PDFを一括で保存します（処理済みの種類は再利用されます）"
             >
               <span class="tile-title">一式zip保存</span>
-              <span class="tile-desc">問題・趣旨・採点実感の3点をzipで</span>
+              <span class="tile-desc" id="source-zip-desc"
+                >問題・趣旨・採点実感の3点をzipで</span
+              >
             </button>
             <button
               id="llm"
               class="tile"
               type="button"
-              title="試験問題・出題の趣旨・採点実感を、メタ情報・出典付きの1つのMarkdownにまとめて保存します（LLMに渡す用）"
+              title="各種類を、メタ情報・出典付きの1つのMarkdownにまとめて保存します（LLMに渡す用）"
             >
               <span class="tile-title">LLM用に保存</span>
               <span class="tile-desc">出典付き1つのMarkdownにまとめる</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 予備試験：テキスト変換／ダウンロードカード。司法試験モードでは隠す -->
-      <div class="actions-yobi" id="yobi-actions" hidden>
-        <div class="save-card">
-          <div class="lane-head">
-            <span class="lane-title-2">テキスト変換</span>
-            <span class="badge">科目別・全文</span>
-          </div>
-          <div class="lane-sub">
-            科目グループPDFから当該科目だけを切り出して全文をテキスト化します
-          </div>
-          <div class="field lane-format" id="yobi-format-field">
-            <label>出力形式</label>
-            <div class="radio-group">
-              <label class="radio">
-                <input type="radio" name="yobi-format" value="plain" checked />
-                ノーマル
-              </label>
-              <label class="radio">
-                <input type="radio" name="yobi-format" value="scrapbox" />
-                Scrapbox記法
-              </label>
-            </div>
-          </div>
-          <button id="yobi-text-q" class="btn-primary" type="button">
-            試験問題をテキスト変換
-          </button>
-          <div class="btn-row">
-            <button id="yobi-text-shushi" class="btn-secondary" type="button">
-              出題の趣旨をテキスト変換
-            </button>
-          </div>
-          <div class="result-actions">
-            <span class="result-hint">変換すると使えます</span>
-            <button id="yobi-copy" class="btn-secondary" type="button" disabled>
-              結果をコピー
-            </button>
-            <button
-              id="yobi-download"
-              class="btn-secondary"
-              type="button"
-              disabled
-            >
-              .txt 保存
-            </button>
-          </div>
-        </div>
-        <div class="save-card">
-          <div class="lane-head">
-            <span class="lane-title-2">ダウンロード</span>
-            <span class="badge">変換不要</span>
-          </div>
-          <div class="lane-sub">押すだけで原典PDFを取得して保存します</div>
-          <button id="yobi-q" class="btn-primary" type="button">
-            試験問題PDFを保存
-          </button>
-          <div class="btn-row">
-            <button id="yobi-shushi" class="btn-secondary" type="button">
-              出題の趣旨PDFを保存
-            </button>
-            <button id="yobi-zip" class="btn-secondary" type="button">
-              問題＋趣旨をzip保存
             </button>
           </div>
         </div>
@@ -411,6 +347,6 @@
       src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20260630.1018"></script>
+    <script type="module" src="./app.js?v=20260630.1615"></script>
   </body>
 </html>
