@@ -16,13 +16,21 @@ export function sourceLine(pdfUrl) {
   return `出典：法務省ウェブサイト（${pdfUrl}）を加工して作成`;
 }
 
-export function toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate) {
-  const out = [`${yearLabel}司法試験　${subjectLabel}`];
+export function toScrapbox(
+  paras,
+  yearLabel,
+  subjectLabel,
+  pdfUrl,
+  decorate,
+  opts = {},
+) {
+  const { examTitle = "司法試験", examTag = "司法試験" } = opts;
+  const out = [`${yearLabel}${examTitle}　${subjectLabel}`];
   if (pdfUrl) out.push(sourceLine(pdfUrl));
   if (decorate) {
     const m = /（(.+)）/.exec(subjectLabel);
     const tag = m ? m[1] : subjectLabel;
-    out.push(`#司法試験 #${tag} #論文式 #${yearLabel}`);
+    out.push(`#${examTag} #${tag} #論文式 #${yearLabel}`);
   }
   out.push("");
   // 構造マーカー行（「第１ ○○」「１ ○○」「１．○○」）と会話文
@@ -66,13 +74,15 @@ export function toScrapboxNarrative(
   docType,
   pdfUrl,
   decorate,
+  opts = {},
 ) {
-  const out = [`${yearLabel}司法試験　${subjectLabel}　${docType}`];
+  const { examTitle = "司法試験", examTag = "司法試験" } = opts;
+  const out = [`${yearLabel}${examTitle}　${subjectLabel}　${docType}`];
   if (pdfUrl) out.push(sourceLine(pdfUrl));
   if (decorate) {
     const m = /（(.+)）/.exec(subjectLabel);
     const tag = m ? m[1] : subjectLabel;
-    out.push(`#司法試験 #${tag} #論文式 #${yearLabel} #${docType}`);
+    out.push(`#${examTag} #${tag} #論文式 #${yearLabel} #${docType}`);
   }
   out.push("");
   for (const p of paras) {

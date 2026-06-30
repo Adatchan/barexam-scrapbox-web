@@ -506,8 +506,12 @@ textarea {
   line-height: 1.45;
 }
 
-/* ── 予備モードの保存カード ──────────────────────────── */
+/* ── 予備モードのカード（テキスト変換 / 保存）────────── */
+/* カード間の縦マージンは検索条件カード（.form の margin-bottom）と等間隔にする。 */
 .actions-yobi {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
   margin-bottom: 18px;
 }
 
