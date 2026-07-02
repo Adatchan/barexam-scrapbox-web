@@ -6,6 +6,28 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
+    <!--
+      CSP（GitHub Pages はレスポンスヘッダを設定できないため meta で指定）:
+      - script-src の sha256-… は下部のインラインスクリプト（エラー表示）のハッシュ。
+        インラインスクリプトを1文字でも変更したら再計算して両HTMLを更新すること:
+          node -e 'const{readFileSync}=require("node:fs");const{createHash}=require("node:crypto");const m=/<script>([\s\S]*?)<\/script>/.exec(readFileSync("index.html","utf8"));console.log("sha256-"+createHash("sha256").update(m[1],"utf8").digest("base64"))'
+      - connect-src の workers.dev は moj.js の WORKER_URL。変更時はここも更新すること。
+      - worker-src blob: は PDF.js がクロスオリジンの worker を blob 経由で包むために必要。
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+        script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'sha256-QvZO38DsH2SfqnShNHlfpvRBHwBW2zRZD3QMj1UZkCI=';
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        font-src 'self' https://fonts.gstatic.com;
+        img-src 'self' data:;
+        connect-src 'self' https://shihoshiken-proxy.adachiyuki0409.workers.dev https://cdnjs.cloudflare.com;
+        worker-src 'self' blob:;
+        child-src 'self' blob:;
+        object-src 'none';
+        base-uri 'none';
+        form-action 'none'"
+    />
     <meta name="theme-color" content="#004679" />
     <meta name="color-scheme" content="light" />
     <meta
@@ -342,9 +364,13 @@
       })();
     </script>
 
-    <!-- PDF.js (legacy build for wide compatibility) -->
+    <!-- PDF.js (legacy build for wide compatibility)
+         integrity はこのバージョンのファイルの SHA-384。バージョンを上げたら再計算:
+           curl -sSL <URL> | openssl dgst -sha384 -binary | openssl base64 -A -->
     <script
       src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs"
+      integrity="sha384-uwJM5C0hGZH5Ed/vHx4Ht1PUd8ABIDVIcLbHydZOdFL5eTUG8Jdr32xNVIyn0kYH"
+      crossorigin="anonymous"
       type="module"
     ></script>
     <script type="module" src="./app.js?v=20260630.1615"></script>

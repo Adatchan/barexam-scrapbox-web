@@ -6,6 +6,24 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
+    <!--
+      CSP（index.html と同一方針）。インラインスクリプトを変更したら sha256-… を
+      再計算して両HTMLを更新すること（手順は index.html のコメント参照）。
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+        script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'sha256-QvZO38DsH2SfqnShNHlfpvRBHwBW2zRZD3QMj1UZkCI=';
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        font-src 'self' https://fonts.gstatic.com;
+        img-src 'self' data:;
+        connect-src 'self' https://shihoshiken-proxy.adachiyuki0409.workers.dev https://cdnjs.cloudflare.com;
+        worker-src 'self' blob:;
+        child-src 'self' blob:;
+        object-src 'none';
+        base-uri 'none';
+        form-action 'none'"
+    />
     <meta name="theme-color" content="#004679" />
     <meta name="color-scheme" content="light" />
     <meta
