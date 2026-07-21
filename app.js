@@ -34,7 +34,7 @@ import {
 } from "./pdfsplit.js";
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
 import { enhanceSelect } from "./colorselect.js";
-import { celebrate, showToast } from "./effects.js";
+import { celebrate, alarmError, showToast } from "./effects.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -268,6 +268,11 @@ async function onRun() {
     // 予備の画像化PDF等は「失敗」ではなく案内（PDF保存を促す）として警告表示。
     appendLog(e.message, yobi ? "warn" : "err");
     setStatus(yobi ? "テキスト変換できませんでした" : "エラー", "error");
+    alarmError(
+      yobi ? "変換できませんでした" : "エラー",
+      e.message,
+      yobi ? "#d97706" : "#dc2626",
+    );
   } finally {
     setBusy(false);
     $("run").textContent = "変換実行";
@@ -355,6 +360,7 @@ async function onSaveSourcePdf() {
       window.open(fallbackUrl, "_blank", "noopener");
     }
     setStatus("エラー", "error");
+    alarmError("エラー", e.message);
   } finally {
     setBusy(false);
   }
@@ -425,6 +431,7 @@ async function onSaveSourceZip() {
   } catch (e) {
     appendLog(`一括保存に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
+    alarmError("エラー", e.message);
   } finally {
     setBusy(false);
   }
@@ -529,6 +536,7 @@ async function onSaveLlm() {
   } catch (e) {
     appendLog(`LLM用ファイルの作成に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
+    alarmError("エラー", e.message);
   } finally {
     setBusy(false);
   }
@@ -675,6 +683,7 @@ async function onSaveYobiSingle(docType) {
   } catch (e) {
     appendLog(`保存に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
+    alarmError("エラー", e.message);
   } finally {
     setBusy(false);
   }
@@ -735,6 +744,7 @@ async function onSaveYobiZip() {
   } catch (e) {
     appendLog(`一括保存に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
+    alarmError("エラー", e.message);
   } finally {
     setBusy(false);
   }
@@ -819,6 +829,7 @@ async function onSaveYobiLlm() {
   } catch (e) {
     appendLog(`LLM用ファイルの作成に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
+    alarmError("エラー", e.message);
   } finally {
     setBusy(false);
   }

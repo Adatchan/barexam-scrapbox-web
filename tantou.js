@@ -18,7 +18,7 @@ import { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } from "./yobi-years.js";
 import { yearKeyToLabel, subjectSystem, SYSTEM_BG } from "./data.js";
 import { TANTOU_NEWS } from "./news.js";
 import { fetchPdf, formatKB } from "./moj.js";
-import { celebrate, showToast } from "./effects.js";
+import { celebrate, alarmError, showToast } from "./effects.js";
 import {
   TANTOU_SUBJECTS,
   TANTOU_DOC_TYPES as DOC_TYPES,
@@ -284,6 +284,7 @@ async function saveSingle(docType) {
   } catch (e) {
     appendLog(`保存に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
+    alarmError("エラー", e.message);
   } finally {
     setBusy(false);
   }
@@ -342,6 +343,7 @@ async function saveZip() {
   } catch (e) {
     appendLog(`一括保存に失敗: ${e.message}`, "err");
     setStatus("エラー", "error");
+    alarmError("エラー", e.message);
   } finally {
     setBusy(false);
   }

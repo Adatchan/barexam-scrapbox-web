@@ -958,6 +958,39 @@ textarea {
   animation: ov-draw 0.45s ease 0.25s forwards;
 }
 
+.fx-card-err {
+  animation:
+    ov-pop 0.35s ease both,
+    fx-shake 0.4s ease 0.42s,
+    ov-out 0.38s ease 2.2s forwards;
+}
+
+.fx-x-path {
+  stroke-dasharray: 18;
+  stroke-dashoffset: 18;
+  animation: ov-draw 0.3s ease 0.25s forwards;
+}
+
+.fx-x-path2 {
+  animation-delay: 0.42s;
+}
+
+@keyframes fx-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  45% {
+    transform: translateX(5px);
+  }
+  70% {
+    transform: translateX(-3px);
+  }
+}
+
 .fx-title {
   margin-top: 6px;
   font-family: var(--heading);

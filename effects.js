@@ -51,6 +51,51 @@ export function celebrate(title, sub = "", color = ACCENT) {
   _ovTimer = setTimeout(() => ov.remove(), 1500);
 }
 
+// 失敗時のエラーオーバーレイ（リング＋バツ描画＋シェイク＋タイトル＋サブ文）。
+// 成功時の celebrate と対になる演出。既定は赤、警告用途には amber などを渡す。
+export function alarmError(title, sub = "", color = "#dc2626") {
+  document.querySelector(".fx-overlay")?.remove();
+  clearTimeout(_ovTimer);
+
+  const ov = document.createElement("div");
+  ov.className = "fx-overlay";
+
+  const card = document.createElement("div");
+  card.className = "fx-card fx-card-err";
+
+  const icon = document.createElement("div");
+  icon.className = "fx-icon";
+  for (const cls of ["fx-ring", "fx-ring fx-ring2"]) {
+    const r = document.createElement("span");
+    r.className = cls;
+    r.style.borderColor = color;
+    icon.appendChild(r);
+  }
+  const disc = document.createElement("span");
+  disc.className = "fx-disc";
+  disc.style.background = color + "1a"; // 透過10%程度の淡い円
+  disc.innerHTML =
+    '<svg viewBox="0 0 24 24" width="38" height="38" fill="none" aria-hidden="true">' +
+    `<path class="fx-x-path" d="M6 6l12 12" stroke="${color}" ` +
+    'stroke-width="3" stroke-linecap="round"/>' +
+    `<path class="fx-x-path fx-x-path2" d="M18 6L6 18" stroke="${color}" ` +
+    'stroke-width="3" stroke-linecap="round"/></svg>';
+  icon.appendChild(disc);
+
+  const t = document.createElement("div");
+  t.className = "fx-title";
+  t.textContent = title;
+  const s = document.createElement("div");
+  s.className = "fx-sub";
+  s.textContent = sub;
+
+  card.append(icon, t, s);
+  ov.appendChild(card);
+  document.body.appendChild(ov);
+  // エラー文を読めるよう成功時より長めに表示する
+  _ovTimer = setTimeout(() => ov.remove(), 2600);
+}
+
 // 下部トースト（小さな確認メッセージ）。
 export function showToast(text) {
   document.querySelector(".fx-toast")?.remove();
