@@ -1,0 +1,12 @@
+{
+  "name": "barexam-scrapbox-web",
+  "private": true,
+  "type": "module",
+  "description": "ビルド時の事前変換スクリプト用。ブラウザ配信物には影響しない。",
+  "scripts": {
+    "precompute": "node scripts/precompute.mjs"
+  },
+  "devDependencies": {
+    "pdfjs-dist": "4.0.379"
+  }
+}

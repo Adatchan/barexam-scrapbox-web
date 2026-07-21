@@ -1,0 +1,1119 @@
+/* =============================================================================
+   しほしけ UI リデザイン（案B＝2レーン型 / クールなツール調）
+   - 主操作（塗り）は画面に1つ＝「まず押す」
+   - 変換後に使う操作（コピー/.txt）は結果のそばに置き変換まで無効表示
+   - 変換不要の保存は「変換不要」バッジ付きカードに分離
+   JS（app.js / tantou.js / colorselect.js）が参照する id・class は維持。
+   ============================================================================= */
+:root {
+  --page-bg: #e7e5df; /* カード外の地 */
+  --card: #ffffff;
+
+  --ink: #161b26; /* 本文 */
+  --muted: #687085; /* 補足 */
+  --muted-2: #9097a6; /* さらに淡い */
+  --slate: #2b3445; /* 構造色 */
+
+  --primary: #1f5bd6; /* 主操作（塗り） */
+  --primary-hover: #1a4fbe;
+  --primary-soft: #5b6b8c; /* 青レーン内の補足文字 */
+
+  --line: #e6e8ee; /* 罫線 */
+  --panel: #f5f7fa; /* 設定カード地 */
+  --lane-blue-bg: #eef3fd; /* 変換レーン地 */
+  --lane-blue-border: #d6e2fa;
+  --lane-gray-bg: #f7f8fa; /* 保存レーン地 */
+  --tile-border: #dee2ea; /* タイルボタン枠 */
+  --result-bg: #fbfcfe; /* 結果ペイン地 */
+
+  --badge-fg: #1f5bd6;
+  --badge-bg: #e5eefc;
+
+  --btn-outline-border: #cbd2de;
+  --btn-outline-hover: #f1f4f9;
+
+  --accent: #cc0000; /* エラー */
+  --ok: #1f5bd6; /* 完了 */
+  --warn: #a65a00;
+
+  /* 互換のため旧変数も残す（colorselect.js 等で参照される矢印色など） */
+  --border: #cbd2de;
+  --primary-mid: #1f5bd6;
+  --primary-light: #1f5bd6;
+  --text: #161b26;
+
+  --radius: 12px;
+  --radius-md: 10px;
+  --radius-sm: 8px;
+
+  --sans: "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+  --heading: "Zen Kaku Gothic New", "Noto Sans JP", -apple-system,
+    BlinkMacSystemFont, system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Hiragino Sans",
+    monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--sans);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--page-bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+select,
+input,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* 共通: hidden 属性は他のレイアウト指定に勝たせる */
+.lanes[hidden],
+.actions-yobi[hidden],
+.field[hidden] {
+  display: none;
+}
+
+/* ── アプリ全体（白カード on 地色） ───────────────────────── */
+.app {
+  max-width: 900px;
+  margin: 28px auto;
+  padding: 30px 34px 26px;
+  background: var(--card);
+  border-radius: 16px;
+  box-shadow: 0 4px 22px rgba(20, 30, 60, 0.1);
+}
+
+/* ── ヘッダー ────────────────────────────────────────── */
+.hero {
+  margin-bottom: 22px;
+}
+
+/* タイトル行のみヘルプボタンと横並び。説明文は全幅 */
+.hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  margin-bottom: 5px;
+}
+
+.hero h1 {
+  margin: 0;
+  font-family: var(--heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+}
+
+.hero h1 .beta {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--muted-2);
+  white-space: nowrap;
+}
+
+.hero .subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.hero .subtitle a {
+  color: var(--primary);
+}
+
+/* ── ヘルプボタン（ヘッダー右上） ─────────────────────── */
+.btn-help {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px 7px 9px;
+  border: 1px solid var(--btn-outline-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--slate);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-help:hover {
+  background: var(--btn-outline-hover);
+}
+
+.help-badge {
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ── ヘルプダイアログ ─────────────────────────────────── */
+#help-dialog {
+  max-width: 640px;
+  width: calc(100vw - 40px);
+  max-height: 80vh;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  color: var(--ink);
+}
+
+#help-dialog::backdrop {
+  background: rgba(20, 27, 38, 0.45);
+}
+
+/* 開閉アニメーション。閉じるときは JS が .closing を付け、
+   animationend 後に close() する（入ってきた道を戻る） */
+#help-dialog[open] {
+  animation: dlg-in 0.18s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+#help-dialog[open]::backdrop {
+  animation: xfade-in 0.18s ease;
+}
+
+#help-dialog.closing[open] {
+  animation: dlg-out 0.15s ease forwards;
+}
+
+#help-dialog.closing[open]::backdrop {
+  animation: xfade-out 0.15s ease forwards;
+}
+
+@keyframes dlg-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+@keyframes dlg-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+@keyframes xfade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes xfade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.help-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.help-head h2 {
+  margin: 0;
+  font-family: var(--heading);
+  font-size: 1.1rem;
+  color: var(--ink);
+}
+
+#help-dialog details {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 0;
+}
+
+#help-dialog summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--slate);
+}
+
+#help-dialog details p {
+  margin: 8px 0 4px;
+  font-size: 0.9rem;
+  line-height: 1.8;
+  color: var(--ink);
+}
+
+#help-dialog a {
+  color: var(--primary);
+}
+
+/* ── 更新情報 ────────────────────────────────────────── */
+.news {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--primary);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 22px;
+}
+
+.news-title {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--slate);
+  letter-spacing: 0.04em;
+}
+
+.news-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.82rem;
+  color: var(--ink);
+}
+
+.news-list li {
+  padding: 2px 0;
+}
+
+.news-list .news-date {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.75em;
+}
+
+/* ── 設定カード ──────────────────────────────────────── */
+.form {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 15px 20px;
+  margin-bottom: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 26px;
+  align-items: center;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field > label {
+  font-weight: 700;
+  color: var(--slate);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+/* ネイティブ select（colorselect 適用前のフォールバック表示） */
+.form .field select {
+  width: 178px;
+  padding: 7px 30px 7px 10px;
+  border: 1px solid var(--btn-outline-border);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%231F5BD6' d='M6 8L0 0h12z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.radio-group {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.radio input {
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+/* ── カスタムドロップダウン（colorselect.js）─────────────
+   設定カード内ではコンパクトな固定幅にし、長い科目名は省略表示。 */
+.cs {
+  position: relative;
+  width: 178px;
+}
+.cs-native {
+  display: none;
+}
+.cs-trigger {
+  width: 100%;
+  text-align: left;
+  padding: 7px 30px 7px 10px;
+  border: 1px solid var(--btn-outline-border);
+  border-radius: 7px;
+  background-color: #fff;
+  color: var(--ink);
+  font-size: 0.85rem;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%231F5BD6' d='M6 8L0 0h12z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+.cs-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cs-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+  border-color: var(--primary);
+}
+.cs-list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 20px rgba(20, 30, 60, 0.16);
+  transform-origin: top center;
+  animation: cs-in 0.16s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+/* トリガーから生えるように開く（閉じるのは即時） */
+@keyframes cs-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+.cs-option {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.cs-option.active {
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+.cs-option[aria-selected="true"] {
+  font-weight: 700;
+}
+
+/* ── 2レーン（① 変換 / そのまま保存）───────────────────── */
+.lanes {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.lane {
+  flex: 1;
+  border-radius: 11px;
+  padding: 18px 20px;
+  min-width: 0;
+}
+
+.lane-convert {
+  background: var(--lane-blue-bg);
+  border: 1px solid var(--lane-blue-border);
+  display: flex;
+  flex-direction: column;
+}
+
+.lane-save {
+  background: var(--lane-gray-bg);
+  border: 1px solid var(--line);
+}
+
+.lane-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 3px;
+}
+
+.lane-sub {
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin-bottom: 14px;
+  line-height: 1.55;
+}
+
+.lane-convert .lane-sub {
+  color: var(--primary-soft);
+}
+
+.lane-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 3px;
+}
+
+.lane-title-2 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--slate);
+}
+
+.badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--badge-fg);
+  background: var(--badge-bg);
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+
+.lane-convert .btn-primary {
+  width: 100%;
+}
+
+/* 「テキストに変換」カード内に移した出力形式ラジオ */
+.lane-format {
+  margin-bottom: 14px;
+}
+
+/* タイル型ボタン（タイトル＋一行説明） */
+.tiles {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.tile {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 13px;
+  border: 1px solid var(--tile-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.tile:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+
+.tile:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tile-title {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.tile-desc {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 1px;
+  line-height: 1.45;
+}
+
+/* ── 短答ダウンローダー（tantou.html）のカード ──────── */
+.actions-yobi {
+  margin-bottom: 18px;
+}
+
+.save-card {
+  background: var(--lane-gray-bg);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 18px 20px;
+}
+
+.save-card .btn-primary {
+  width: 100%;
+  margin-top: 12px;
+  margin-bottom: 11px;
+}
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-row .btn-secondary {
+  flex: 1;
+}
+
+/* ── ボタン ──────────────────────────────────────────── */
+.btn-primary {
+  padding: 14px 18px;
+  border: none;
+  border-radius: 9px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(31, 91, 214, 0.26);
+  transition:
+    background 0.15s,
+    opacity 0.15s;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.btn-secondary {
+  padding: 10px 16px;
+  border: 1.5px solid var(--btn-outline-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--slate);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    opacity 0.15s;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--btn-outline-hover);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 押した瞬間に応答する（pointer-down フィードバック） */
+.btn-primary:active:not(:disabled),
+.btn-secondary:active:not(:disabled),
+.tile:active:not(:disabled),
+.btn-help:active,
+.cs-trigger:active,
+.tab:active {
+  transform: scale(0.98);
+  transition: transform 100ms ease-out;
+}
+
+/* 項目は inline の系統色背景に上書きされないよう filter で暗くする */
+.cs-option:active {
+  filter: brightness(0.95);
+}
+
+/* キーボードフォーカスの可視化を全ボタンで統一する */
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-help:focus-visible,
+.tile:focus-visible,
+.tab:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ── 進捗（司法・予備で共有。アクション群の直下に表示）──── */
+.progress {
+  margin: 0 0 20px;
+}
+
+.bar {
+  width: 100%;
+  height: 7px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: var(--primary);
+  border-radius: 999px;
+  transition: transform 0.2s;
+}
+
+.status {
+  margin-top: 7px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-feature-settings: "tnum";
+}
+
+.status.error {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.status.ok {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+/* ── 結果エリア ──────────────────────────────────────── */
+.output {
+  position: relative;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  cursor: pointer;
+  color: var(--muted-2);
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: -1px;
+}
+
+.tab:hover {
+  color: var(--primary);
+}
+
+.tab.active {
+  background: var(--result-bg);
+  border-color: var(--line);
+  border-bottom-color: var(--result-bg);
+  color: var(--primary);
+}
+
+/* 結果に対する操作（コピー / .txt）。「テキストに変換」カード内に置く */
+.result-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.result-actions .btn-secondary {
+  flex: 1 1 0;
+  padding: 9px 12px;
+  font-size: 0.82rem;
+}
+
+.result-hint {
+  flex-basis: 100%;
+  font-size: 0.72rem;
+  color: var(--primary-soft);
+  margin-bottom: -2px;
+}
+
+/* 変換が済んで #copy が有効化されたらヒントを隠す（純CSS・JS非依存） */
+.result-actions:has(#copy:not(:disabled)) .result-hint {
+  display: none;
+}
+
+.pane {
+  display: none;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-top: none;
+  border-radius: 0 0 9px 9px;
+  background: var(--result-bg);
+  min-height: 300px;
+  max-height: 520px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.pane.active {
+  display: block;
+}
+
+#log .ok {
+  color: var(--ok);
+}
+#log .err {
+  color: var(--accent);
+}
+#log .warn {
+  color: var(--warn);
+}
+#log .info {
+  color: var(--ink);
+}
+
+/* ── フッター ────────────────────────────────────────── */
+.foot {
+  margin-top: 26px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.disclaimer {
+  font-size: 0.76rem;
+  color: var(--muted);
+  line-height: 1.7;
+  margin: 0;
+}
+
+.disclaimer a {
+  color: var(--primary);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* ── レスポンシブ（モバイル：縦スタック）──────────────── */
+@media (max-width: 640px) {
+  .app {
+    margin: 0;
+    border-radius: 0;
+    padding: 18px 16px 32px;
+    box-shadow: none;
+  }
+  .hero-top {
+    gap: 12px;
+  }
+  .hero h1 {
+    font-size: 1.25rem;
+  }
+
+  /* 設定カード：縦に積む */
+  .form {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 13px;
+  }
+  .field {
+    flex-wrap: wrap;
+  }
+  .form .field select,
+  .cs {
+    width: 100%;
+  }
+
+  /* 2レーン → 縦スタック。各カードを設定カードと同じ全幅に揃える。
+     「そのまま保存」を変換より前（設定の直下）に */
+  .lanes {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .lane-save {
+    order: 1;
+  }
+  .lane-convert {
+    order: 2;
+  }
+
+  /* 全ボタン全幅・48px 以上のタップ領域 */
+  .btn-primary {
+    width: 100%;
+    min-height: 50px;
+  }
+  .btn-secondary {
+    min-height: 48px;
+  }
+  .btn-row {
+    flex-direction: column;
+  }
+
+  /* コピー / .txt は結果ペインの下にフルで並べる */
+  .result-actions {
+    position: static;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  .result-actions .btn-secondary {
+    flex: 1 1 auto;
+    min-height: 46px;
+    padding: 11px 14px;
+    font-size: 0.85rem;
+  }
+  .result-hint {
+    flex-basis: 100%;
+  }
+
+  .pane {
+    min-height: 220px;
+    font-size: 0.8rem;
+  }
+}
+
+/* ── 完了演出（effects.js）──────────────────────────────── */
+.fx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  pointer-events: none; /* 操作を妨げない */
+}
+
+.fx-card {
+  width: 220px;
+  padding: 24px 20px 18px;
+  background: #fff;
+  border: 1px solid #eef1f6;
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(20, 30, 60, 0.22);
+  text-align: center;
+  animation:
+    ov-pop 0.35s ease both,
+    ov-out 0.38s ease 1.1s forwards;
+}
+
+.fx-icon {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+}
+
+.fx-ring {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: 2px solid var(--primary);
+  animation: ov-ring 0.9s cubic-bezier(0.2, 0.7, 0.3, 1) 0.06s both;
+}
+
+.fx-ring2 {
+  animation-delay: 0.24s;
+}
+
+.fx-disc {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+
+.fx-check-path {
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: ov-draw 0.45s ease 0.25s forwards;
+}
+
+.fx-title {
+  margin-top: 6px;
+  font-family: var(--heading);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.fx-sub {
+  margin-top: 3px;
+  font-size: 0.76rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.fx-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 18px;
+  background: #161b26;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  animation:
+    toast-in 0.32s cubic-bezier(0.2, 0.8, 0.3, 1) both,
+    toast-out 0.36s ease 1.6s forwards;
+}
+
+.fx-toast-dot {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+@media (max-width: 640px) {
+  .fx-toast {
+    left: 16px;
+    right: 16px;
+    transform: none;
+    justify-content: center;
+    text-align: center;
+    border-radius: 14px;
+    animation:
+      fx-fade-in 0.3s ease both,
+      fx-fade-out 0.36s ease 1.6s forwards;
+  }
+}
+
+@keyframes ov-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.92);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes ov-out {
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+}
+@keyframes ov-ring {
+  0% {
+    transform: scale(0.45);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.85);
+    opacity: 0;
+  }
+}
+@keyframes ov-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes toast-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+}
+@keyframes fx-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fx-fade-out {
+  to {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* 動きを減らす設定では、スライド・拡大・リングの代わりに短いクロスフェードにする
+   （フィードバック自体は残す。押下の scale は小さく前庭に影響しないため維持） */
+@media (prefers-reduced-motion: reduce) {
+  .fx-ring,
+  .fx-ring2 {
+    display: none;
+  }
+  .fx-card {
+    animation:
+      xfade-in 0.15s ease both,
+      xfade-out 0.2s ease 1.1s forwards;
+  }
+  .fx-toast {
+    animation:
+      xfade-in 0.15s ease both,
+      xfade-out 0.2s ease 1.6s forwards;
+  }
+  .fx-check-path {
+    animation-duration: 0.01ms;
+    animation-delay: 0s;
+  }
+  .cs-list {
+    animation: xfade-in 0.12s ease;
+  }
+  #help-dialog[open] {
+    animation: xfade-in 0.15s ease;
+  }
+  #help-dialog.closing[open] {
+    animation: xfade-out 0.15s ease forwards;
+  }
+  .bar-fill {
+    transition: none;
+  }
+}

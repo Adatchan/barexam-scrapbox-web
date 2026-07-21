@@ -1,0 +1,176 @@
+// =============================================================================
+// PDF の科目別ページ抽出・先頭ページ判定（PDF.js・DOM非依存）
+//
+// 予備試験は科目グループPDF（憲法・行政法 など）や全科目まとめた出題の趣旨
+// PDFで公表されるため、個別科目で切り出すには各科目の開始ページを特定する
+// 必要がある。各科目の本文は「［憲法］」「［行政法］」のような角括弧見出しが
+// ページ先頭に置かれるので、それを手掛かりにページ範囲を求める。
+// 短答ダウンローダー（tantou.js）と論文コンバーター（app.js）が共有する。
+// =============================================================================
+const PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379";
+let _pdfjsPromise = null;
+export function loadPdfjs() {
+  if (!_pdfjsPromise)
+    _pdfjsPromise = (async () => {
+      const mod = await import(`${PDFJS_CDN}/pdf.min.mjs`);
+      mod.GlobalWorkerOptions.workerSrc = `${PDFJS_CDN}/pdf.worker.min.mjs`;
+      return mod;
+    })();
+  return _pdfjsPromise;
+}
+
+// 初回クリック時のコールドスタート（pdf.min.mjs と pdf.worker.min.mjs を
+// 都度CDNから取得＝各~600KB）を隠すための先読み。アイドル時にバックグラウンドで
+// 本体をロードし、worker スクリプトもHTTPキャッシュに温めておく。クリック時には
+// ロード済みになる。データ節約／低速回線では無駄DLを避けてスキップする。
+// parser.js も同一CDN URLを import するため、ここで温めれば共有される。
+let _warmed = false;
+export function warmupPdfjs() {
+  if (_warmed || navigator.connection?.saveData) return;
+  _warmed = true;
+  const start = () => {
+    loadPdfjs().catch(() => {}); // 本体import（失敗は黙殺。本番取得時に再試行）
+    // worker スクリプトをHTTPキャッシュに温める（getDocument 時に即使える）
+    fetch(`${PDFJS_CDN}/pdf.worker.min.mjs`).catch(() => {});
+  };
+  if ("requestIdleCallback" in window)
+    requestIdleCallback(start, { timeout: 3000 });
+  else setTimeout(start, 1200);
+}
+
+const nosp = (s) => s.replace(/[\s　]+/g, "");
+
+// 扉ページ（「論文式試験問題集［経済法］」のような科目名だけの中央寄せ
+// ページ）を本文ページと区別する閾値。これ以下の文字数なら扉・白紙とみなす。
+// 扉(最長でも約24字)と本文(最短でも約200字)の間には十分な開きがある。
+const DOORPAGE_MAX_LEN = 40;
+
+// ページ先頭帯（上端から30%）のテキストを連結して空白除去した配列を返す。
+// 科目見出しは必ずページ先頭にあるため、本文中の角括弧（［No.１］等）を
+// 誤検出しないよう先頭帯に絞る。
+// ただし選択科目PDFは各科目が扉ページ（科目名のみ・中央寄せ）から始まり、
+// 上端帯には文字が無いため top では拾えない。この扉を境界に使わないと前の
+// 科目の末尾に次科目の扉が混入する。そこで文字数が極端に少ないページ
+// （扉・白紙）に限り全文を見出し判定の対象にする。
+async function pageTopTexts(pdf) {
+  const out = [];
+  for (let pn = 1; pn <= pdf.numPages; pn++) {
+    const page = await pdf.getPage(pn);
+    const H = page.getViewport({ scale: 1 }).height;
+    const items = (await page.getTextContent()).items.filter((i) => i.str);
+    const all = nosp(items.map((i) => i.str).join(""));
+    if (all.length <= DOORPAGE_MAX_LEN) {
+      out.push(all); // 扉・白紙ページは全文で見出しを拾う
+      continue;
+    }
+    const top = items
+      .filter((i) => i.transform[5] > H * 0.7)
+      .sort((a, b) => b.transform[5] - a.transform[5] || a.transform[4] - b.transform[4])
+      .map((i) => i.str)
+      .join("");
+    out.push(nosp(top));
+  }
+  return out;
+}
+
+// 角括弧見出し ［name］（全角／半角の閉じ括弧を許容）がテキストに含まれるか
+const hasHeader = (text, nameNosp) =>
+  text.includes(`［${nameNosp}］`) ||
+  text.includes(`［${nameNosp}]`) ||
+  text.includes(`[${nameNosp}]`);
+
+const Q_MARKER_RE = /〔第[0-9０-９一二三四五六七八九十]+問〕/;
+
+// ── 解析結果のPDF単位キャッシュ ──────────────────────────────────────────
+// 予備の出題の趣旨（全科目まとめた1PDF）や科目グループの問題PDFは、同一年度で
+// 科目を変えても同じPDFを読み直すことになる。ページ先頭テキスト（重い）と
+// 本文開始ページの抽出結果を cacheKey（通常はPDFのURL）単位で再利用し、別科目
+// への切替時の再パースを避ける。容量は控えめに（tops は短い文字列配列で軽量）。
+const topsCache = new Map(); // cacheKey -> string[]（各ページの先頭テキスト）
+const firstPageCache = new Map(); // cacheKey -> number（本文開始ページ）
+const PARSE_CACHE_MAX = 8;
+
+function lruGet(map, key) {
+  if (!key || !map.has(key)) return undefined;
+  const v = map.get(key);
+  map.delete(key);
+  map.set(key, v); // 末尾＝最近使用
+  return v;
+}
+function lruPut(map, key, val) {
+  if (!key) return;
+  map.delete(key);
+  map.set(key, val);
+  while (map.size > PARSE_CACHE_MAX) map.delete(map.keys().next().value);
+}
+
+// ページ先頭テキスト配列を取得（cacheKey があれば再利用・保存）
+async function getPageTopTexts(pdfBytes, cacheKey) {
+  const hit = lruGet(topsCache, cacheKey);
+  if (hit) return hit;
+  const pdfjs = await loadPdfjs();
+  const pdf = await pdfjs.getDocument({ data: pdfBytes }).promise;
+  const tops = await pageTopTexts(pdf);
+  await pdf.destroy();
+  lruPut(topsCache, cacheKey, tops);
+  return tops;
+}
+
+// 最初に設問〔第○問〕を含むページ番号（1始まり）。無ければ1（＝除去しない）。
+// 表紙・白紙・章扉など情報量のない先頭ページを除くために使う。
+// cacheKey を渡すと結果を PDF 単位でキャッシュする。
+export async function firstContentPage(pdfBytes, cacheKey) {
+  const hit = lruGet(firstPageCache, cacheKey);
+  if (hit !== undefined) return hit;
+  const pdfjs = await loadPdfjs();
+  const pdf = await pdfjs.getDocument({ data: pdfBytes }).promise;
+  let result = 1;
+  for (let pn = 1; pn <= pdf.numPages; pn++) {
+    const text = (await pdf.getPage(pn))
+      .getTextContent()
+      .then((c) => c.items.map((i) => i.str).join(""));
+    if (Q_MARKER_RE.test(await text)) {
+      result = pn;
+      break;
+    }
+  }
+  await pdf.destroy();
+  lruPut(firstPageCache, cacheKey, result);
+  return result;
+}
+
+// 科目別のページ範囲 [開始, 終了]（1始まり・両端含む）を返す。
+//   targetHeaders: 対象科目の見出し候補（例: ["憲法"]、選択科目なら複数）
+//   allHeaders:    境界判定に使う全科目見出し（次の科目の開始＝対象の終端）
+// 対象見出しが無ければ null（その年度・PDFに無い科目）。
+export async function findSubjectPageRange(
+  pdfBytes,
+  targetHeaders,
+  allHeaders,
+  cacheKey,
+) {
+  const tops = await getPageTopTexts(pdfBytes, cacheKey);
+  const n = tops.length;
+
+  const targetN = targetHeaders.map(nosp);
+  const otherN = allHeaders.map(nosp).filter((h) => !targetN.includes(h));
+
+  let start = -1;
+  for (let i = 0; i < n; i++) {
+    if (targetN.some((h) => hasHeader(tops[i], h))) {
+      start = i + 1;
+      break;
+    }
+  }
+  if (start === -1) return null;
+
+  let end = n;
+  // 開始ページの次ページ以降で、対象以外の科目見出しが現れたら手前で区切る
+  for (let idx = start; idx < n; idx++) {
+    if (otherN.some((h) => hasHeader(tops[idx], h))) {
+      end = idx; // tops[idx] はページ idx+1 → 終端はその手前の idx ページ
+      break;
+    }
+  }
+  return [start, end];
+}

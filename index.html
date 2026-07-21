@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <!--
+      CSP（GitHub Pages はレスポンスヘッダを設定できないため meta で指定）:
+      - script-src の sha256-… は下部のインラインスクリプト（エラー表示）のハッシュ。
+        インラインスクリプトを1文字でも変更したら再計算して両HTMLを更新すること:
+          node -e 'const{readFileSync}=require("node:fs");const{createHash}=require("node:crypto");const m=/<script>([\s\S]*?)<\/script>/.exec(readFileSync("index.html","utf8"));console.log("sha256-"+createHash("sha256").update(m[1],"utf8").digest("base64"))'
+      - connect-src の workers.dev は moj.js の WORKER_URL。変更時はここも更新すること。
+      - worker-src blob: は PDF.js がクロスオリジンの worker を blob 経由で包むために必要。
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+        script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'sha256-QvZO38DsH2SfqnShNHlfpvRBHwBW2zRZD3QMj1UZkCI=';
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        font-src 'self' https://fonts.gstatic.com;
+        img-src 'self' data:;
+        connect-src 'self' https://shihoshiken-proxy.adachiyuki0409.workers.dev https://cdnjs.cloudflare.com;
+        worker-src 'self' blob:;
+        child-src 'self' blob:;
+        object-src 'none';
+        base-uri 'none';
+        form-action 'none'"
+    />
+    <meta name="theme-color" content="#004679" />
+    <meta name="color-scheme" content="light" />
+    <meta
+      name="description"
+      content="司法試験論文式の試験問題・出題の趣旨・採点実感を、法務省ウェブの公表PDFからテキストに変換する非公式ツール"
+    />
+    <meta property="og:title" content="しほしけコンバーター（β版）" />
+    <meta
+      property="og:description"
+      content="司法試験論文式の試験問題・出題の趣旨・採点実感を、法務省ウェブの公表PDFからテキストに変換する非公式ツール"
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://adatchan.github.io/barexam-scrapbox-web/"
+    />
+    <title>しほしけコンバーター（β版）– 司法試験論文式過去問テキスト変換</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css?v=20260712.0935" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="hero">
+        <div class="hero-top">
+          <h1>しほしけコンバーター<span class="beta">（β版）</span></h1>
+          <button id="help" class="btn-help" type="button">
+            <span class="help-badge" aria-hidden="true">?</span>使い方・FAQ
+          </button>
+        </div>
+        <p class="subtitle">
+          司法試験論文式の試験問題・出題の趣旨・採点実感を、法務省ウェブの公表PDFからテキストに変換します
+        </p>
+        <p class="subtitle" style="margin-top: 6px">
+          短答式（司法試験・予備試験）の問題・正答PDFを年度別に保存したい場合は
+          <a href="./tantou.html">しほしけ短答ダウンローダー</a> をどうぞ。
+        </p>
+      </header>
+
+      <section class="news" aria-label="更新情報">
+        <h2 class="news-title">更新情報</h2>
+        <ul id="news-list" class="news-list"></ul>
+      </section>
+
+      <dialog id="help-dialog" aria-label="ヘルプ">
+        <div class="help-head">
+          <h2>ヘルプ（よくある質問）</h2>
+          <button id="help-close" class="btn-secondary" type="button">
+            閉じる
+          </button>
+        </div>
+
+        <details open>
+          <summary>このツールは何ですか？</summary>
+          <p>
+            司法試験論文式の「試験問題」「出題の趣旨」「採点実感」を、法務省ウェブサイトで公表されているPDFから自動で抽出してテキスト化する、法務省非公式の個人開発ツールです。処理はすべてブラウザ内で行われ、登録やデータ収集はありません。
+          </p>
+        </details>
+
+        <details>
+          <summary>基本的な使い方は？</summary>
+          <p>
+            年度・科目・種類・出力形式を選んで「変換実行」を押すと、結果欄にテキストが表示されます。「結果をコピー」でクリップボードへ、「.txt 保存」でファイルとして保存できます。
+          </p>
+        </details>
+
+        <details>
+          <summary>対応している年度・科目は？</summary>
+          <p>
+            平成22年から最新年度までの論文式です。科目は基本7科目（憲法・行政法・民法・商法・民訴・刑法・刑訴）と、選択科目のうち経済法・労働法・倒産法（各第１問・第２問）に対応しています。
+          </p>
+        </details>
+
+        <details>
+          <summary>予備試験にも対応していますか？</summary>
+          <p>
+            画面上部の「試験」で予備試験に切り替えると、論文式の試験問題と出題の趣旨を、科目別の全文テキスト変換（ノーマル／Scrapbox記法）と、科目別の原典PDF保存の両方で利用できます（平成23年〜最新年度）。予備試験は科目をまとめたPDF（憲法・行政法 など）で公表され、出題の趣旨も全科目を1つにまとめたPDFですが、本ツールが選択した科目だけを自動で切り出します。採点実感はありません。なお一部の年度は趣旨が画像化されたPDFでテキストを抽出できないため、その場合はテキスト変換ではなくPDF保存をご利用ください。短答式は
+            <a href="./tantou.html">しほしけ短答ダウンローダー</a>
+            が司法試験・予備試験の両方に対応しています。
+          </p>
+        </details>
+
+        <details>
+          <summary>新しい年度はいつ使えるようになりますか？</summary>
+          <p>
+            毎週月曜の朝に法務省ウェブサイトを自動巡回しています。試験問題（例年8月頃）、出題の趣旨・採点実感（例年9〜11月頃）が法務省ウェブに掲載されると、1週間以内に自動で追加され、「更新情報」欄でお知らせします。
+          </p>
+        </details>
+
+        <details>
+          <summary>出力形式の「ノーマル」と「Scrapbox記法」の違いは？</summary>
+          <p>
+            ノーマルは装飾のないプレーンテキストです。Scrapbox記法を選ぶと、見出しが [* ]・[** ] で装飾され、#司法試験 などのタグ行が付きます。どちらも冒頭に出典（法務省の原典PDFのURL）が入ります。
+          </p>
+        </details>
+
+        <details>
+          <summary>「原典PDF保存」は何をしますか？</summary>
+          <p>
+            選択中の年度・科目・種類について、法務省の原典PDFから該当するページだけを抜き出したPDFを保存します。各ページの右下にファイル名、左下に出典と、試験問題・出題の趣旨・採点実感それぞれの原典PDFへのクリック可能なリンクを印字します。変換実行をしていなくても、押せば自動で取得・処理されます。
+          </p>
+        </details>
+
+        <details>
+          <summary>「一式zip保存」は何をしますか？</summary>
+          <p>
+            選択中の年度・科目について、試験問題・出題の趣旨・採点実感の3点の抜粋PDFを「[年度]司法試験[科目]一式」フォルダにまとめ、zipで保存します。処理済みの種類は再利用されるため、変換実行のあとに押すと速く完了します。未掲載の種類がある年度では、取得できた分だけが入ります。
+          </p>
+        </details>
+
+        <details>
+          <summary>「LLM用に保存」は何をしますか？</summary>
+          <p>
+            選択中の年度・科目について、試験問題・出題の趣旨・採点実感を1つのMarkdownファイルにまとめて保存します。冒頭に「これは司法試験論文式の過去問である」というメタ情報と出典（原典PDFのURL）が入るので、ChatGPTやClaudeなどのLLMにそのまま貼り付け・添付して、答案の添削や解説を依頼するのに使えます。
+          </p>
+        </details>
+
+        <details>
+          <summary>選択科目の採点実感で、第１問と第２問の内容が同じになります</summary>
+          <p>
+            原典の採点実感が問ごとに分かれていない年度・科目（選択科目や平成期の多く）では、科目全体（第１問・第２問の両方を含む）を出力します。原典の構造上の仕様です。
+          </p>
+        </details>
+
+        <details>
+          <summary>抜粋PDFの先頭ページに前の問題の終わりが入っています</summary>
+          <p>
+            抜粋はページ単位で行うため、同じページ内で前の問題が終わり次の問題が始まっている場合、その部分が含まれます。
+          </p>
+        </details>
+
+        <details>
+          <summary>出力が原典と違う気がします</summary>
+          <p>
+            PDF解析による自動変換のため、改行位置や段落の区切りなどに誤りが生じることがあります。学習には原典PDFをあわせてご確認ください。おかしな箇所があれば
+            <a
+              href="https://github.com/Adatchan/barexam-scrapbox-web/issues"
+              target="_blank"
+              rel="noopener"
+              >GitHub の Issue</a
+            >
+            からお知らせください。
+          </p>
+        </details>
+
+        <details>
+          <summary>著作権は大丈夫ですか？学内などで共有してもよいですか？</summary>
+          <p>
+            法務省ウェブサイトのコンテンツには「公共データ利用規約（PDL1.0）」が適用されており、出典の記載と加工した旨の表示を条件に、複製・共有・加工が認められています。本ツールの出力には出典・加工表示が自動で付くので、そのまま保持して共有してください。本ツール自体の共有も自由です。
+          </p>
+        </details>
+      </dialog>
+
+      <section class="form">
+        <div class="field">
+          <label>試験</label>
+          <div class="radio-group">
+            <label class="radio">
+              <input type="radio" name="exam" value="shihou" checked />
+              司法試験
+            </label>
+            <label class="radio">
+              <input type="radio" name="exam" value="yobi" />
+              予備試験
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="year">年度</label>
+          <select id="year"></select>
+        </div>
+
+        <div class="field">
+          <label for="subject">科目</label>
+          <select id="subject"></select>
+        </div>
+
+        <div class="field" id="type-field">
+          <label for="type">種類</label>
+          <select id="type">
+            <option value="試験問題">試験問題</option>
+            <option value="出題の趣旨">出題の趣旨</option>
+            <option value="採点実感">採点実感</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- ① テキストに変換 / そのまま保存 の2レーン（司法・予備で共通）-->
+      <div class="lanes" id="actions">
+        <div class="lane lane-convert">
+          <div class="lane-title">テキストに変換</div>
+          <div class="lane-sub">このツールのメイン機能です</div>
+          <div class="field lane-format" id="format-field">
+            <label>出力形式</label>
+            <div class="radio-group">
+              <label class="radio">
+                <input type="radio" name="format" value="plain" checked />
+                ノーマル
+              </label>
+              <label class="radio">
+                <input type="radio" name="format" value="scrapbox" />
+                Scrapbox記法
+              </label>
+            </div>
+          </div>
+          <button id="run" class="btn-primary" type="button">変換実行</button>
+          <div class="result-actions">
+            <span class="result-hint">変換すると使えます</span>
+            <button id="copy" class="btn-secondary" type="button" disabled>
+              結果をコピー
+            </button>
+            <button id="download" class="btn-secondary" type="button" disabled>
+              .txt 保存
+            </button>
+          </div>
+        </div>
+        <div class="lane lane-save">
+          <div class="lane-head">
+            <span class="lane-title-2">そのまま保存</span>
+            <span class="badge">変換不要</span>
+          </div>
+          <div class="lane-sub">変換せず、押すだけで保存できます</div>
+          <div class="tiles">
+            <button
+              id="source"
+              class="tile"
+              type="button"
+              title="選択中の種類の該当ページだけを原典PDFから抜き出して保存します（未変換でも自動で取得します）"
+            >
+              <span class="tile-title">原典PDF保存</span>
+              <span class="tile-desc">該当ページを原典から抜き出して保存</span>
+            </button>
+            <button
+              id="source-zip"
+              class="tile"
+              type="button"
+              title="原典PDFを一括で保存します（処理済みの種類は再利用されます）"
+            >
+              <span class="tile-title">一式zip保存</span>
+              <span class="tile-desc" id="source-zip-desc"
+                >問題・趣旨・採点実感の3点をzipで</span
+              >
+            </button>
+            <button
+              id="llm"
+              class="tile"
+              type="button"
+              title="各種類を、メタ情報・出典付きの1つのMarkdownにまとめて保存します（LLMに渡す用）"
+            >
+              <span class="tile-title">LLM用に保存</span>
+              <span class="tile-desc">出典付き1つのMarkdownにまとめる</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <section class="progress" aria-live="polite">
+        <div
+          id="bar"
+          class="bar"
+          role="progressbar"
+          aria-label="進捗"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="0"
+        >
+          <div id="bar-fill" class="bar-fill"></div>
+        </div>
+        <div id="status" class="status">待機中</div>
+      </section>
+
+      <section class="output">
+        <div class="tabs" role="tablist">
+          <button
+            class="tab active"
+            data-target="result"
+            type="button"
+            role="tab"
+            aria-selected="true"
+          >
+            結果
+          </button>
+          <button
+            class="tab"
+            data-target="log"
+            type="button"
+            role="tab"
+            aria-selected="false"
+          >
+            ログ
+          </button>
+        </div>
+        <pre id="result" class="pane active" role="tabpanel"></pre>
+        <pre id="log" class="pane" role="tabpanel"></pre>
+      </section>
+
+      <footer class="foot">
+        <p class="disclaimer">
+          本サービスは法務省非公式の個人開発ツールです。出力は
+          <a
+            href="https://www.moj.go.jp/hisho06_00280.html"
+            target="_blank"
+            rel="noopener"
+            >法務省ウェブサイト</a
+          >掲載のコンテンツを加工して作成したものであり、変換の正確性は保証されません。学習の際は原典PDFをご確認ください。
+        </p>
+      </footer>
+    </main>
+
+    <!-- モジュール初期化失敗や想定外のエラーをログ欄に表示する（調査支援） -->
+    <script>
+      (function () {
+        function report(msg) {
+          var log = document.getElementById("log");
+          if (log) log.textContent += "[NG] 内部エラー: " + msg + "\n";
+          var status = document.getElementById("status");
+          if (status) {
+            status.textContent = "エラー";
+            status.className = "status error";
+          }
+        }
+        window.addEventListener("error", function (e) {
+          report(e.message || "スクリプトの読み込みに失敗しました");
+        });
+        window.addEventListener("unhandledrejection", function (e) {
+          var r = e.reason;
+          report((r && r.message) || String(r));
+        });
+      })();
+    </script>
+
+    <!-- PDF.js (legacy build for wide compatibility)
+         integrity はこのバージョンのファイルの SHA-384。バージョンを上げたら再計算:
+           curl -sSL <URL> | openssl dgst -sha384 -binary | openssl base64 -A -->
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs"
+      integrity="sha384-uwJM5C0hGZH5Ed/vHx4Ht1PUd8ABIDVIcLbHydZOdFL5eTUG8Jdr32xNVIyn0kYH"
+      crossorigin="anonymous"
+      type="module"
+    ></script>
+    <script type="module" src="./app.js?v=20260712.0935"></script>
+  </body>
+</html>

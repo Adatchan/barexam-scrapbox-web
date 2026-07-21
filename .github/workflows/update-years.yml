@@ -1,0 +1,62 @@
+# 法務省ウェブを週1回巡回し、新年度の司法試験ページを検出したら
+# years.js を自動更新してデプロイするワークフロー。
+# （試験問題は例年8月頃、出題の趣旨・採点実感は9〜11月頃に掲載される）
+name: 新年度の自動取り込み
+
+on:
+  schedule:
+    # 毎週月曜 09:00 JST (00:00 UTC)
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  update-years:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      # 事前変換スクリプトが使う pdfjs-dist を入れる
+      - name: 依存パッケージをインストール
+        run: npm ci
+
+      - name: 法務省ページを巡回して years.js / news.js を更新
+        run: node scripts/update-years.mjs
+
+      # 更新後の年度表で全年度×科目×種類を事前変換し converted/ を再生成する。
+      # 既存年度（不変PDF）は同一出力＝差分なし。新年度・新規掲載分のみ差分が出る。
+      # parser.js/format.js を改修した場合もここで自動的に再生成・反映される。
+      - name: 事前変換データ（converted/）を生成
+        run: node scripts/precompute.mjs
+
+      - name: 変更があればコミットしてプッシュ
+        run: |
+          git add years.js news.js yobi-years.js converted
+          if git diff --cached --quiet; then
+            echo "変更なし"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: 年度対応表・更新情報・事前変換データを自動更新"
+          git push
+
+      # 全年度×全種類で PDF リンク探索が機能するか検査する。
+      # 法務省サイトの構造変更や中継 Worker の障害をここで検知する
+      - name: リンク探索の健全性チェック
+        run: node scripts/check-links.mjs
+
+      # リポジトリに60日間コミットがないと GitHub が定期実行を自動停止する
+      # ため、実行のたびに再有効化してタイマーをリセットする
+      - name: 定期実行の自動停止を防止
+        if: always()
+        run: gh workflow enable update-years.yml --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}

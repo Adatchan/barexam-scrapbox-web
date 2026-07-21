@@ -1,0 +1,10 @@
+#!/bin/sh
+# アプリ資産（JSモジュール・CSS）が変更されたら index.html の
+# キャッシュバスター（?v=）を自動更新してコミットに含める。
+# 有効化: git config core.hooksPath .githooks
+# ルート直下の .js / .css がブラウザ配信物のすべて（scripts/ や worker/ は
+# 配信されないため対象外）。個別列挙だと追加モジュールが漏れるので全体で見る。
+if git diff --cached --name-only |
+  grep -qE '^[A-Za-z0-9_-]+\.(js|css)$'; then
+  node scripts/bump-version.mjs && git add index.html tantou.html
+fi
