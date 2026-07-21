@@ -23,6 +23,7 @@ export const YEAR_URL_MAP = {
   r5: "https://www.moj.go.jp/jinji/shihoushiken/jinji08_00198.html",
   r6: "https://www.moj.go.jp/jinji/shihoushiken/jinji08_00241.html",
   r7: "https://www.moj.go.jp/jinji/shihoushiken/jinji08_00267.html",
+  r8: "https://www.moj.go.jp/jinji/shihoushiken/jinji08_00295.html",
 };
 
 // 結果ページ（出題の趣旨・採点実感の掲載元）

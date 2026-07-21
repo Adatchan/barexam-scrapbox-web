@@ -26,6 +26,7 @@ export const YOBI_YEAR_URL_MAP = {
   r5: "https://www.moj.go.jp/jinji/shihoushiken/jinji07_00151.html",
   r6: "https://www.moj.go.jp/jinji/shihoushiken/jinji07_00228.html",
   r7: "https://www.moj.go.jp/jinji/shihoushiken/jinji07_00287.html",
+  r8: "https://www.moj.go.jp/jinji/shihoushiken/jinji07_00317.html",
 };
 
 // 結果ページ（短答式の正解及び配点・論文式の出題の趣旨の掲載元）
