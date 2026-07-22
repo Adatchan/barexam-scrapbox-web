@@ -89,11 +89,17 @@ export function alarmError(title, sub = "", color = "#dc2626") {
   s.className = "fx-sub";
   s.textContent = sub;
 
-  card.append(icon, t, s);
+  // 典型的な原因（最新年度の未公表・画像PDF）を示す補足
+  const hint = document.createElement("div");
+  hint.className = "fx-hint";
+  hint.textContent =
+    "資料が未公表か、画像PDF等の仕様により処理できない可能性があります。";
+
+  card.append(icon, t, s, hint);
   ov.appendChild(card);
   document.body.appendChild(ov);
-  // エラー文を読めるよう成功時より長めに表示する
-  _ovTimer = setTimeout(() => ov.remove(), 2600);
+  // エラー文と補足を読めるよう成功時より長めに表示する
+  _ovTimer = setTimeout(() => ov.remove(), 4200);
 }
 
 // 下部トースト（小さな確認メッセージ）。

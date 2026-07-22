@@ -959,10 +959,25 @@ textarea {
 }
 
 .fx-card-err {
+  width: 260px;
   animation:
     ov-pop 0.35s ease both,
     fx-shake 0.4s ease 0.42s,
-    ov-out 0.38s ease 2.2s forwards;
+    ov-out 0.38s ease 3.8s forwards;
+}
+
+.fx-card-err .fx-sub {
+  overflow-wrap: anywhere; /* 長いURLもカード内で折り返す */
+}
+
+.fx-hint {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #eef1f6;
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .fx-x-path {
