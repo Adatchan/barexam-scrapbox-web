@@ -246,6 +246,19 @@ textarea {
   color: var(--ink);
 }
 
+/* ヘルプのグループ見出し（はじめに／うまくいかないとき 等） */
+#help-dialog .help-group {
+  margin: 20px 0 2px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--primary);
+}
+
+#help-dialog .help-group:first-of-type {
+  margin-top: 6px;
+}
+
 #help-dialog details {
   border-bottom: 1px solid var(--line);
   padding: 8px 0;
