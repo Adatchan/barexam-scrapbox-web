@@ -815,6 +815,28 @@ textarea {
   color: var(--primary);
 }
 
+.foot-links {
+  margin: 8px 0 0;
+  font-size: 0.76rem;
+}
+
+.repo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.repo-link:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.gh-icon {
+  flex: none;
+}
+
 .muted {
   color: var(--muted);
 }
