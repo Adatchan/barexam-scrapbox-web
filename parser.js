@@ -34,6 +34,22 @@ export function setPdfjs(lib) {
   _injectedPdfjs = lib;
 }
 
+// getDocument に渡す追加オプション。CMap（CID フォントの文字コード表）が
+// 無いと、埋め込みフォントの種類によってはテキストを1文字も取り出せない
+// （例: 平成30年 民事系の採点実感）。ブラウザでは pdfjs-dist の npm 配信
+// （jsDelivr）から取得する。Node（scripts/precompute.mjs）は同じ資産が
+// node_modules にあるので setPdfDocOptions() でローカルパスを注入する。
+const PDFJS_ASSETS = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}`;
+let _pdfDocOptions = {
+  cMapUrl: `${PDFJS_ASSETS}/cmaps/`,
+  cMapPacked: true,
+  standardFontDataUrl: `${PDFJS_ASSETS}/standard_fonts/`,
+};
+
+export function setPdfDocOptions(opts) {
+  _pdfDocOptions = { ..._pdfDocOptions, ...opts };
+}
+
 async function loadPdfjs() {
   if (_injectedPdfjs) return _injectedPdfjs;
   if (_pdfjsPromise) return _pdfjsPromise;
@@ -63,7 +79,8 @@ const EXTRACT_CONCURRENCY = 5;
 
 export async function extractBoxes(pdfBytes, onProgress) {
   const pdfjsLib = await loadPdfjs();
-  const pdf = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
+  const pdf = await pdfjsLib.getDocument({ data: pdfBytes, ..._pdfDocOptions })
+    .promise;
   const n = pdf.numPages;
   const perPage = new Array(n); // ページ(0始まり) → そのページの boxes[]
   let done = 0;

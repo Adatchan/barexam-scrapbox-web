@@ -18,11 +18,22 @@
 // =============================================================================
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
-import { setPdfjs } from "../parser.js";
+import { setPdfjs, setPdfDocOptions } from "../parser.js";
 
 setPdfjs(pdfjs); // ブラウザの CDN ロードの代わりに pdfjs-dist を注入
+
+// CMap・標準フォントはブラウザでは CDN から取るが、Node では node_modules の
+// 同じ資産を使う（無いと一部PDFからテキストを抽出できない）
+const pdfjsDir = createRequire(import.meta.url)
+  .resolve("pdfjs-dist/package.json")
+  .replace(/package\.json$/, "");
+setPdfDocOptions({
+  cMapUrl: `${pdfjsDir}cmaps/`,
+  standardFontDataUrl: `${pdfjsDir}standard_fonts/`,
+});
 
 const { buildEntry } = await import("../convert.js");
 const { buildYobiEntry } = await import("../yobi-convert.js");

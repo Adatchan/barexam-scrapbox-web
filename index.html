@@ -13,6 +13,9 @@
           node -e 'const{readFileSync}=require("node:fs");const{createHash}=require("node:crypto");const m=/<script>([\s\S]*?)<\/script>/.exec(readFileSync("index.html","utf8"));console.log("sha256-"+createHash("sha256").update(m[1],"utf8").digest("base64"))'
       - connect-src の workers.dev は moj.js の WORKER_URL。変更時はここも更新すること。
       - worker-src blob: は PDF.js がクロスオリジンの worker を blob 経由で包むために必要。
+      - connect-src の jsDelivr は PDF.js の CMap・標準フォント（pdfjs-dist の
+        cmaps/ と standard_fonts/）の取得先。無いと一部年度のPDFから
+        テキストを抽出できない。
     -->
     <meta
       http-equiv="Content-Security-Policy"
@@ -21,7 +24,7 @@
         style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
         font-src 'self' https://fonts.gstatic.com;
         img-src 'self' data:;
-        connect-src 'self' https://shihoshiken-proxy.adachiyuki0409.workers.dev https://cdnjs.cloudflare.com;
+        connect-src 'self' https://shihoshiken-proxy.adachiyuki0409.workers.dev https://cdnjs.cloudflare.com https://cdn.jsdelivr.net;
         worker-src 'self' blob:;
         child-src 'self' blob:;
         object-src 'none';

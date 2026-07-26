@@ -242,23 +242,36 @@ export async function fetchSaitenPdfUrl(resultsUrl, systemName, sectionKeyword) 
     const subUrl = resolveUrl(subM[1], resultsUrl);
     const subHtml = await fetchHtml(subUrl);
     const target = sectionKeyword || systemName;
-    const escaped = subjectPattern(target);
+    const targetRe = new RegExp(subjectPattern(target));
 
-    let m2 = new RegExp(`href="([^"#]+\\.pdf)"[^>]*>[^<]*${escaped}`).exec(
-      subHtml,
-    );
-    if (m2) return resolveUrl(m2[1], subUrl);
+    // サブページの PDF リンクを（href, リンク文字列）で列挙して選ぶ。
+    // 平成23年のように「採点実感等に関する意見」（本体）と「採点実感等に
+    // 関する意見（公法系科目第１問）（補足）」が並ぶ年度があり、単純な
+    // 前方一致だと補足の方を掴んでしまうため、補足・訂正の類は本体の
+    // 候補が無いときだけ使う。
+    const links = [...subHtml.matchAll(/href="([^"#]+\.pdf)"[^>]*>([^<]*)</g)]
+      .map(([, href, text]) => ({ href, text }))
+      .filter(({ text }) => text.trim());
+    const isSub = ({ text }) => /補足|訂正|正誤/.test(text);
+    const hitsTarget = ({ text }) => targetRe.test(text);
+    const isSaiten = ({ text }) => text.includes("採点実感");
+    const isSelect = ({ text }) => text.includes("選択科目");
 
-    if (sectionKeyword) {
-      m2 = /href="([^"#]+\.pdf)"[^>]*>[^<]*選択科目/.exec(subHtml);
-      if (m2) return resolveUrl(m2[1], subUrl);
+    // 優先順位は従来どおり「科目名 → 選択科目まとめ → 採点実感 → 最初のPDF」で、
+    // それぞれ補足・訂正でないものを先に見る。
+    const pick = [
+      (l) => hitsTarget(l) && !isSub(l),
+      ...(sectionKeyword ? [(l) => isSelect(l) && !isSub(l)] : []),
+      (l) => isSaiten(l) && !isSub(l),
+      hitsTarget,
+      ...(sectionKeyword ? [isSelect] : []),
+      isSaiten,
+      () => true,
+    ];
+    for (const cond of pick) {
+      const hit = links.find(cond);
+      if (hit) return resolveUrl(hit.href, subUrl);
     }
-
-    m2 = /href="([^"#]+\.pdf)"[^>]*>[^<]*採点実感/.exec(subHtml);
-    if (m2) return resolveUrl(m2[1], subUrl);
-
-    m2 = /href="([^"#]+\.pdf)"/.exec(subHtml);
-    if (m2) return resolveUrl(m2[1], subUrl);
   }
 
   if (directM) return resolveUrl(directM[1], resultsUrl);

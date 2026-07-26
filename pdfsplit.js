@@ -8,6 +8,14 @@
 // 短答ダウンローダー（tantou.js）と論文コンバーター（app.js）が共有する。
 // =============================================================================
 const PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379";
+// CMap・標準フォント（parser.js と同じ理由。これが無いと埋め込みフォントに
+// よってはテキストを取り出せず、科目見出しからのページ範囲特定に失敗する）
+const PDFJS_ASSETS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379";
+export const PDF_DOC_OPTIONS = {
+  cMapUrl: `${PDFJS_ASSETS}/cmaps/`,
+  cMapPacked: true,
+  standardFontDataUrl: `${PDFJS_ASSETS}/standard_fonts/`,
+};
 let _pdfjsPromise = null;
 export function loadPdfjs() {
   if (!_pdfjsPromise)
@@ -109,7 +117,8 @@ async function getPageTopTexts(pdfBytes, cacheKey) {
   const hit = lruGet(topsCache, cacheKey);
   if (hit) return hit;
   const pdfjs = await loadPdfjs();
-  const pdf = await pdfjs.getDocument({ data: pdfBytes }).promise;
+  const pdf = await pdfjs.getDocument({ data: pdfBytes, ...PDF_DOC_OPTIONS })
+    .promise;
   const tops = await pageTopTexts(pdf);
   await pdf.destroy();
   lruPut(topsCache, cacheKey, tops);
@@ -123,7 +132,8 @@ export async function firstContentPage(pdfBytes, cacheKey) {
   const hit = lruGet(firstPageCache, cacheKey);
   if (hit !== undefined) return hit;
   const pdfjs = await loadPdfjs();
-  const pdf = await pdfjs.getDocument({ data: pdfBytes }).promise;
+  const pdf = await pdfjs.getDocument({ data: pdfBytes, ...PDF_DOC_OPTIONS })
+    .promise;
   let result = 1;
   for (let pn = 1; pn <= pdf.numPages; pn++) {
     const text = (await pdf.getPage(pn))
