@@ -8,6 +8,8 @@
 import {
   reEscape,
   nosp,
+  normSubject,
+  subjectPattern,
   SETSUMON_RE,
   STRUCTURE_MARKER_RE,
   DIALOGUE_RE,
@@ -493,14 +495,14 @@ export function parseShushiSection(boxes, systemName, qNum) {
 }
 
 export function parseShushiSectionSelect(boxes, sectionKeyword, qNum) {
-  const kwNosp = nosp(sectionKeyword);
-  const otherNosp = SELECT_SUBJECTS.map((s) => nosp(s)).filter(
+  const kwNosp = normSubject(sectionKeyword);
+  const otherNosp = SELECT_SUBJECTS.map((s) => normSubject(s)).filter(
     (s) => s !== kwNosp,
   );
 
   const isSubjectHeader = (b, nameNosp) => {
     const ts = b.text.trim();
-    return ts.length < 30 && nosp(ts).includes(nameNosp);
+    return ts.length < 30 && normSubject(ts).includes(nameNosp);
   };
 
   let secSi = boxes.findIndex((b) => isSubjectHeader(b, kwNosp));
@@ -537,7 +539,8 @@ export function parseShushiSectionSelect(boxes, sectionKeyword, qNum) {
 
   const skip = (b) => {
     const ts = b.text.trim();
-    return ts.length < 10 && kwNosp === nosp(ts);
+    // 科目名だけの扉行（「労働法」「国際関係法（公法系）」など）を落とす
+    return ts.length <= sectionKeyword.length + 2 && kwNosp === normSubject(ts);
   };
   const qBoxes = secBoxes.slice(qSi, qEi);
   return {
@@ -555,7 +558,7 @@ export function parseSaitenSection(
 ) {
   const qKanji = Q_KANJI[qNum];
   const target = sectionKeyword || systemName;
-  const escaped = reEscape(target);
+  const escaped = subjectPattern(target);
 
   // タイトルの書式は年度・科目で異なる:
   //   問別:     令和７年司法試験の採点実感（公法系科目第１問）
@@ -571,7 +574,7 @@ export function parseSaitenSection(
   // 表示ラベル（例: 公法系第１問（憲法））から科目名を取り出してフォールバックに使う
   const subjM = /（(.+)）/.exec(subjectLabel || "");
   if (subjM && subjM[1] !== target) {
-    patterns.push(new RegExp(`[（(]${reEscape(subjM[1])}[）)]`));
+    patterns.push(new RegExp(`[（(]${subjectPattern(subjM[1])}[）)]`));
   }
 
   for (const pattern of patterns) {

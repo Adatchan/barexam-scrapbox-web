@@ -21,8 +21,10 @@ import {
   findTantouAnswerPdfUrl,
 } from "../tantou-moj.js";
 import { findYobiRonbunPdfUrl, findYobiShushiPdfUrl } from "../yobi-moj.js";
+import { SELECT_SUBJECTS } from "../data.js";
 
-const SELECT_KEYWORDS = ["経済法", "労働法", "倒産法"];
+// 選択科目は8科目すべてを検査する（data.js の定義を単一の出典とする）
+const SELECT_KEYWORDS = SELECT_SUBJECTS;
 
 // 年度キー（h22, r1 など）を西暦に変換して最新年度を求める。
 // 最新年度は趣旨・採点実感などが未公表なだけの可能性が高いため、

@@ -7,7 +7,7 @@
 // =============================================================================
 import { YEAR_URL_MAP, RESULTS_URL_MAP } from "./years.js";
 import { SUBJECT_MAP, Q_KANJI, yearKeyToLabel } from "./data.js";
-import { nosp } from "./rules.js";
+import { normSubject } from "./rules.js";
 import {
   fetchPdf,
   fetchExamPdfUrl,
@@ -162,20 +162,28 @@ export async function buildEntry({ yearKey, subject, docType }, ctx) {
 
   // 選択科目の試験問題: セクションを絞り込む
   if (docType === "試験問題" && sectionKeyword) {
-    const kwNosp = nosp(sectionKeyword);
-    let secStart = boxes.findIndex(
-      (b) => nosp(b.text).includes(kwNosp) && isHeader(b),
-    );
-    if (secStart === -1)
-      secStart = boxes.findIndex((b) => nosp(b.text).includes(kwNosp));
+    const kwNosp = normSubject(sectionKeyword);
+    const direct = (i) => normSubject(boxes[i].text).includes(kwNosp);
+    // 「国際関係法（公法系）」のような長い科目名は、PDFのテキスト抽出で
+    // 「国際関係法」と「（公法系）」が別の片に分かれることがあるため、
+    // 直後の数片を連結したものでも照合する。
+    const near = (i) =>
+      normSubject(
+        boxes
+          .slice(i, i + 4)
+          .map((b) => b.text)
+          .join(""),
+      ).includes(kwNosp);
+    const hasKw = (i) => direct(i) || near(i);
+
+    let secStart = boxes.findIndex((b, i) => direct(i) && isHeader(b));
+    if (secStart === -1) secStart = boxes.findIndex((b, i) => direct(i));
+    if (secStart === -1) secStart = boxes.findIndex((b, i) => near(i));
     if (secStart === -1)
       throw new Error(`選択科目PDFに「${sectionKeyword}」が見つかりません。`);
     let secEnd = boxes.length;
     for (let i = secStart + 1; i < boxes.length; i++) {
-      if (
-        boxes[i].text.includes("論文式試験問題集") &&
-        !nosp(boxes[i].text).includes(kwNosp)
-      ) {
+      if (boxes[i].text.includes("論文式試験問題集") && !hasKw(i)) {
         secEnd = i;
         break;
       }

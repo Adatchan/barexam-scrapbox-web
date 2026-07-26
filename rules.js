@@ -14,6 +14,25 @@ export function nosp(s) {
   return s.replace(/[\s　]+/g, "");
 }
 
+// 科目名の照合用の正規化。空白を除くほか、半角括弧を全角に寄せる。
+// 「国際関係法（公法系）」のように括弧を含む科目名は、法務省ページの
+// リンク文字列や PDF 本文で半角括弧になっている場合があるため。
+export function normSubject(s) {
+  return nosp(s).replace(/\(/g, "（").replace(/\)/g, "）");
+}
+
+// 科目名を、括弧が全角・半角どちらでもあたる正規表現ソースに変換する
+// （normSubject と違い、正規化できない相手＝HTML文字列の検索に使う）。
+export function subjectPattern(s) {
+  return [...s]
+    .map((ch) => {
+      if (ch === "（" || ch === "(") return "[（(]";
+      if (ch === "）" || ch === ")") return "[）)]";
+      return reEscape(ch);
+    })
+    .join("");
+}
+
 // 設問見出し（〔設問〕〔設問１〕など。数字は全角・半角・省略を許容）
 export const SETSUMON_RE = /^〔設問[0-9０-９]*〕/;
 

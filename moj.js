@@ -6,7 +6,7 @@
 // 同じ Worker を経由するため、scripts/check-links.mjs が本番と同一の
 // コードパスを検査できる。
 // =============================================================================
-import { reEscape } from "./rules.js";
+import { reEscape, subjectPattern } from "./rules.js";
 
 export const WORKER_URL =
   "https://shihoshiken-proxy.adachiyuki0409.workers.dev";
@@ -180,7 +180,7 @@ export async function fetchShushiPdfUrl(resultsUrl, sectionKeyword) {
   const html = await fetchHtml(resultsUrl);
 
   if (sectionKeyword) {
-    const kw = reEscape(sectionKeyword);
+    const kw = subjectPattern(sectionKeyword);
     const p = new RegExp(
       `href="([^"#]+\\.pdf)"[^>]*>[^<]*(?:出題の趣旨[^<]*${kw}|${kw}[^<]*出題の趣旨)`,
     );
@@ -198,7 +198,7 @@ export async function fetchShushiPdfUrl(resultsUrl, sectionKeyword) {
   if (subM && sectionKeyword) {
     const subUrl = resolveUrl(subM[1], resultsUrl);
     const subHtml = await fetchHtml(subUrl);
-    const kw = reEscape(sectionKeyword);
+    const kw = subjectPattern(sectionKeyword);
     let m2 = new RegExp(`href="([^"#]+\\.pdf)"[^>]*>[^<]*${kw}`).exec(subHtml);
     if (m2) return resolveUrl(m2[1], subUrl);
     m2 = /href="([^"#]+\.pdf)"[^>]*>[^<]*選択科目/.exec(subHtml);
@@ -223,7 +223,7 @@ export async function fetchSaitenPdfUrl(resultsUrl, systemName, sectionKeyword) 
   const html = await fetchHtml(resultsUrl);
 
   if (sectionKeyword) {
-    const kw = reEscape(sectionKeyword);
+    const kw = subjectPattern(sectionKeyword);
     const p = new RegExp(
       `href="([^"#]+\\.pdf)"[^>]*>[^<]*(?:採点実感[^<]*${kw}|${kw}[^<]*採点実感)`,
     );
@@ -242,7 +242,7 @@ export async function fetchSaitenPdfUrl(resultsUrl, systemName, sectionKeyword) 
     const subUrl = resolveUrl(subM[1], resultsUrl);
     const subHtml = await fetchHtml(subUrl);
     const target = sectionKeyword || systemName;
-    const escaped = reEscape(target);
+    const escaped = subjectPattern(target);
 
     let m2 = new RegExp(`href="([^"#]+\\.pdf)"[^>]*>[^<]*${escaped}`).exec(
       subHtml,
