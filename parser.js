@@ -9,6 +9,7 @@ import {
   reEscape,
   nosp,
   normSubject,
+  hasMarker,
   subjectPattern,
   SETSUMON_RE,
   STRUCTURE_MARKER_RE,
@@ -206,7 +207,8 @@ function groupLinesIntoBlocks(lines) {
     const t = l.text.trim();
     if (/^【[^【】]+】$/.test(t)) return true;
     if (/^〔[^〔〕]+〕$/.test(t)) return true;
-    if (/^〔第[１２３]問〕/.test(t) && t.length < 120) return true;
+    // 「〔第 1 問〕」（半角数字・空白入り）の年度もあるため揺れを許容する
+    if (/^〔第\s*[１２３1-3]\s*問〕/.test(t) && t.length < 120) return true;
     if (SETSUMON_RE.test(t) && t.length < 120) return true;
     // 採点実感のセクションタイトル（句点で終わらないため、放置すると
     // 直後の本文と結合されてタイトル判定に失敗する年度がある）
@@ -300,12 +302,12 @@ function pageRangeOf(boxes) {
 
 // ─── 段落抽出（試験問題用、X 座標インデント判定） ───────────────────────
 export function parseParagraphs(boxes, startMarker, endMarker) {
-  const si = boxes.findIndex((b) => b.text.includes(startMarker));
+  const si = boxes.findIndex((b) => hasMarker(b.text, startMarker));
   if (si === -1)
     throw new Error(`開始マーカー「${startMarker}」が見つかりません。`);
   let ei = boxes.length;
   if (endMarker) {
-    const idx = boxes.findIndex((b) => b.text.includes(endMarker));
+    const idx = boxes.findIndex((b) => hasMarker(b.text, endMarker));
     if (idx !== -1) ei = idx;
   }
 
@@ -468,7 +470,7 @@ export function parseShushiSection(boxes, systemName, qNum) {
   const secBoxes = boxes.slice(secSi, secEi);
 
   const qMarker = `〔第${Q_KANJI[qNum]}問〕`;
-  const qSi = secBoxes.findIndex((b) => b.text.includes(qMarker));
+  const qSi = secBoxes.findIndex((b) => hasMarker(b.text, qMarker));
   if (qSi === -1)
     throw new Error(`「${qMarker}」が出題の趣旨PDF内に見つかりません。`);
 
@@ -476,7 +478,7 @@ export function parseShushiSection(boxes, systemName, qNum) {
   if (Q_KANJI[qNum + 1]) {
     const nxt = `〔第${Q_KANJI[qNum + 1]}問〕`;
     for (let i = qSi + 1; i < secBoxes.length; i++) {
-      if (secBoxes[i].text.includes(nxt)) {
+      if (hasMarker(secBoxes[i].text, nxt)) {
         qEi = i;
         break;
       }
@@ -520,7 +522,7 @@ export function parseShushiSectionSelect(boxes, sectionKeyword, qNum) {
   const secBoxes = boxes.slice(secSi, secEi);
 
   const qMarker = `〔第${Q_KANJI[qNum]}問〕`;
-  const qSi = secBoxes.findIndex((b) => b.text.includes(qMarker));
+  const qSi = secBoxes.findIndex((b) => hasMarker(b.text, qMarker));
   if (qSi === -1)
     throw new Error(
       `出題の趣旨PDF内の「${sectionKeyword}」セクションに「${qMarker}」が見つかりません。`,
@@ -530,7 +532,7 @@ export function parseShushiSectionSelect(boxes, sectionKeyword, qNum) {
   if (Q_KANJI[qNum + 1]) {
     const nxt = `〔第${Q_KANJI[qNum + 1]}問〕`;
     for (let i = qSi + 1; i < secBoxes.length; i++) {
-      if (secBoxes[i].text.includes(nxt)) {
+      if (hasMarker(secBoxes[i].text, nxt)) {
         qEi = i;
         break;
       }
@@ -578,8 +580,12 @@ export function parseSaitenSection(
   }
 
   for (const pattern of patterns) {
+    // タイトルは「（国際関係法（公法系 ））」のように括弧の直前に空白が
+    // 入る年度があるため、空白と半角括弧を正規化してから照合する。
     const si = boxes.findIndex(
-      (b) => isSaitenTitle(b.text) && pattern.test(b.text),
+      (b) =>
+        isSaitenTitle(b.text) &&
+        (pattern.test(b.text) || pattern.test(normSubject(b.text))),
     );
     if (si === -1) continue;
     let ei = boxes.length;

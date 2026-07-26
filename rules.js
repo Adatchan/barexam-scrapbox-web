@@ -21,6 +21,18 @@ export function normSubject(s) {
   return nosp(s).replace(/\(/g, "（").replace(/\)/g, "）");
 }
 
+// マーカー照合用の正規化。空白を除き、半角数字を全角に寄せる。
+// 原典PDFには「〔第 1 問〕」（半角数字・空白入り）と「〔第１問〕」が混在する
+// （令和8年の知的財産法・労働法など）。
+export function normMarker(s) {
+  return nosp(s).replace(/[0-9]/g, (d) => "０１２３４５６７８９"[Number(d)]);
+}
+
+// 問マーカー（〔第１問〕など）を表記揺れごと照合する
+export function hasMarker(text, marker) {
+  return normMarker(text).includes(normMarker(marker));
+}
+
 // 科目名を、括弧が全角・半角どちらでもあたる正規表現ソースに変換する
 // （normSubject と違い、正規化できない相手＝HTML文字列の検索に使う）。
 export function subjectPattern(s) {

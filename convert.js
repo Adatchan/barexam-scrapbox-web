@@ -7,7 +7,7 @@
 // =============================================================================
 import { YEAR_URL_MAP, RESULTS_URL_MAP } from "./years.js";
 import { SUBJECT_MAP, Q_KANJI, yearKeyToLabel } from "./data.js";
-import { normSubject } from "./rules.js";
+import { normSubject, hasMarker } from "./rules.js";
 import {
   fetchPdf,
   fetchExamPdfUrl,
@@ -200,13 +200,13 @@ export async function buildEntry({ yearKey, subject, docType }, ctx) {
     if (Q_KANJI[qNum + 1]) {
       if (sectionKeyword) {
         const cand2 = `〔第${Q_KANJI[qNum + 1]}問〕`;
-        if (boxes.some((b) => b.text.includes(cand2))) endMarker = cand2;
+        if (boxes.some((b) => hasMarker(b.text, cand2))) endMarker = cand2;
       } else {
         const cand = `論文式試験問題集［${systemName}第${Q_KANJI[qNum + 1]}問］`;
-        if (boxes.some((b) => b.text.includes(cand))) endMarker = cand;
+        if (boxes.some((b) => hasMarker(b.text, cand))) endMarker = cand;
         else {
           const cand2 = `〔第${Q_KANJI[qNum + 1]}問〕`;
-          if (boxes.some((b) => b.text.includes(cand2))) endMarker = cand2;
+          if (boxes.some((b) => hasMarker(b.text, cand2))) endMarker = cand2;
         }
       }
     }
