@@ -147,12 +147,22 @@ export async function buildYobiEntry({ yearKey, subject, docType }, ctx) {
   }
 
   // 出題の趣旨PDFは「問題と出題趣旨」が一体のため、各科目セクション内の
-  // 「（出題の趣旨）」以降（＝趣旨本文）に絞る。問題文の再掲を落とす。
-  // マーカーが無い年度・科目はセクション全体をそのまま流す。
+  // 趣旨マーカー以降（＝趣旨本文）に絞る。問題文の再掲を落とす。
+  // 表記は年度により「（出題の趣旨）」「（出題趣旨）」（平成23〜27年）と揺れ、
+  // 問題文と同じボックスに連結していることもある（令和7年の倒産法など）ため、
+  // その場合はマーカー以降だけを残す。マーカーが無ければセクション全体を流す。
+  const SHUSHI_MARKER_RE = /（\s*出\s*題\s*の?\s*趣\s*旨\s*）/;
   let startMarker = slice[0].text;
   if (docType === "出題の趣旨") {
-    const mi = slice.findIndex((b) => b.text.includes("（出題の趣旨）"));
-    if (mi !== -1) startMarker = "（出題の趣旨）";
+    const mi = slice.findIndex((b) => SHUSHI_MARKER_RE.test(b.text));
+    if (mi !== -1) {
+      const m = SHUSHI_MARKER_RE.exec(slice[mi].text);
+      if (m.index > 0) {
+        slice = slice.slice();
+        slice[mi] = { ...slice[mi], text: slice[mi].text.slice(m.index) };
+      }
+      startMarker = m[0];
+    }
   }
 
   setProgress(0.85);
