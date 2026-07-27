@@ -6,7 +6,7 @@
 // 原典PDF保存（単体・一括zip）が同じ取得・解析結果を共有して二重処理を防ぐ。
 // =============================================================================
 import { YEAR_URL_MAP, RESULTS_URL_MAP } from "./years.js";
-import { SUBJECT_MAP, Q_KANJI, yearKeyToLabel } from "./data.js";
+import { SUBJECT_MAP, subjectInfo, Q_KANJI, yearKeyToLabel } from "./data.js";
 import { normSubject, hasMarker } from "./rules.js";
 import {
   fetchPdf,
@@ -81,7 +81,7 @@ export function assembleResult(entry, docType, decorate) {
 export async function resolveSourceUrls(yearKey, subject) {
   const urls = { 試験問題: null, 出題の趣旨: null, 採点実感: null };
   if (!(yearKey in YEAR_URL_MAP) || !(subject in SUBJECT_MAP)) return urls;
-  const [systemName, , , sectionKeyword] = SUBJECT_MAP[subject];
+  const [systemName, , , sectionKeyword] = subjectInfo(yearKey, subject);
 
   try {
     urls["試験問題"] = await fetchExamPdfUrl(YEAR_URL_MAP[yearKey], systemName);
@@ -117,7 +117,10 @@ export async function buildEntry({ yearKey, subject, docType }, ctx) {
   if (!(subject in SUBJECT_MAP)) throw new Error(`未対応の科目: ${subject}`);
 
   const yearLabel = yearKeyToLabel(yearKey);
-  const [systemName, qNum, subjectLabel, sectionKeyword] = SUBJECT_MAP[subject];
+  const [systemName, qNum, subjectLabel, sectionKeyword] = subjectInfo(
+    yearKey,
+    subject,
+  );
 
   let pdfUrl;
   if (docType === "試験問題") {
@@ -298,7 +301,7 @@ export async function convertText({ yearKey, subject, docType, decorate }, ctx) 
     log("事前変換データを使用（PDF解析を省略）");
     setProgress(1.0);
     const yearLabel = yearKeyToLabel(yearKey);
-    const [, , subjectLabel] = SUBJECT_MAP[subject];
+    const [, , subjectLabel] = subjectInfo(yearKey, subject);
     return assembleResult(
       {
         yearLabel,
