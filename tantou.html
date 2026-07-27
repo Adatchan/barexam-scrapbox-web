@@ -47,7 +47,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./style.css?v=20260727.0116" />
+    <link rel="stylesheet" href="./style.css?v=20260727.0132" />
   </head>
   <body>
     <main class="app">
@@ -163,9 +163,17 @@
         </details>
 
         <details>
+          <summary>データはどこから取得していますか？</summary>
+          <p>
+            短答式はPDFをそのまま保存するツールなので、押すたびに原典PDFを取得します。その際は法務省ウェブサイトへの負荷を最小限にするため、原則として中継サーバー（Cloudflare
+            Worker）に保管済みのPDFを使い、まだ保管されていないPDFだけを法務省から取得して、以後はその保管分を配信します。過去問PDFは公表後に内容が変わらないため、同じPDFを法務省へ繰り返し取りに行くことはありません。取得元は画面下部の「ログ」欄で確認できます。
+          </p>
+        </details>
+
+        <details>
           <summary>取得したPDFはどこかに送信されますか？</summary>
           <p>
-            PDFの取得・加工・保存はすべてお使いのブラウザ内で行われ、保存したファイルが外部に送られることはありません。アカウント登録もアクセス解析もありません。ただし、ブラウザから法務省ウェブサイトへ直接アクセスできない制約（CORS）があるため、PDFの取得だけは中継サーバー（Cloudflare Worker）を通ります。中継するのは法務省サイト配下のURLだけで、そこで扱うのは公表済みのPDFのみです（再取得の負荷を減らすためキャッシュとして保管します）。
+            PDFの加工（出典フッターの印字）・保存はすべてお使いのブラウザ内で行われ、保存したファイルが外部に送られることはありません。アカウント登録もアクセス解析もありません。ブラウザから法務省ウェブサイトへ直接アクセスできない制約（CORS）があるため、PDFの取得だけは上記の中継サーバーを通りますが、中継するのは法務省サイト配下のURLだけで、そこで扱うのは公表済みのPDFのみです。
           </p>
         </details>
 
@@ -318,6 +326,6 @@
       })();
     </script>
 
-    <script type="module" src="./tantou.js?v=20260727.0116"></script>
+    <script type="module" src="./tantou.js?v=20260727.0132"></script>
   </body>
 </html>
