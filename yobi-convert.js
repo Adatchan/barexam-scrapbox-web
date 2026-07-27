@@ -43,11 +43,18 @@ const HEADER_NEAR = 40;
 function normBrackets(s) {
   return s.replace(/[[［]/g, "［").replace(/[\]］]/g, "］");
 }
+// 閉じ記号は年度により順序が乱れて抽出される（平成23年・平成28年の趣旨PDFは
+// 「［法律実務基礎科目（民事 ］）」＝ ］ と ） が逆順）。そのため科目名の本体
+// までを一致させ、その直後に ］ が閉じ記号だけを挟んで現れることを条件にする。
+// 「民事」と「民事訴訟法」のような接頭辞衝突は、直後が閉じ記号でないことで
+// 引き続き弾ける。
 function subjectHeaderAt(box, names) {
   const t = normBrackets(nosp(box.text));
   return names.some((h) => {
-    const idx = t.indexOf(`［${h}］`);
-    return idx >= 0 && idx < HEADER_NEAR;
+    const core = h.replace(/[）］]+$/, "");
+    const idx = t.indexOf(`［${core}`);
+    if (idx < 0 || idx >= HEADER_NEAR) return false;
+    return /^[）］]{0,2}］/.test(t.slice(idx + 1 + core.length));
   });
 }
 
