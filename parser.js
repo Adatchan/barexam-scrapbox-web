@@ -342,8 +342,15 @@ export function parseParagraphs(boxes, startMarker, endMarker) {
 
     if (SETSUMON_RE.test(t)) {
       if (cur) paras.push(cur);
-      cur = "";
-      paras.push(t);
+      // 「〔設問１〕…具体的事実を摘示しつつ論じ」のように行が文の途中で
+      // 終わっている場合は、次の行（「なさい。」）を結合できるよう cur に
+      // 置く。マーカーだけの行や文が完結している行は独立した段落にする。
+      if (SENTENCE_END_RE.test(t)) {
+        paras.push(t);
+        cur = "";
+      } else {
+        cur = t;
+      }
       prevX = x0;
       inLaw = false;
       continue;
