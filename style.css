@@ -578,6 +578,18 @@ textarea {
   border-color: var(--lane-blue-border);
 }
 
+/* 保存レーン（原典・一式・LLM）と、選択中の形式の説明 */
+#save-mode {
+  background: #fff;
+}
+
+.save-desc {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
 /* ── カスタムドロップダウン（colorselect.js）─────────────
    設定カード内ではコンパクトな固定幅にし、長い科目名は省略表示。 */
 .cs {
@@ -718,56 +730,14 @@ textarea {
   white-space: nowrap;
 }
 
-.lane-convert .btn-primary {
+.lane-convert .btn-primary,
+.lane-save .btn-primary {
   width: 100%;
 }
 
 /* 「テキストに変換」カード内に移した出力形式ラジオ */
 .lane-format {
   margin-bottom: 14px;
-}
-
-/* タイル型ボタン（タイトル＋一行説明） */
-.tiles {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-
-.tile {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 10px 13px;
-  border: 1px solid var(--tile-border);
-  border-radius: var(--radius-sm);
-  background: #fff;
-  cursor: pointer;
-  transition: border-color 0.15s;
-}
-
-.tile:hover:not(:disabled) {
-  border-color: var(--primary);
-}
-
-.tile:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.tile-title {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.tile-desc {
-  display: block;
-  font-size: 0.72rem;
-  color: var(--muted);
-  margin-top: 1px;
-  line-height: 1.45;
 }
 
 /* ── 短答ダウンローダー（tantou.html）のカード ──────── */
@@ -846,7 +816,6 @@ textarea {
 /* 押した瞬間に応答する（pointer-down フィードバック） */
 .btn-primary:active:not(:disabled),
 .btn-secondary:active:not(:disabled),
-.tile:active:not(:disabled),
 .btn-help:active,
 .cs-trigger:active,
 .tab:active {
@@ -863,7 +832,6 @@ textarea {
 .btn-primary:focus-visible,
 .btn-secondary:focus-visible,
 .btn-help:focus-visible,
-.tile:focus-visible,
 .tab:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;

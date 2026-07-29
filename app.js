@@ -67,6 +67,31 @@ function setType(value) {
   return !!el;
 }
 
+// 「そのまま保存」の保存形式（原典 / 一式 / LLM）。表示は短縮名にし、
+// 選択中の形式の説明をボタン下に出す。
+const SAVE_DESC = {
+  source:
+    "選択中の種類の該当ページだけを原典PDFから抜き出して保存します（未変換でも自動で取得します）。",
+  zip: {
+    shihou:
+      "試験問題・出題の趣旨・採点実感の3点の抜粋PDFを、1つのフォルダにまとめてzipで保存します。",
+    yobi: "試験問題・出題の趣旨の2点の抜粋PDFを、1つのフォルダにまとめてzipで保存します。",
+  },
+  llm: "各種類を、メタ情報・出典付きの1つのMarkdownにまとめて保存します（LLMに渡す用）。",
+};
+
+function saveMode() {
+  const el = document.querySelector('input[name="save-mode"]:checked');
+  return el ? el.value : "source";
+}
+
+function updateSaveDesc() {
+  const mode = saveMode();
+  const d = SAVE_DESC[mode];
+  $("save-desc").textContent =
+    typeof d === "string" ? d : d[isYobi() ? "yobi" : "shihou"];
+}
+
 // 試験種別（司法試験 / 予備試験）。予備は PDF収集モード（jinji07 系統・
 // 科目グループ別・出題の趣旨は全科目まとめた1PDF・採点実感なし）。
 function isYobi() {
@@ -139,10 +164,7 @@ function initSelectors() {
 function applyExamMode() {
   const yobi = isYobi();
   initSelectors();
-  // 一式zip保存の説明（司法は3点、予備は問題＋趣旨の2点）
-  $("source-zip-desc").textContent = yobi
-    ? "問題・趣旨の2点をzipで"
-    : "問題・趣旨・採点実感の3点をzipで";
+  updateSaveDesc(); // 一式zipの説明は司法3点・予備2点で変わる
   invalidateResult();
   $("log").textContent = "";
   $("result").textContent = "";
@@ -479,7 +501,7 @@ function setProgressBar(frac) {
 
 // 変換・保存処理の排他制御。処理中は実行系ボタンをすべて無効化する
 function setBusy(busy) {
-  for (const id of ["run", "source", "source-zip", "llm"]) {
+  for (const id of ["run", "save-run"]) {
     $(id).disabled = busy;
   }
 }
@@ -1147,9 +1169,14 @@ window.addEventListener("DOMContentLoaded", () => {
   $("run").addEventListener("click", onRun);
   $("copy").addEventListener("click", onCopy);
   $("download").addEventListener("click", onDownload);
-  $("source").addEventListener("click", onSaveSourcePdf);
-  $("source-zip").addEventListener("click", onSaveSourceZip);
-  $("llm").addEventListener("click", onSaveLlm);
+  $("save-run").addEventListener("click", () => {
+    const mode = saveMode();
+    if (mode === "zip") return onSaveSourceZip();
+    if (mode === "llm") return onSaveLlm();
+    return onSaveSourcePdf();
+  });
+  $("save-mode").addEventListener("change", updateSaveDesc);
+  updateSaveDesc();
 
   // ダイアログ（ヘルプ・全文検索）。背景クリック・Escでも閉じる。
   setupDialog("help-dialog", "help", "help-close");

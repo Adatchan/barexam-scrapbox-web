@@ -54,7 +54,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./style.css?v=20260729.0252" />
+    <link rel="stylesheet" href="./style.css?v=20260729.0258" />
   </head>
   <body>
     <main class="app">
@@ -105,8 +105,8 @@
           <summary>基本的な使い方は？</summary>
           <p>
             ①上の欄で「試験」「年度」「科目」「種類」を選ぶ →
-            ②テキストが欲しいときは「変換実行」、PDFが欲しいときは「そのまま保存」の各ボタンを押す →
-            ③テキストは「結果をコピー」または「.txt 保存」で持ち出します。②のPDF保存は、変換していなくてもそのまま押せます。
+            ②テキストが欲しいときは「変換実行」、PDFが欲しいときは「そのまま保存」で形式（原典・一式・LLM）を選んで「保存実行」を押す →
+            ③テキストは「結果をコピー」または「.txt 保存」で持ち出します。②の保存は、変換していなくてもそのまま押せます。
           </p>
         </details>
 
@@ -159,23 +159,23 @@
         <h3 class="help-group">そのまま保存する（変換不要）</h3>
 
         <details>
-          <summary>「原典PDF保存」は何をしますか？</summary>
+          <summary>保存形式の「原典」は何をしますか？</summary>
           <p>
-            選択中の年度・科目・種類について、法務省の原典PDFから該当するページだけを抜き出したPDFを保存します。各ページの右下にファイル名、左下に出典と、試験問題・出題の趣旨・採点実感それぞれの原典PDFへのクリック可能なリンクを印字します。変換実行をしていなくても、押せば自動で取得・処理されます。
+            「そのまま保存」で保存する形式を「原典」にして「保存実行」を押すと、選択中の年度・科目・種類について、法務省の原典PDFから該当するページだけを抜き出したPDFを保存します。各ページの右下にファイル名、左下に出典と、試験問題・出題の趣旨・採点実感それぞれの原典PDFへのクリック可能なリンクを印字します。変換実行をしていなくても、押せば自動で取得・処理されます。
           </p>
         </details>
 
         <details>
-          <summary>「一式zip保存」は何をしますか？</summary>
+          <summary>保存形式の「一式」は何をしますか？</summary>
           <p>
-            選択中の年度・科目について、試験問題・出題の趣旨・採点実感の3点の抜粋PDFを「[年度]司法試験[科目]一式」フォルダにまとめ、zipで保存します。処理済みの種類は再利用されるため、変換実行のあとに押すと速く完了します。未掲載の種類がある年度では、取得できた分だけが入ります。
+            保存する形式を「一式」にして「保存実行」を押すと、選択中の年度・科目について、試験問題・出題の趣旨・採点実感の3点の抜粋PDFを「[年度]司法試験[科目]一式」フォルダにまとめ、zipで保存します。処理済みの種類は再利用されるため、変換実行のあとに押すと速く完了します。未掲載の種類がある年度では、取得できた分だけが入ります。
           </p>
         </details>
 
         <details>
-          <summary>「LLM用に保存」は何をしますか？</summary>
+          <summary>保存形式の「LLM」は何をしますか？</summary>
           <p>
-            選択中の年度・科目について、試験問題・出題の趣旨・採点実感を1つのMarkdownファイルにまとめて保存します。冒頭に「これは司法試験論文式の過去問である」というメタ情報と出典（原典PDFのURL）が入るので、ChatGPTやClaudeなどのLLMにそのまま貼り付け・添付して、答案の添削や解説を依頼するのに使えます。
+            保存する形式を「LLM」にして「保存実行」を押すと、選択中の年度・科目について、試験問題・出題の趣旨・採点実感を1つのMarkdownファイルにまとめて保存します。冒頭に「これは司法試験論文式の過去問である」というメタ情報と出典（原典PDFのURL）が入るので、ChatGPTやClaudeなどのLLMにそのまま貼り付け・添付して、答案の添削や解説を依頼するのに使えます。
           </p>
         </details>
 
@@ -406,37 +406,28 @@
             <span class="badge">変換不要</span>
           </div>
           <div class="lane-sub">変換せず、押すだけで保存できます</div>
-          <div class="tiles">
-            <button
-              id="source"
-              class="tile"
-              type="button"
-              title="選択中の種類の該当ページだけを原典PDFから抜き出して保存します（未変換でも自動で取得します）"
-            >
-              <span class="tile-title">原典PDF保存</span>
-              <span class="tile-desc">該当ページを原典から抜き出して保存</span>
-            </button>
-            <button
-              id="source-zip"
-              class="tile"
-              type="button"
-              title="原典PDFを一括で保存します（処理済みの種類は再利用されます）"
-            >
-              <span class="tile-title">一式zip保存</span>
-              <span class="tile-desc" id="source-zip-desc"
-                >問題・趣旨・採点実感の3点をzipで</span
-              >
-            </button>
-            <button
-              id="llm"
-              class="tile"
-              type="button"
-              title="各種類を、メタ情報・出典付きの1つのMarkdownにまとめて保存します（LLMに渡す用）"
-            >
-              <span class="tile-title">LLM用に保存</span>
-              <span class="tile-desc">出典付き1つのMarkdownにまとめる</span>
-            </button>
+          <div class="field lane-format">
+            <label>保存する形式</label>
+            <div class="seg" id="save-mode" role="radiogroup" aria-label="保存する形式">
+              <label class="seg-item">
+                <input type="radio" name="save-mode" value="source" checked />
+                <span>原典</span>
+              </label>
+              <label class="seg-item">
+                <input type="radio" name="save-mode" value="zip" />
+                <span>一式</span>
+              </label>
+              <label class="seg-item">
+                <input type="radio" name="save-mode" value="llm" />
+                <span>LLM</span>
+              </label>
+            </div>
           </div>
+          <button id="save-run" class="btn-primary" type="button">
+            保存実行
+          </button>
+          <div class="save-desc" id="save-desc"></div>
+        </div>
         </div>
       </div>
 
@@ -547,6 +538,6 @@
       crossorigin="anonymous"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20260729.0252"></script>
+    <script type="module" src="./app.js?v=20260729.0258"></script>
   </body>
 </html>
