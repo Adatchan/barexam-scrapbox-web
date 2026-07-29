@@ -1,0 +1,33 @@
+# 一時: 合冊PDFのテキスト抽出結果を調べるための手動ワークフロー。
+# 実行環境から法務省へ直接アクセスできないため、ここで動かしてログを読む。
+# 調査が済んだら削除する。
+name: 一時調査
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: PDFのURL
+        required: true
+        default: https://www.moj.go.jp/content/000054317.pdf
+      words:
+        description: 探す語（空白区切り）
+        required: true
+        default: 租税法 倒産法 経済法
+      dump_all:
+        description: 全片を出力する
+        required: false
+        default: "false"
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: node scripts/_diag.mjs "${{ inputs.url }}" ${{ inputs.words }}
+        env:
+          DUMP_ALL: ${{ inputs.dump_all == 'true' && '1' || '' }}
