@@ -103,6 +103,20 @@ const sec = parseShushiSection(
 ).paras.join("");
 ok(!sec.includes("破産"), "系科目が後続の選択科目を取り込まない");
 
+// 扉行を拾えなくても、問番号が第２問から第１問へ戻れば別科目とみなす
+const sec2 = parseShushiSection(
+  boxes([
+    "【刑事系科目】",
+    "〔第２問〕",
+    "本問は，捜査に関する事例である。",
+    "〔第１問〕",
+    "本問は，破産手続の事例である。",
+  ]),
+  "刑事系科目",
+  2,
+).paras.join("");
+ok(!sec2.includes("破産"), "問番号が戻ったら別科目として打ち切る");
+
 // 科目名がテキスト抽出で複数の片に分かれる場合
 const sel = parseShushiSectionSelect(
   boxes([

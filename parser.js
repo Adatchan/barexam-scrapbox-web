@@ -10,6 +10,7 @@ import {
   nosp,
   normSubject,
   hasMarker,
+  normMarker,
   normalizeParagraphs,
   subjectPattern,
   SETSUMON_RE,
@@ -513,6 +514,21 @@ function selectHeaderIndex(boxes, from, namesNosp, maxExtra = null) {
 
 const SELECT_NOSP = SELECT_SUBJECTS.map((s) => normSubject(s));
 
+// 自問より前に戻る問マーカー（第２問の途中で現れる〔第１問〕など）の位置。
+// 出題の趣旨は科目ごとに 第１問→第２問 の順で並ぶため、番号が戻ったら
+// そこから先は別科目である。本文中の言及を拾わないよう行頭に限る。
+function backwardQuestionIndex(boxes, from, qNum) {
+  const marks = [];
+  for (let k = 1; k <= qNum; k++)
+    if (k !== qNum && Q_KANJI[k]) marks.push(normMarker(`〔第${Q_KANJI[k]}問〕`));
+  if (!marks.length) return -1;
+  for (let i = from; i < boxes.length; i++) {
+    const t = normMarker(boxes[i].text);
+    if (marks.some((m) => t.startsWith(m))) return i;
+  }
+  return -1;
+}
+
 export function parseShushiSection(boxes, systemName, qNum) {
   const sysHeader = `【${systemName}】`;
   const sysNosp = nosp(sysHeader);
@@ -551,6 +567,9 @@ export function parseShushiSection(boxes, systemName, qNum) {
       }
     }
   }
+  // 選択科目の扉行を拾えなかった場合の備え（平成28年の倒産法など）
+  const bi = backwardQuestionIndex(secBoxes, qSi + 1, qNum);
+  if (bi !== -1 && bi < qEi) qEi = bi;
 
   const skip = (b) => {
     const t = b.text;
