@@ -10,6 +10,7 @@ import {
   nosp,
   normSubject,
   hasMarker,
+  normalizeParagraphs,
   subjectPattern,
   SETSUMON_RE,
   STRUCTURE_MARKER_RE,
@@ -411,7 +412,10 @@ export function parseParagraphs(boxes, startMarker, endMarker) {
     prevX = x0;
   }
   if (cur) paras.push(cur);
-  return { paras, pageRange: pageRangeOf(boxes.slice(si, ei)) };
+  return {
+    paras: normalizeParagraphs(paras),
+    pageRange: pageRangeOf(boxes.slice(si, ei)),
+  };
 }
 
 // ─── narrative（出題の趣旨・採点実感）見出し判定 ───────────────────────
@@ -466,7 +470,9 @@ function parseNarrativeParagraphs(secBoxes, extraSkip) {
     prevX = x0;
   }
   if (cur) paras.push(cur);
-  return paras;
+  // 段落内に埋もれた項目見出し（第１／１／（１）／ア／（ア））を独立させ、
+  // 空白・ページ番号の残骸を落とす（公用文作成の考え方 Ⅰ-6 ウ）
+  return normalizeParagraphs(paras);
 }
 
 export function parseShushiSection(boxes, systemName, qNum) {

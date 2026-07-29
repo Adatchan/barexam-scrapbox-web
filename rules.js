@@ -53,6 +53,44 @@ export const SETSUMON_RE = /^〔設問[0-9０-９]*〕/;
 export const STRUCTURE_MARKER_RE =
   /^(?:第[0-9０-９一二三四五六七八九十]+|[0-9０-９]+)[　 ．.]/;
 
+// 項目の細別（公用文作成の考え方 Ⅰ-6 ウ の階層: 第１ → １ → （１） → ア →
+// （ア））。原典PDFではこれらの見出しが本文と同じ字下げで置かれるため、段落の
+// 区切りを字下げで判定すると前の段落に連結されてしまう。文末（。）の直後に
+// これらが現れたら改行して独立させる。丸数字（①②）は上の階層表に無く、
+// 「①については」のように文中参照でも使われるため対象にしない。
+const ITEM_HEAD =
+  "(?:第[0-9０-９一二三四五六七八九十]{1,3}[　 ]|[0-9０-９]{1,2}[　 ]|" +
+  "[（(][0-9０-９]{1,2}[）)]|[⑴-⒇]|[ア-ン][　 ]|[（(][ア-ン][）)])";
+const ITEM_HEAD_AFTER_PERIOD = new RegExp(`。(?=${ITEM_HEAD})`, "g");
+
+// 句読点・閉じ括弧の直前に入り込んだ空白（PDFの字送り由来）と、
+// 2つ以上続く半角空白。原典の「〔設 問〕」のような1つの空白は残す。
+const SPACE_BEFORE_PUNCT = /[ 　]+(?=[。、，．）)」』〕】])/g;
+const MULTI_SPACE = /[ ]{2,}/g;
+
+// 行の途中に紛れ込んだページ番号（「見なが- 2 -ら」）。前後が仮名・漢字の
+// ときだけ取り除く（「法人税基本通達２−２−１２」等を壊さない）。
+const PAGENUM_INLINE =
+  /(?<=[ぁ-んァ-ヶ一-龥])[-‐‑–—―−]\s*[0-9０-９]{1,3}\s*[-‐‑–—―−](?=[ぁ-んァ-ヶ一-龥])/g;
+
+// 段落テキストの仕上げ。段落内に埋もれた項目見出しを改行で独立させ、
+// 空白とページ番号の残骸を落とす。戻り値は段落の配列（分割されうる）。
+export function normalizeParagraph(text) {
+  return text
+    .replace(PAGENUM_INLINE, "")
+    .replace(SPACE_BEFORE_PUNCT, "")
+    .replace(MULTI_SPACE, " ")
+    .replace(ITEM_HEAD_AFTER_PERIOD, "。\n")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+// 段落配列に normalizeParagraph を適用して平坦化する
+export function normalizeParagraphs(paras) {
+  return paras.flatMap((p) => normalizeParagraph(p));
+}
+
 // 会話文の開始（「甲：」「Ｘ：」のような短い話者名＋全角コロン）。
 // 「注：」「例：」のような注記ラベルは話者として扱わない
 export const DIALOGUE_RE =
