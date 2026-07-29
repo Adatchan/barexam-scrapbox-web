@@ -136,6 +136,36 @@ ok(
   "分割された科目名でも見出しを照合",
 );
 
+// 扉行が本文と同じ片にまとまっている場合
+const sel2 = parseShushiSectionSelect(
+  boxes([
+    "憲法",
+    "〔第１問〕",
+    "本問は，貧困と権利である。",
+    "租税法〔第１問〕本問は，所得区分を問う。",
+    "経済法",
+  ]),
+  "租税法",
+  1,
+).paras.join("");
+ok(
+  sel2.includes("所得区分") && !sel2.includes("貧困"),
+  "扉行が本文と同じ片でも見出しとして扱う",
+);
+
+// 科目名で始まる本文は見出しとみなさない
+let threwBody = false;
+try {
+  parseShushiSectionSelect(
+    boxes(["憲法", "〔第１問〕", "租税法上の所得区分が争われた事案である。"]),
+    "租税法",
+    1,
+  );
+} catch {
+  threwBody = true;
+}
+ok(threwBody, "科目名で始まる本文は見出しとみなさない");
+
 // 自科目の見出しが無い合冊PDFは、別科目を先頭から取り込まず失敗させる
 let threw = false;
 try {
