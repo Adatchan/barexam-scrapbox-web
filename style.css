@@ -393,6 +393,13 @@ textarea {
   color: var(--slate);
 }
 
+.hit-subject {
+  background: var(--badge-bg);
+  border-color: var(--badge-bg);
+  color: var(--badge-fg);
+  font-weight: 700;
+}
+
 .hit-count {
   margin-left: auto;
   font-size: 0.72rem;

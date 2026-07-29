@@ -16,7 +16,13 @@
 import { YEAR_URL_MAP } from "./years.js";
 import { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } from "./yobi-years.js";
 import { NEWS } from "./news.js";
-import { SUBJECT_MAP, yearKeyToLabel, subjectSystem, SYSTEM_BG } from "./data.js";
+import {
+  SUBJECT_MAP,
+  subjectSearchGroups,
+  yearKeyToLabel,
+  subjectSystem,
+  SYSTEM_BG,
+} from "./data.js";
 import { runConversion, convertText, resolveSourceUrls } from "./convert.js";
 import { convertYobiText } from "./yobi-convert.js";
 import { fetchPdf, cacheSourceLabel, formatKB } from "./moj.js";
@@ -36,7 +42,7 @@ import {
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
 import { enhanceSelect } from "./colorselect.js";
 import { celebrate, alarmError, showToast } from "./effects.js";
-import { searchSubject, searchYearKeys, normalizeQuery } from "./search.js";
+import { searchSubject, normalizeQuery } from "./search.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -170,25 +176,28 @@ function closeSearch() {
 // 事前変換データ（converted/*.json）を科目単位で読み、キーワードに一致する
 // 年度・種類をカードで一覧する。カードを押すと画面の選択欄へ反映する。
 let searchToken = 0; // 連打時に古い検索結果で上書きしないための世代番号
+let searchGroups = []; // 検索プルダウンの科目グループ（選択科目は2問まとめ）
 
 function initSearchControls() {
   const yobi = isYobi();
 
+  searchGroups = subjectSearchGroups(
+    yobi ? YOBI_RONBUN_SUBJECTS : Object.keys(SUBJECT_MAP),
+  );
   const subjSelect = $("search-subject");
   const keep = subjSelect.value;
   subjSelect.innerHTML = "";
-  for (const s of yobi ? YOBI_RONBUN_SUBJECTS : Object.keys(SUBJECT_MAP)) {
+  searchGroups.forEach((g, i) => {
     const opt = document.createElement("option");
-    opt.value = s;
-    opt.textContent = s;
+    opt.value = String(i);
+    opt.textContent = g.label;
     subjSelect.appendChild(opt);
-  }
-  // 画面で選択中の科目に合わせる（切替直後で無い場合は先頭）
-  const wanted = [...subjSelect.options].some((o) => o.value === keep)
-    ? keep
-    : $("subject").value;
-  if ([...subjSelect.options].some((o) => o.value === wanted))
-    subjSelect.value = wanted;
+  });
+  // 画面で選択中の科目を含むグループに合わせる（無ければ以前の選択を維持）
+  const cur = $("subject").value;
+  const byCurrent = searchGroups.findIndex((g) => g.subjects.includes(cur));
+  if (byCurrent >= 0) subjSelect.value = String(byCurrent);
+  else if (keep && subjSelect.options[Number(keep)]) subjSelect.value = keep;
 
   const typeBox = $("search-types");
   typeBox.innerHTML = "";
@@ -214,7 +223,7 @@ function selectedSearchTypes() {
 }
 
 // ヒット1件分のカード。押すと年度・科目・種類を画面へ反映して閉じる。
-function buildHitCard(hit, subject, onPick) {
+function buildHitCard(hit, showSubject, onPick) {
   const card = document.createElement("button");
   card.type = "button";
   card.className = "hit-card";
@@ -224,13 +233,20 @@ function buildHitCard(hit, subject, onPick) {
   const year = document.createElement("span");
   year.className = "hit-year";
   year.textContent = hit.yearLabel;
+  head.appendChild(year);
+  if (showSubject) {
+    const subj = document.createElement("span");
+    subj.className = "hit-type hit-subject";
+    subj.textContent = hit.subject;
+    head.appendChild(subj);
+  }
   const type = document.createElement("span");
   type.className = "hit-type";
   type.textContent = hit.docType;
   const count = document.createElement("span");
   count.className = "hit-count";
   count.textContent = `${hit.count}件`;
-  head.append(year, type, count);
+  head.append(type, count);
 
   const snip = document.createElement("div");
   snip.className = "hit-snippet";
@@ -243,7 +259,7 @@ function buildHitCard(hit, subject, onPick) {
   );
 
   card.append(head, snip);
-  card.addEventListener("click", () => onPick(hit, subject));
+  card.addEventListener("click", () => onPick(hit));
   return card;
 }
 
@@ -264,24 +280,29 @@ async function onSearch() {
   }
 
   const yobi = isYobi();
-  const subject = $("search-subject").value;
+  const group = searchGroups[Number($("search-subject").value)];
+  if (!group) {
+    status.textContent = "科目を選んでください。";
+    return;
+  }
+  // 選択科目は第１問・第２問の両方を対象にするので、カードに科目名も出す
+  const showSubject = group.subjects.length > 1;
   const token = ++searchToken;
-  const total = searchYearKeys(yobi).length;
-  status.textContent = `「${subject}」を検索中… 0/${total}年度`;
+  status.textContent = `「${group.label}」を検索中…`;
 
   try {
     const { hits, searchedYears, missingYears } = await searchSubject(
-      { yobi, subject, types, query },
-      (done) => {
+      { yobi, subjects: group.subjects, types, query },
+      (done, total) => {
         if (token === searchToken)
-          status.textContent = `「${subject}」を検索中… ${done}/${total}年度`;
+          status.textContent = `「${group.label}」を検索中… ${done}/${total}`;
       },
     );
     if (token !== searchToken) return; // 新しい検索が始まっていたら捨てる
 
     if (!hits.length) {
       status.textContent =
-        `「${query}」は ${subject} の${searchedYears}年度分から見つかりませんでした。` +
+        `「${query}」は ${group.label} の${searchedYears}年度分から見つかりませんでした。` +
         (missingYears.length
           ? `（変換データが無い${missingYears.length}年度は対象外）`
           : "");
@@ -293,7 +314,7 @@ async function onSearch() {
         ? `。変換データが無い${missingYears.length}年度は対象外です。`
         : "");
     for (const hit of hits) {
-      results.appendChild(buildHitCard(hit, subject, applySearchHit));
+      results.appendChild(buildHitCard(hit, showSubject, applySearchHit));
     }
   } catch (e) {
     if (token !== searchToken) return;
@@ -301,9 +322,9 @@ async function onSearch() {
   }
 }
 
-// カードの内容を画面の選択欄へ反映する
-function applySearchHit(hit, subject) {
-  $("subject").value = subject;
+// カードの内容を画面の選択欄へ反映する（選択科目はヒットした問の方を選ぶ）
+function applySearchHit(hit) {
+  $("subject").value = hit.subject;
   $("year").value = hit.yearKey;
   $("type").value = hit.docType;
   for (const id of ["year", "subject", "type"]) {
@@ -311,7 +332,7 @@ function applySearchHit(hit, subject) {
   }
   invalidateResult();
   closeSearch();
-  showToast(`${hit.yearLabel} ${subject} ${hit.docType} を選びました`);
+  showToast(`${hit.yearLabel} ${hit.subject} ${hit.docType} を選びました`);
 }
 
 // ─── タブ・ログ・進捗 ─────────────────────────────────────────────────────

@@ -62,6 +62,33 @@ for (const name of SELECT_SUBJECTS) {
   }
 }
 
+// 全文検索の科目プルダウン用のグループ。選択科目は第１問・第２問で別々の
+// 科目として持っているが、検索では「経済法第１問/第２問」のようにまとめて
+// 両方を対象にする（キーワードがどちらの問に出るかは検索するまで分からない）。
+// 戻り値は [{ label, subjects: [科目名, ...] }]。
+export function subjectSearchGroups(subjects) {
+  const groups = [];
+  const indexByBase = new Map();
+  for (const s of subjects) {
+    const m = /^(.+?)第([１２])問$/.exec(s);
+    if (!m) {
+      groups.push({ label: s, subjects: [s] });
+      continue;
+    }
+    const base = m[1];
+    const at = indexByBase.get(base);
+    if (at === undefined) {
+      indexByBase.set(base, groups.length);
+      groups.push({ label: s, subjects: [s] });
+    } else {
+      const g = groups[at];
+      g.subjects.push(s);
+      g.label = `${base}${g.subjects.map((x) => x.slice(base.length)).join("/")}`;
+    }
+  }
+  return groups;
+}
+
 // 科目名 → 系統（科目プルダウンの背景色分け用）。公法系・民事系・刑事系の
 // 基本科目だけを色分けし、選択科目・法律実務基礎科目・一般教養科目など系統に
 // 属さないものは null（無地）。司法・予備、論文・短答の全プルダウンで共用する。

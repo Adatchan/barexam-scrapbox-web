@@ -97,56 +97,75 @@ function makeSnippet(text, start, end) {
   };
 }
 
-// 1科目を検索する。types は ["試験問題", "出題の趣旨", ...]。
-// 戻り値は年度が新しい順・種類が types の順のヒット一覧。
-export async function searchSubject(
-  { yobi, subject, types, query },
-  onProgress,
-) {
+// 科目（選択科目は第１問・第２問の2つ）を検索する。types は
+// ["試験問題", "出題の趣旨", ...]。戻り値は年度が新しい順、同一年度では
+// subjects → types の順に並んだヒット一覧。
+export async function searchSubject({ yobi, subjects, types, query }, onProgress) {
   const q = normalizeQuery(query);
   if (!q) return { hits: [], searchedYears: 0, missingYears: [] };
 
-  const years = await loadSubject(yobi, subject, onProgress);
+  // 科目ごとの取得を並行して進め、進捗は全科目の合計で数える
+  const yearKeys = searchYearKeys(yobi);
+  const totalUnits = yearKeys.length * subjects.length;
+  let doneUnits = 0;
+  const loaded = await Promise.all(
+    subjects.map((subject) =>
+      loadSubject(yobi, subject, () => {
+        onProgress && onProgress(++doneUnits, totalUnits);
+      }),
+    ),
+  );
+
   const hits = [];
-  const missingYears = [];
-  let searchedYears = 0;
+  const missing = new Set(); // どの科目でもデータが無かった年度
+  const searched = new Set();
 
-  for (const [yearKey, data] of years) {
-    if (!data) {
-      missingYears.push(yearKey);
-      continue;
-    }
-    searchedYears++;
-    for (const docType of types) {
-      const entry = data[docType];
-      if (!entry || !Array.isArray(entry.paras)) continue;
-      const text = entry.paras.join("\n");
-      const { text: norm, map } = normalizeWithMap(text);
-
-      let count = 0;
-      let firstStart = -1;
-      let firstEnd = -1;
-      for (let from = 0; ; ) {
-        const i = norm.indexOf(q, from);
-        if (i === -1) break;
-        if (firstStart === -1) {
-          firstStart = map[i];
-          firstEnd = map[i + q.length - 1] + 1;
-        }
-        count++;
-        from = i + q.length;
+  for (const yearKey of yearKeys) {
+    for (let si = 0; si < subjects.length; si++) {
+      const data = loaded[si].get(yearKey);
+      if (!data) {
+        if (!searched.has(yearKey)) missing.add(yearKey);
+        continue;
       }
-      if (!count) continue;
+      searched.add(yearKey);
+      missing.delete(yearKey);
 
-      hits.push({
-        yearKey,
-        yearLabel: yearKeyToLabel(yearKey),
-        docType,
-        count,
-        snippet: makeSnippet(text, firstStart, firstEnd),
-        pdfUrl: entry.pdfUrl || null,
-      });
+      for (const docType of types) {
+        const entry = data[docType];
+        if (!entry || !Array.isArray(entry.paras)) continue;
+        const text = entry.paras.join("\n");
+        const { text: norm, map } = normalizeWithMap(text);
+
+        let count = 0;
+        let firstStart = -1;
+        let firstEnd = -1;
+        for (let from = 0; ; ) {
+          const i = norm.indexOf(q, from);
+          if (i === -1) break;
+          if (firstStart === -1) {
+            firstStart = map[i];
+            firstEnd = map[i + q.length - 1] + 1;
+          }
+          count++;
+          from = i + q.length;
+        }
+        if (!count) continue;
+
+        hits.push({
+          yearKey,
+          yearLabel: yearKeyToLabel(yearKey),
+          subject: subjects[si],
+          docType,
+          count,
+          snippet: makeSnippet(text, firstStart, firstEnd),
+          pdfUrl: entry.pdfUrl || null,
+        });
+      }
     }
   }
-  return { hits, searchedYears, missingYears };
+  return {
+    hits,
+    searchedYears: searched.size,
+    missingYears: [...missing],
+  };
 }
