@@ -46,7 +46,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore: 年度対応表・更新情報・事前変換データを自動更新"
-          git push
+          # 巡回中に main へ別のコミットが入っているとプッシュが弾かれるため、
+          # リベースしてから送り直す（生成物のコミットは1つだけなので衝突しない）
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       # 全年度×全種類で PDF リンク探索が機能するか検査する。
       # 法務省サイトの構造変更や中継 Worker の障害をここで検知する
