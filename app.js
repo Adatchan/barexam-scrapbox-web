@@ -11,6 +11,7 @@
 //   format.js  テキスト整形（ノーマル / Scrapbox 記法）
 //   convert.js 変換ディスパッチと処理結果キャッシュ
 //   pdfout.js  原典PDFの抜き出し・スタンプ印字・zip
+//   search.js  事前変換データの全文検索
 // =============================================================================
 import { YEAR_URL_MAP } from "./years.js";
 import { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } from "./yobi-years.js";
@@ -35,6 +36,7 @@ import {
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
 import { enhanceSelect } from "./colorselect.js";
 import { celebrate, alarmError, showToast } from "./effects.js";
+import { searchSubject, searchYearKeys, normalizeQuery } from "./search.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -121,6 +123,195 @@ function initNews() {
     li.appendChild(document.createTextNode(item.text));
     list.appendChild(li);
   }
+}
+
+// ─── ダイアログ（ヘルプ・全文検索で共通）─────────────────────────────────
+// 閉じるときは開いたときと同じ経路を戻る（.closing のアニメーション完了後に
+// close()。アニメーションが無効な環境でも保険のタイマーで必ず閉じる）。
+function closeDialog(dlg) {
+  if (!dlg.open || dlg.classList.contains("closing")) return;
+  dlg.classList.add("closing");
+  const finish = () => {
+    dlg.classList.remove("closing");
+    dlg.close();
+  };
+  const fallback = setTimeout(finish, 250);
+  dlg.addEventListener(
+    "animationend",
+    () => {
+      clearTimeout(fallback);
+      finish();
+    },
+    { once: true },
+  );
+}
+
+function setupDialog(dialogId, openId, closeId, onOpen) {
+  const dlg = $(dialogId);
+  $(openId).addEventListener("click", () => {
+    dlg.showModal();
+    onOpen && onOpen();
+  });
+  $(closeId).addEventListener("click", () => closeDialog(dlg));
+  dlg.addEventListener("click", (e) => {
+    if (e.target === dlg) closeDialog(dlg); // 背景クリック
+  });
+  dlg.addEventListener("cancel", (e) => {
+    e.preventDefault(); // Esc もアニメーションを通して閉じる
+    closeDialog(dlg);
+  });
+}
+
+function closeSearch() {
+  closeDialog($("search-dialog"));
+}
+
+// ─── 全文検索 ─────────────────────────────────────────────────────────────
+// 事前変換データ（converted/*.json）を科目単位で読み、キーワードに一致する
+// 年度・種類をカードで一覧する。カードを押すと画面の選択欄へ反映する。
+let searchToken = 0; // 連打時に古い検索結果で上書きしないための世代番号
+
+function initSearchControls() {
+  const yobi = isYobi();
+
+  const subjSelect = $("search-subject");
+  const keep = subjSelect.value;
+  subjSelect.innerHTML = "";
+  for (const s of yobi ? YOBI_RONBUN_SUBJECTS : Object.keys(SUBJECT_MAP)) {
+    const opt = document.createElement("option");
+    opt.value = s;
+    opt.textContent = s;
+    subjSelect.appendChild(opt);
+  }
+  // 画面で選択中の科目に合わせる（切替直後で無い場合は先頭）
+  const wanted = [...subjSelect.options].some((o) => o.value === keep)
+    ? keep
+    : $("subject").value;
+  if ([...subjSelect.options].some((o) => o.value === wanted))
+    subjSelect.value = wanted;
+
+  const typeBox = $("search-types");
+  typeBox.innerHTML = "";
+  const types = yobi
+    ? ["試験問題", "出題の趣旨"]
+    : ["試験問題", "出題の趣旨", "採点実感"];
+  for (const t of types) {
+    const label = document.createElement("label");
+    label.className = "radio";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = t;
+    cb.checked = true;
+    label.append(cb, document.createTextNode(t));
+    typeBox.appendChild(label);
+  }
+}
+
+function selectedSearchTypes() {
+  return [...$("search-types").querySelectorAll("input:checked")].map(
+    (i) => i.value,
+  );
+}
+
+// ヒット1件分のカード。押すと年度・科目・種類を画面へ反映して閉じる。
+function buildHitCard(hit, subject, onPick) {
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = "hit-card";
+
+  const head = document.createElement("div");
+  head.className = "hit-head";
+  const year = document.createElement("span");
+  year.className = "hit-year";
+  year.textContent = hit.yearLabel;
+  const type = document.createElement("span");
+  type.className = "hit-type";
+  type.textContent = hit.docType;
+  const count = document.createElement("span");
+  count.className = "hit-count";
+  count.textContent = `${hit.count}件`;
+  head.append(year, type, count);
+
+  const snip = document.createElement("div");
+  snip.className = "hit-snippet";
+  const mark = document.createElement("mark");
+  mark.textContent = hit.snippet.match;
+  snip.append(
+    document.createTextNode(hit.snippet.before),
+    mark,
+    document.createTextNode(hit.snippet.after),
+  );
+
+  card.append(head, snip);
+  card.addEventListener("click", () => onPick(hit, subject));
+  return card;
+}
+
+async function onSearch() {
+  const query = $("search-input").value.trim();
+  const results = $("search-results");
+  const status = $("search-status");
+  results.innerHTML = "";
+
+  if (!normalizeQuery(query)) {
+    status.textContent = "キーワードを入力してください。";
+    return;
+  }
+  const types = selectedSearchTypes();
+  if (!types.length) {
+    status.textContent = "種類を1つ以上選んでください。";
+    return;
+  }
+
+  const yobi = isYobi();
+  const subject = $("search-subject").value;
+  const token = ++searchToken;
+  const total = searchYearKeys(yobi).length;
+  status.textContent = `「${subject}」を検索中… 0/${total}年度`;
+
+  try {
+    const { hits, searchedYears, missingYears } = await searchSubject(
+      { yobi, subject, types, query },
+      (done) => {
+        if (token === searchToken)
+          status.textContent = `「${subject}」を検索中… ${done}/${total}年度`;
+      },
+    );
+    if (token !== searchToken) return; // 新しい検索が始まっていたら捨てる
+
+    if (!hits.length) {
+      status.textContent =
+        `「${query}」は ${subject} の${searchedYears}年度分から見つかりませんでした。` +
+        (missingYears.length
+          ? `（変換データが無い${missingYears.length}年度は対象外）`
+          : "");
+      return;
+    }
+    status.textContent =
+      `「${query}」: ${hits.length}件（${searchedYears}年度分を検索）` +
+      (missingYears.length
+        ? `。変換データが無い${missingYears.length}年度は対象外です。`
+        : "");
+    for (const hit of hits) {
+      results.appendChild(buildHitCard(hit, subject, applySearchHit));
+    }
+  } catch (e) {
+    if (token !== searchToken) return;
+    status.textContent = `検索に失敗しました: ${e.message}`;
+  }
+}
+
+// カードの内容を画面の選択欄へ反映する
+function applySearchHit(hit, subject) {
+  $("subject").value = subject;
+  $("year").value = hit.yearKey;
+  $("type").value = hit.docType;
+  for (const id of ["year", "subject", "type"]) {
+    if ($(id)._cs) $(id)._cs.refresh();
+  }
+  invalidateResult();
+  closeSearch();
+  showToast(`${hit.yearLabel} ${subject} ${hit.docType} を選びました`);
 }
 
 // ─── タブ・ログ・進捗 ─────────────────────────────────────────────────────
@@ -859,34 +1050,14 @@ window.addEventListener("DOMContentLoaded", () => {
   $("source-zip").addEventListener("click", onSaveSourceZip);
   $("llm").addEventListener("click", onSaveLlm);
 
-  // ヘルプダイアログ（背景クリック・Escでも閉じる）
-  const helpDialog = $("help-dialog");
-  // 閉じるときは開いたときと同じ経路を戻る（.closing のアニメーション完了後に
-  // close()。アニメーションが無効な環境でも保険のタイマーで必ず閉じる）
-  function closeHelp() {
-    if (helpDialog.classList.contains("closing")) return;
-    helpDialog.classList.add("closing");
-    const finish = () => {
-      helpDialog.classList.remove("closing");
-      helpDialog.close();
-    };
-    const fallback = setTimeout(finish, 250);
-    helpDialog.addEventListener(
-      "animationend",
-      () => {
-        clearTimeout(fallback);
-        finish();
-      },
-      { once: true },
-    );
-  }
-  $("help").addEventListener("click", () => helpDialog.showModal());
-  $("help-close").addEventListener("click", closeHelp);
-  helpDialog.addEventListener("click", (e) => {
-    if (e.target === helpDialog) closeHelp();
+  // ダイアログ（ヘルプ・全文検索）。背景クリック・Escでも閉じる。
+  setupDialog("help-dialog", "help", "help-close");
+  setupDialog("search-dialog", "search-open", "search-close", () => {
+    initSearchControls();
+    $("search-input").focus();
   });
-  helpDialog.addEventListener("cancel", (e) => {
-    e.preventDefault();
-    closeHelp();
+  $("search-run").addEventListener("click", onSearch);
+  $("search-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") onSearch();
   });
 });

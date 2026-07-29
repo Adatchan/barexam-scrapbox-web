@@ -176,7 +176,8 @@ textarea {
 }
 
 /* ── ヘルプダイアログ ─────────────────────────────────── */
-#help-dialog {
+#help-dialog,
+#search-dialog {
   max-width: 640px;
   width: calc(100vw - 40px);
   max-height: 80vh;
@@ -186,25 +187,30 @@ textarea {
   color: var(--ink);
 }
 
-#help-dialog::backdrop {
+#help-dialog::backdrop,
+#search-dialog::backdrop {
   background: rgba(20, 27, 38, 0.45);
 }
 
 /* 開閉アニメーション。閉じるときは JS が .closing を付け、
    animationend 後に close() する（入ってきた道を戻る） */
-#help-dialog[open] {
+#help-dialog[open],
+#search-dialog[open] {
   animation: dlg-in 0.18s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 
-#help-dialog[open]::backdrop {
+#help-dialog[open]::backdrop,
+#search-dialog[open]::backdrop {
   animation: xfade-in 0.18s ease;
 }
 
-#help-dialog.closing[open] {
+#help-dialog.closing[open],
+#search-dialog.closing[open] {
   animation: dlg-out 0.15s ease forwards;
 }
 
-#help-dialog.closing[open]::backdrop {
+#help-dialog.closing[open]::backdrop,
+#search-dialog.closing[open]::backdrop {
   animation: xfade-out 0.15s ease forwards;
 }
 
@@ -279,6 +285,130 @@ textarea {
 
 #help-dialog a {
   color: var(--primary);
+}
+
+/* ── 全文検索ダイアログ ──────────────────────────────── */
+.hero-actions {
+  flex: none;
+  display: flex;
+  gap: 8px;
+}
+
+.search-note {
+  margin: 0 0 12px;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.search-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+#search-dialog select {
+  padding: 6px 28px 6px 10px;
+  border: 1px solid var(--btn-outline-border);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.search-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+#search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--btn-outline-border);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.search-bar .btn-primary {
+  flex: none;
+  width: auto;
+  padding: 8px 20px;
+}
+
+.search-status {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hit-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink);
+}
+
+.hit-card:hover {
+  border-color: var(--primary);
+  background: var(--btn-outline-hover);
+}
+
+.hit-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.hit-year {
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.hit-type {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 0.72rem;
+  color: var(--slate);
+}
+
+.hit-count {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.hit-snippet {
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: var(--slate);
+}
+
+.hit-snippet mark {
+  background: #fff2a8;
+  color: inherit;
+  font-weight: 700;
 }
 
 /* ── 更新情報 ────────────────────────────────────────── */
@@ -1190,10 +1320,12 @@ textarea {
   .cs-list {
     animation: xfade-in 0.12s ease;
   }
-  #help-dialog[open] {
+  #help-dialog[open],
+#search-dialog[open] {
     animation: xfade-in 0.15s ease;
   }
-  #help-dialog.closing[open] {
+  #help-dialog.closing[open],
+#search-dialog.closing[open] {
     animation: xfade-out 0.15s ease forwards;
   }
   .bar-fill {

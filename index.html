@@ -54,16 +54,21 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./style.css?v=20260727.0132" />
+    <link rel="stylesheet" href="./style.css?v=20260729.0200" />
   </head>
   <body>
     <main class="app">
       <header class="hero">
         <div class="hero-top">
           <h1>しほしけコンバーター<span class="beta">（β版）</span></h1>
-          <button id="help" class="btn-help" type="button">
-            <span class="help-badge" aria-hidden="true">?</span>使い方・FAQ
-          </button>
+          <div class="hero-actions">
+            <button id="search-open" class="btn-help" type="button">
+              <span class="help-badge" aria-hidden="true">検</span>全文検索
+            </button>
+            <button id="help" class="btn-help" type="button">
+              <span class="help-badge" aria-hidden="true">?</span>使い方・FAQ
+            </button>
+          </div>
         </div>
         <p class="subtitle">
           司法試験論文式の試験問題・出題の趣旨・採点実感を、法務省ウェブの公表PDFからテキストに変換します
@@ -118,6 +123,13 @@
             画面上部の「試験」で司法試験・予備試験を切り替えられます。<br />
             ・司法試験: 平成22年から最新年度まで。基本7科目（憲法・行政法・民法・商法・民訴・刑法・刑訴）と、選択科目8科目（倒産法・租税法・経済法・知的財産法・労働法・環境法・国際関係法（公法系）・国際関係法（私法系））の各第１問・第２問。<br />
             ・予備試験: 平成23年から最新年度まで。基本7科目・法律実務基礎科目（民事・刑事）・選択科目8科目・一般教養科目（令和3年以前）。種類は試験問題と出題の趣旨のみです。予備試験は複数科目をまとめたPDF（「憲法・行政法」など）で公表されますが、選んだ科目だけを自動で切り出します。
+          </p>
+        </details>
+
+        <details>
+          <summary>キーワードから年度を探せますか？</summary>
+          <p>
+            画面右上の「全文検索」から探せます。科目を選んでキーワードを入れると、その科目の全年度について、試験問題・出題の趣旨・採点実感の本文を検索し、該当した年度をカードで一覧します。カードを押すと、その年度・科目・種類が画面の選択欄に入るので、そのまま「変換実行」や各種保存に進めます。検索は事前変換済みデータに対して行うので、法務省ウェブサイトへのアクセスは発生しません（変換データが無い年度は検索対象外です）。
           </p>
         </details>
 
@@ -264,6 +276,48 @@
             ただし、試験問題・出題の趣旨・採点実感そのものは法務省ウェブサイトの公表資料に由来するため、MIT License の対象外です。これらには「公共データ利用規約（PDL1.0）」が適用され、出典の記載と加工した旨の表示を条件に、複製・共有・加工が認められています。本ツールの出力（テキスト・抜粋PDF）には出典・加工表示が自動で付くので、そのまま保持したうえで学内などで共有してください。
           </p>
         </details>
+      </dialog>
+
+      <!-- 全文検索（事前変換データを対象。原典PDFは取得しない）-->
+      <dialog id="search-dialog" aria-label="全文検索">
+        <div class="help-head">
+          <h2>全文検索</h2>
+          <button id="search-close" class="btn-secondary" type="button">
+            閉じる
+          </button>
+        </div>
+
+        <p class="search-note">
+          選んだ科目について、全年度の本文をキーワードで検索します。結果のカードを押すと、その年度・科目・種類が画面の選択欄に入ります。検索は事前変換済みデータに対して行うため、まだ変換データが無い年度（新年度の掲載直後など）は対象外です。
+        </p>
+
+        <div class="search-controls">
+          <div class="field">
+            <label for="search-subject">科目</label>
+            <select id="search-subject"></select>
+          </div>
+          <div class="field">
+            <label>種類</label>
+            <div class="radio-group" id="search-types"></div>
+          </div>
+        </div>
+
+        <div class="search-bar">
+          <input
+            id="search-input"
+            type="search"
+            placeholder="キーワード（例: 権利濫用、伝聞法則）"
+            autocomplete="off"
+          />
+          <button id="search-run" class="btn-primary" type="button">
+            検索
+          </button>
+        </div>
+
+        <div id="search-status" class="search-status" aria-live="polite">
+          キーワードを入力して「検索」を押してください。
+        </div>
+        <div id="search-results" class="search-results"></div>
       </dialog>
 
       <section class="form">
@@ -477,6 +531,6 @@
       crossorigin="anonymous"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20260727.0132"></script>
+    <script type="module" src="./app.js?v=20260729.0200"></script>
   </body>
 </html>
