@@ -512,6 +512,61 @@ textarea {
   cursor: pointer;
 }
 
+/* ── 試験の切替（トグルスイッチ風のセグメント）───────────
+   中身はラジオボタンのまま（JS は input[name="exam"] を見る）。
+   選択中の項目に塗りのつまみが移動して見えるようにする。 */
+.seg {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--btn-outline-border);
+  border-radius: 999px;
+  background: var(--panel);
+}
+
+.seg-item {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+
+.seg-item input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.seg-item span {
+  display: block;
+  padding: 5px 16px;
+  border-radius: 999px;
+  font-size: 0.83rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.seg-item:hover span {
+  color: var(--slate);
+}
+
+.seg-item input:checked + span {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(31, 91, 214, 0.35);
+}
+
+.seg-item input:focus-visible + span {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 /* ── カスタムドロップダウン（colorselect.js）─────────────
    設定カード内ではコンパクトな固定幅にし、長い科目名は省略表示。 */
 .cs {
@@ -1332,6 +1387,9 @@ textarea {
     animation: xfade-out 0.15s ease forwards;
   }
   .bar-fill {
+    transition: none;
+  }
+  .seg-item span {
     transition: none;
   }
 }
