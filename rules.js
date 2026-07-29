@@ -87,9 +87,44 @@ export function normalizeParagraph(text) {
     .filter(Boolean);
 }
 
+// 見出しらしい書き出し（ITEM_HEAD に「１．」形式を加えたもの）
+const HEAD_LIKE_RE = new RegExp(`^(?:${ITEM_HEAD}|【)`);
+
+// 段落が見出し行に見えるか（短く、句点を含まず、階層マーカーで始まる）。
+// 「４ 法科大学院教育に求めるもの」のように文末記号が無くても、
+// 次の段落の続きではない。
+function isHeadingLine(s) {
+  return (
+    s.length <= 40 &&
+    !/[。．]/.test(s) &&
+    (HEAD_LIKE_RE.test(s) || STRUCTURE_MARKER_RE.test(s))
+  );
+}
+
+// 改ページ等で文の途中に段落の区切りが入ってしまったものを繋ぎ直す。
+// 前の段落が文末で終わっておらず、次の段落が仮名で始まる（＝見出しでも
+// 会話の話者でもない文の続き）ときだけ結合する。
+export function mergeBrokenParagraphs(paras) {
+  const out = [];
+  for (const p of paras) {
+    const prev = out[out.length - 1];
+    if (
+      prev &&
+      !SENTENCE_END_RE.test(prev) &&
+      !isHeadingLine(prev) &&
+      /^[ぁ-んー]/.test(p)
+    ) {
+      out[out.length - 1] = prev + p;
+      continue;
+    }
+    out.push(p);
+  }
+  return out;
+}
+
 // 段落配列に normalizeParagraph を適用して平坦化する
 export function normalizeParagraphs(paras) {
-  return paras.flatMap((p) => normalizeParagraph(p));
+  return mergeBrokenParagraphs(paras.flatMap((p) => normalizeParagraph(p)));
 }
 
 // 会話文の開始（「甲：」「Ｘ：」のような短い話者名＋全角コロン）。
