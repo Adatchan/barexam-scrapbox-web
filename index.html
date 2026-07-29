@@ -54,7 +54,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./style.css?v=20260729.0258" />
+    <link rel="stylesheet" href="./style.css?v=20260729.0302" />
   </head>
   <body>
     <main class="app">
@@ -105,7 +105,7 @@
           <summary>基本的な使い方は？</summary>
           <p>
             ①上の欄で「試験」「年度」「科目」「種類」を選ぶ →
-            ②テキストが欲しいときは「変換実行」、PDFが欲しいときは「そのまま保存」で形式（原典・一式・LLM）を選んで「保存実行」を押す →
+            ②テキストが欲しいときは「変換実行」、PDFが欲しいときは「そのまま保存」で形式（個別・一式・LLM）を選んで「保存実行」を押す →
             ③テキストは「結果をコピー」または「.txt 保存」で持ち出します。②の保存は、変換していなくてもそのまま押せます。
           </p>
         </details>
@@ -159,9 +159,9 @@
         <h3 class="help-group">そのまま保存する（変換不要）</h3>
 
         <details>
-          <summary>保存形式の「原典」は何をしますか？</summary>
+          <summary>保存形式の「個別」は何をしますか？</summary>
           <p>
-            「そのまま保存」で保存する形式を「原典」にして「保存実行」を押すと、選択中の年度・科目・種類について、法務省の原典PDFから該当するページだけを抜き出したPDFを保存します。各ページの右下にファイル名、左下に出典と、試験問題・出題の趣旨・採点実感それぞれの原典PDFへのクリック可能なリンクを印字します。変換実行をしていなくても、押せば自動で取得・処理されます。
+            「そのまま保存」で保存する形式を「個別」にして「保存実行」を押すと、選択中の年度・科目・種類について、法務省の原典PDFから該当するページだけを抜き出したPDFを保存します。各ページの右下にファイル名、左下に出典と、試験問題・出題の趣旨・採点実感それぞれの原典PDFへのクリック可能なリンクを印字します。変換実行をしていなくても、押せば自動で取得・処理されます。
           </p>
         </details>
 
@@ -411,7 +411,7 @@
             <div class="seg" id="save-mode" role="radiogroup" aria-label="保存する形式">
               <label class="seg-item">
                 <input type="radio" name="save-mode" value="source" checked />
-                <span>原典</span>
+                <span>個別</span>
               </label>
               <label class="seg-item">
                 <input type="radio" name="save-mode" value="zip" />
@@ -538,6 +538,6 @@
       crossorigin="anonymous"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20260729.0258"></script>
+    <script type="module" src="./app.js?v=20260729.0302"></script>
   </body>
 </html>
