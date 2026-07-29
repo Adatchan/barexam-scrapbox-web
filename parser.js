@@ -509,13 +509,18 @@ function selectHeaderIndex(boxes, from, namesNosp, maxExtra = null) {
       if (hit) return i;
     }
     // 扉行が直後の本文と同じ片にまとまってしまい、上の長さ制限に掛からない
-    // 場合の受け皿。科目名で始まり、その直後が問マーカーや括弧のときだけ
-    // 見出しとみなす（「租税法上の所得区分は…」のような本文は除く）。
+    // 場合の受け皿（平成22年の「［租 税 法］租税法の出題に関しては…」）。
+    // 片の先頭が科目名（開き括弧1文字を許す）で、その直後が閉じ括弧や
+    // 問マーカーのときだけ見出しとみなす。「租税法上の所得区分は…」のような
+    // 本文の書き出しは除く。
     if (maxExtra === null) {
       const head = normSubject(boxes[i].text);
       for (const name of namesNosp) {
-        if (!head.startsWith(name)) continue;
-        if (/^[〔【（第]/.test(head.slice(name.length))) return i;
+        const at = head.indexOf(name);
+        if (at === -1 || at > 1) continue;
+        if (at === 1 && !/[［【〔（([]/.test(head[0])) continue;
+        if (/^[］】〕）)\]」〔【（(第]/.test(head.slice(at + name.length)))
+          return i;
       }
     }
   }
