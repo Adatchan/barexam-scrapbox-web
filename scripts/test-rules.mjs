@@ -1,8 +1,11 @@
-// 一時: rules.js の段落正規化（normalizeParagraph）の回帰確認
+// 段落構造まわりの回帰テスト（外部依存なしで動く）
 //
-// 「公用文作成の考え方」Ⅰ-6 の階層見出しと、原典PDFに現れる構造マーカー
-// （〔設問〕【資料】）が、句点の直後で正しく改行されるかを確かめる。
-// 使い方: node scripts/_probe.mjs
+//   ・rules.js の段落正規化: 「公用文作成の考え方」Ⅰ-6 の階層見出しと、
+//     原典PDFに現れる構造マーカー（〔設問〕【資料】）を句点の直後で改行する。
+//   ・rules.js の段落結合: 改ページで文の途中に入った区切りを繋ぎ直す。
+//   ・parser.js のセクション切り出し: 合冊PDFで別科目を取り込まない。
+//
+// 使い方: node scripts/test-rules.mjs
 import { normalizeParagraph, mergeBrokenParagraphs } from "../rules.js";
 
 let ng = 0;

@@ -1,12 +1,12 @@
-// 一時: 事前変換データ（converted/**.json）の改行・段落エラー監査
+// 事前変換データ（converted/**.json）の改行・段落エラー監査
 //
 // 「公用文作成の考え方」（文化審議会建議）Ⅰ-5・6 を判定基準にする。
 //   ・項目の細別と階層（横書き）: 第１ → １ → （１） → ア → （ア）
 //   ・文の書き出し・改行直後は１字下げ
 //   ・句点は「。」、読点は「、」（横書きは「，」も可だが文書内で統一）
 //
-// 使い方: node scripts/_audit.mjs [対象パス接頭辞...]   例: node scripts/_audit.mjs converted/r7
-//         node scripts/_audit.mjs --json out.json  で全件の詳細をJSON出力
+// 使い方: node scripts/audit-converted.mjs [対象パス接頭辞...]   例: node scripts/audit-converted.mjs converted/r7
+//         node scripts/audit-converted.mjs --json out.json  で全件の詳細をJSON出力
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
