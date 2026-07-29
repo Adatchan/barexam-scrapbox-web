@@ -54,7 +54,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./style.css?v=20260729.0229" />
+    <link rel="stylesheet" href="./style.css?v=20260729.0245" />
   </head>
   <body>
     <main class="app">
@@ -364,12 +364,10 @@
         </div>
 
         <div class="field" id="type-field">
-          <label for="type">種類</label>
-          <select id="type">
-            <option value="試験問題">試験問題</option>
-            <option value="出題の趣旨">出題の趣旨</option>
-            <option value="採点実感">採点実感</option>
-          </select>
+          <label>種類</label>
+          <!-- 中身は radio（試験の切替と同じセグメント）。選択肢は
+               initSelectors() が試験に合わせて作り直す。 -->
+          <div class="seg" id="type" role="radiogroup" aria-label="種類"></div>
         </div>
       </section>
 
@@ -549,6 +547,6 @@
       crossorigin="anonymous"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20260729.0229"></script>
+    <script type="module" src="./app.js?v=20260729.0245"></script>
   </body>
 </html>

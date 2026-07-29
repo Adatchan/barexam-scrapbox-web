@@ -567,6 +567,11 @@ textarea {
   outline-offset: 2px;
 }
 
+/* 種類（問題・趣旨・実感）は3つ並ぶので少し詰める */
+#type .seg-item span {
+  padding: 5px 14px;
+}
+
 /* ── カスタムドロップダウン（colorselect.js）─────────────
    設定カード内ではコンパクトな固定幅にし、長い科目名は省略表示。 */
 .cs {

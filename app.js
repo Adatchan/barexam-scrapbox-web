@@ -46,6 +46,27 @@ import { searchSubject, normalizeQuery } from "./search.js";
 
 const $ = (id) => document.getElementById(id);
 
+// 種類セグメントの表示名（値は「試験問題」等のまま。JSON・ファイル名に使う）
+const TYPE_SHORT = {
+  試験問題: "問題",
+  出題の趣旨: "趣旨",
+  採点実感: "実感",
+};
+
+// 種類（試験問題／出題の趣旨／採点実感）の現在値と設定
+function currentType() {
+  const el = document.querySelector('#type input[name="type"]:checked');
+  return el ? el.value : "試験問題";
+}
+
+function setType(value) {
+  const el = document.querySelector(
+    `#type input[name="type"][value="${value}"]`,
+  );
+  if (el) el.checked = true;
+  return !!el;
+}
+
 // 試験種別（司法試験 / 予備試験）。予備は PDF収集モード（jinji07 系統・
 // 科目グループ別・出題の趣旨は全科目まとめた1PDF・採点実感なし）。
 function isYobi() {
@@ -59,18 +80,29 @@ function initSelectors() {
   const yobi = isYobi();
 
   // 種類: 予備に採点実感は無いため2種類。司法は3種類。
-  const typeSelect = $("type");
-  typeSelect.innerHTML = "";
+  // セグメント（ラジオ）で作り、表示は短縮名（問題・趣旨・実感）にする。
+  const typeBox = $("type");
+  const keepType = currentType();
+  typeBox.innerHTML = "";
   const typeOpts = yobi
     ? ["試験問題", "出題の趣旨"]
     : ["試験問題", "出題の趣旨", "採点実感"];
   for (const t of typeOpts) {
-    const opt = document.createElement("option");
-    opt.value = t;
-    opt.textContent = t;
-    typeSelect.appendChild(opt);
+    const label = document.createElement("label");
+    label.className = "seg-item";
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "type";
+    input.value = t;
+    input.setAttribute("aria-label", t);
+    input.checked = t === keepType;
+    const span = document.createElement("span");
+    span.textContent = TYPE_SHORT[t] || t;
+    label.append(input, span);
+    typeBox.appendChild(label);
   }
-  if (typeSelect._cs) typeSelect._cs.refresh();
+  if (!typeBox.querySelector("input:checked"))
+    typeBox.querySelector("input").checked = true;
 
   const yearSelect = $("year");
   yearSelect.innerHTML = "";
@@ -374,8 +406,8 @@ function applySearchHit(hit, yobi) {
   }
   $("subject").value = hit.subject;
   $("year").value = hit.yearKey;
-  $("type").value = hit.docType;
-  for (const id of ["year", "subject", "type"]) {
+  setType(hit.docType);
+  for (const id of ["year", "subject"]) {
     if ($(id)._cs) $(id)._cs.refresh();
   }
   invalidateResult();
@@ -490,7 +522,7 @@ async function onRun() {
   const yobi = isYobi();
   const yearKey = $("year").value;
   const subject = $("subject").value;
-  const docType = $("type").value;
+  const docType = currentType();
   const decorate = selectedFormat() === "scrapbox";
 
   $("log").textContent = "";
@@ -580,11 +612,11 @@ function triggerDownload(blob, filename) {
 // 選択中の種類の原典PDF（該当ページのみ）を保存する。
 // 変換実行済みならキャッシュを再利用し、未処理なら自動で取得する。
 async function onSaveSourcePdf() {
-  if (isYobi()) return onSaveYobiSingle($("type").value);
+  if (isYobi()) return onSaveYobiSingle(currentType());
   const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
-  const docType = $("type").value;
+  const docType = currentType();
   setBusy(true);
   let fallbackUrl = "";
   try {
@@ -1101,13 +1133,13 @@ window.addEventListener("DOMContentLoaded", () => {
   // 全プルダウンを同じカスタムドロップダウンに揃える。科目だけ系統色を付ける。
   enhanceSelect($("year"));
   enhanceSelect($("subject"), (v) => SYSTEM_BG[subjectSystem(v)]);
-  enhanceSelect($("type"));
   warmupPdfjs(); // PDF.js をアイドル時に先読みし初回クリックの待ちを隠す
   initNews();
   setupTabs();
-  for (const id of ["year", "subject", "type"]) {
+  for (const id of ["year", "subject"]) {
     $(id).addEventListener("change", invalidateResult);
   }
+  $("type").addEventListener("change", invalidateResult);
   for (const r of document.querySelectorAll('input[name="exam"]')) {
     r.addEventListener("change", applyExamMode);
   }
