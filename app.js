@@ -178,26 +178,52 @@ function closeSearch() {
 let searchToken = 0; // 連打時に古い検索結果で上書きしないための世代番号
 let searchGroups = []; // 検索プルダウンの科目グループ（選択科目は2問まとめ）
 
-function initSearchControls() {
-  const yobi = isYobi();
+// 検索ダイアログ内で選ばれている試験種別（メイン画面とは独立に切り替えられる）
+function searchIsYobi() {
+  const el = document.querySelector('input[name="search-exam"]:checked');
+  return !!el && el.value === "yobi";
+}
+
+// 科目グループの色分けはメイン画面の科目プルダウンと同じ規則にする
+function searchGroupColor(value) {
+  const g = searchGroups[Number(value)];
+  return g ? SYSTEM_BG[subjectSystem(g.label)] : "";
+}
+
+// 科目プルダウン（と種類チェックボックス）を、いま選ばれている試験に合わせて
+// 作り直す。preferMain=true のときはメイン画面で選択中の科目に合わせる。
+function buildSearchSubjects(preferMain) {
+  const yobi = searchIsYobi();
+  const subjSelect = $("search-subject");
+  // 試験を切り替えても同じ科目を選び続けられるよう、切替前のラベルを覚えておく
+  // （司法「経済法第１問/第２問」↔ 予備「経済法」のように問の分割だけが違う）
+  const prevLabel = searchGroups[Number(subjSelect.value)]?.label;
+  const baseOf = (s) => s.replace(/第[１２]問(\/第[１２]問)?$/, "");
 
   searchGroups = subjectSearchGroups(
     yobi ? YOBI_RONBUN_SUBJECTS : Object.keys(SUBJECT_MAP),
   );
-  const subjSelect = $("search-subject");
-  const keep = subjSelect.value;
+
   subjSelect.innerHTML = "";
   searchGroups.forEach((g, i) => {
     const opt = document.createElement("option");
     opt.value = String(i);
     opt.textContent = g.label;
+    const sys = subjectSystem(g.label);
+    if (sys) opt.style.backgroundColor = SYSTEM_BG[sys];
     subjSelect.appendChild(opt);
   });
-  // 画面で選択中の科目を含むグループに合わせる（無ければ以前の選択を維持）
+
   const cur = $("subject").value;
-  const byCurrent = searchGroups.findIndex((g) => g.subjects.includes(cur));
-  if (byCurrent >= 0) subjSelect.value = String(byCurrent);
-  else if (keep && subjSelect.options[Number(keep)]) subjSelect.value = keep;
+  const byCurrent = preferMain
+    ? searchGroups.findIndex((g) => g.subjects.includes(cur))
+    : -1;
+  const byLabel = prevLabel
+    ? searchGroups.findIndex((g) => baseOf(g.label) === baseOf(prevLabel))
+    : -1;
+  const pick = byCurrent >= 0 ? byCurrent : byLabel >= 0 ? byLabel : 0;
+  subjSelect.value = String(pick);
+  if (subjSelect._cs) subjSelect._cs.refresh();
 
   const typeBox = $("search-types");
   typeBox.innerHTML = "";
@@ -214,6 +240,16 @@ function initSearchControls() {
     label.append(cb, document.createTextNode(t));
     typeBox.appendChild(label);
   }
+}
+
+// ダイアログを開くたびに、メイン画面の試験・科目に合わせて作り直す
+function initSearchControls() {
+  const exam = isYobi() ? "yobi" : "shihou";
+  const radio = document.querySelector(
+    `input[name="search-exam"][value="${exam}"]`,
+  );
+  if (radio) radio.checked = true;
+  buildSearchSubjects(true);
 }
 
 function selectedSearchTypes() {
@@ -279,7 +315,7 @@ async function onSearch() {
     return;
   }
 
-  const yobi = isYobi();
+  const yobi = searchIsYobi();
   const group = searchGroups[Number($("search-subject").value)];
   if (!group) {
     status.textContent = "科目を選んでください。";
@@ -314,7 +350,9 @@ async function onSearch() {
         ? `。変換データが無い${missingYears.length}年度は対象外です。`
         : "");
     for (const hit of hits) {
-      results.appendChild(buildHitCard(hit, showSubject, applySearchHit));
+      results.appendChild(
+        buildHitCard(hit, showSubject, (h) => applySearchHit(h, yobi)),
+      );
     }
   } catch (e) {
     if (token !== searchToken) return;
@@ -322,8 +360,18 @@ async function onSearch() {
   }
 }
 
-// カードの内容を画面の選択欄へ反映する（選択科目はヒットした問の方を選ぶ）
-function applySearchHit(hit) {
+// カードの内容を画面の選択欄へ反映する（選択科目はヒットした問の方を選ぶ）。
+// ダイアログで試験を切り替えて検索していた場合は、メイン画面もそちらに合わせる。
+function applySearchHit(hit, yobi) {
+  if (isYobi() !== yobi) {
+    const radio = document.querySelector(
+      `input[name="exam"][value="${yobi ? "yobi" : "shihou"}"]`,
+    );
+    if (radio) {
+      radio.checked = true;
+      applyExamMode(); // 年度・科目・種類のリストを作り直す
+    }
+  }
   $("subject").value = hit.subject;
   $("year").value = hit.yearKey;
   $("type").value = hit.docType;
@@ -1073,10 +1121,19 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // ダイアログ（ヘルプ・全文検索）。背景クリック・Escでも閉じる。
   setupDialog("help-dialog", "help", "help-close");
+  enhanceSelect($("search-subject"), searchGroupColor);
   setupDialog("search-dialog", "search-open", "search-close", () => {
     initSearchControls();
     $("search-input").focus();
   });
+  for (const r of document.querySelectorAll('input[name="search-exam"]')) {
+    r.addEventListener("change", () => {
+      buildSearchSubjects(false);
+      $("search-results").innerHTML = "";
+      $("search-status").textContent =
+        "キーワードを入力して「検索」を押してください。";
+    });
+  }
   $("search-run").addEventListener("click", onSearch);
   $("search-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") onSearch();

@@ -309,14 +309,10 @@ textarea {
   margin-bottom: 10px;
 }
 
-#search-dialog select {
-  padding: 6px 28px 6px 10px;
-  border: 1px solid var(--btn-outline-border);
-  border-radius: 7px;
-  background: #fff;
-  color: var(--ink);
-  font-size: 0.85rem;
-  cursor: pointer;
+/* 科目はメイン画面と同じ独自ドロップダウン（colorselect.js）。
+   科目名が長いので設定カードより少し広くする。 */
+#search-dialog .cs {
+  width: 232px;
 }
 
 .search-bar {
