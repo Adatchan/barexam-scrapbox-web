@@ -572,6 +572,12 @@ textarea {
   padding: 5px 14px;
 }
 
+/* 出力形式は青い変換レーンの中なので、地を白にして浮かせる */
+#format-field .seg {
+  background: #fff;
+  border-color: var(--lane-blue-border);
+}
+
 /* ── カスタムドロップダウン（colorselect.js）─────────────
    設定カード内ではコンパクトな固定幅にし、長い科目名は省略表示。 */
 .cs {
