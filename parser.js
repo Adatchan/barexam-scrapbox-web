@@ -482,6 +482,37 @@ function parseNarrativeParagraphs(secBoxes, extraSkip) {
   return normalizeParagraphs(paras);
 }
 
+// 選択科目の扉行（科目名だけの短い行）の位置を探す。PDFのテキスト抽出で
+// 科目名が複数の片に分かれることがあるため（「国際関係法」＋「（公法系）」）、
+// 直後の数片を連結したものでも照合する。本文を拾わないよう連結後も短い行に
+// 限る。maxExtra を指定すると「科目名＋α文字」までの行だけを扉行とみなす。
+function selectHeaderIndex(boxes, from, namesNosp, maxExtra = null) {
+  const limit = (name) => (maxExtra === null ? 30 : name.length + maxExtra);
+  for (let i = from; i < boxes.length; i++) {
+    const headLen = normSubject(boxes[i].text).length;
+    for (let n = 1; n <= 4 && i + n <= boxes.length; n++) {
+      const joined = normSubject(
+        boxes
+          .slice(i, i + n)
+          .map((b) => b.text)
+          .join(""),
+      );
+      if (joined.length >= 30) break;
+      const hit = namesNosp.some((name) => {
+        if (joined.length >= limit(name)) return false;
+        const at = joined.indexOf(name);
+        // 科目名は先頭の片から始まっていること。後続の片だけに現れる場合は
+        // その片の位置で改めて判定する（連結は名前の分断を繋ぐためのもの）。
+        return at !== -1 && at < headLen;
+      });
+      if (hit) return i;
+    }
+  }
+  return -1;
+}
+
+const SELECT_NOSP = SELECT_SUBJECTS.map((s) => normSubject(s));
+
 export function parseShushiSection(boxes, systemName, qNum) {
   const sysHeader = `【${systemName}】`;
   const sysNosp = nosp(sysHeader);
@@ -497,6 +528,12 @@ export function parseShushiSection(boxes, systemName, qNum) {
       break;
     }
   }
+  // 合冊PDFでは系科目の後ろに選択科目が続く。【…】形式の見出しを置かない
+  // 年度があり（平成28年など）、そのままだと末尾まで取り込んでしまうため、
+  // 選択科目の扉行でも打ち切る。
+  const selEi = selectHeaderIndex(boxes, secSi + 1, SELECT_NOSP, 6);
+  if (selEi !== -1 && selEi < secEi) secEi = selEi;
+
   const secBoxes = boxes.slice(secSi, secEi);
 
   const qMarker = `〔第${Q_KANJI[qNum]}問〕`;
@@ -532,22 +569,19 @@ export function parseShushiSectionSelect(boxes, sectionKeyword, qNum) {
     (s) => s !== kwNosp,
   );
 
-  const isSubjectHeader = (b, nameNosp) => {
-    const ts = b.text.trim();
-    return ts.length < 30 && normSubject(ts).includes(nameNosp);
-  };
-
-  let secSi = boxes.findIndex((b) => isSubjectHeader(b, kwNosp));
+  let secSi = selectHeaderIndex(boxes, 0, [kwNosp]);
   let secEi = boxes.length;
   if (secSi === -1) {
+    // 他科目の扉行があるなら合冊PDFであり、自科目だけ見つからないのは誤り。
+    // 先頭（＝別科目）から取り込んでしまわないよう明示的に失敗させる。
+    if (selectHeaderIndex(boxes, 0, otherNosp) !== -1)
+      throw new Error(
+        `出題の趣旨PDFに「${sectionKeyword}」の見出しが見つかりません。`,
+      );
     secSi = 0; // 個別 PDF と仮定
   } else {
-    for (let i = secSi + 1; i < boxes.length; i++) {
-      if (otherNosp.some((on) => isSubjectHeader(boxes[i], on))) {
-        secEi = i;
-        break;
-      }
-    }
+    const nxt = selectHeaderIndex(boxes, secSi + 1, otherNosp);
+    if (nxt !== -1) secEi = nxt;
   }
   const secBoxes = boxes.slice(secSi, secEi);
 

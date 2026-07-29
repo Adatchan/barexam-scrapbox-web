@@ -73,5 +73,98 @@ ok(
   "文末で終わっていれば結合しない",
 );
 
+// ─── 出題の趣旨の科目セクションの切り出し ───────────────────────────────
+const { parseShushiSection, parseShushiSectionSelect } = await import(
+  "../parser.js"
+);
+// 行ごとに1ボックスの疑似 PDF（y は上から下へ）
+const boxes = (lines) =>
+  lines.map((text, i) => ({
+    text,
+    x0: 0,
+    x1: 100,
+    y0: -i * 10,
+    y1: -i * 10 + 9,
+    page: 1,
+  }));
+
+// 合冊PDFでは系科目の後ろに選択科目が続く（平成28年など）
+const sec = parseShushiSection(
+  boxes([
+    "【刑事系科目】",
+    "〔第２問〕",
+    "本問は，捜査に関する事例である。",
+    "倒産法",
+    "〔第１問〕",
+    "本問は，破産手続の事例である。",
+  ]),
+  "刑事系科目",
+  2,
+).paras.join("");
+ok(!sec.includes("破産"), "系科目が後続の選択科目を取り込まない");
+
+// 科目名がテキスト抽出で複数の片に分かれる場合
+const sel = parseShushiSectionSelect(
+  boxes([
+    "国際関係法",
+    "（公法系）",
+    "〔第１問〕",
+    "本問は，国家承認を問う。",
+    "労働法",
+    "〔第１問〕",
+    "本問は，解雇を問う。",
+  ]),
+  "国際関係法（公法系）",
+  1,
+).paras.join("");
+ok(
+  sel.includes("国家承認") && !sel.includes("解雇"),
+  "分割された科目名でも見出しを照合",
+);
+
+// 自科目の見出しが無い合冊PDFは、別科目を先頭から取り込まず失敗させる
+let threw = false;
+try {
+  parseShushiSectionSelect(
+    boxes(["憲法", "〔第１問〕", "本問は，貧困と権利である。", "労働法"]),
+    "租税法",
+    1,
+  );
+} catch {
+  threw = true;
+}
+ok(threw, "自科目の見出しが無い合冊PDFは失敗させる");
+
+// 見出しの無い個別PDFは従来どおり先頭から
+ok(
+  parseShushiSectionSelect(
+    boxes(["〔第１問〕", "本問は，所得区分を問う。"]),
+    "租税法",
+    1,
+  )
+    .paras.join("")
+    .includes("所得区分"),
+  "見出しの無い個別PDFは先頭から",
+);
+
+// 本文中に出てくる科目名でセクションを打ち切らない
+ok(
+  parseShushiSection(
+    boxes([
+      "【民事系科目】",
+      "〔第１問〕",
+      "本問は，知的財産法の議論も参照する会社法の事例である。",
+      "【刑事系科目】",
+      "〔第１問〕",
+      "本問は，殺人の事例である。",
+    ]),
+    "民事系科目",
+    1,
+  )
+    .paras.join("")
+    .includes("会社法"),
+  "本文中の科目名では打ち切らない",
+);
+
 console.log(ng === 0 ? "\n全テストOK" : `\nNG ${ng}件`);
 process.exit(ng ? 1 : 0);

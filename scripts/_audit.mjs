@@ -110,12 +110,20 @@ const prefixes = args.filter((a, i) => !a.startsWith("--") && i !== jsonAt + 1);
 
 const summary = new Map(); // type -> {files:Set, count:number, samples:[]}
 const perFile = [];
+const all = []; // 別科目の取り込み検査用
 
 for (const file of walk(ROOT)) {
   if (prefixes.length && !prefixes.some((p) => file.startsWith(p))) continue;
   const data = JSON.parse(readFileSync(file, "utf8"));
   for (const [docType, entry] of Object.entries(data)) {
     if (!entry || !Array.isArray(entry.paras)) continue;
+    const text = entry.paras.join("\n");
+    all.push({
+      key: `${file.slice(0, file.lastIndexOf("/"))}[${docType}]`,
+      sub: file.slice(file.lastIndexOf("/") + 1, -5),
+      text,
+      n: text.length,
+    });
     const issues = analyzeEntry(entry.paras);
     if (!issues.length) continue;
     perFile.push({ file, docType, issues });
@@ -129,7 +137,30 @@ for (const file of walk(ROOT)) {
   }
 }
 
+// 同じ年度・種類の別科目の内容をそのまま含んでいないか（合冊PDFの
+// 区切り判定に失敗すると、後続の科目まで丸ごと取り込んでしまう）
+const overCapture = [];
+const byKey = new Map();
+for (const e of all) {
+  if (!byKey.has(e.key)) byKey.set(e.key, []);
+  byKey.get(e.key).push(e);
+}
+for (const [key, list] of byKey) {
+  for (const a of list) {
+    for (const b of list) {
+      if (a === b || b.n < 200 || a.n <= b.n * 1.5) continue;
+      if (!a.text.includes(b.text.slice(-160))) continue;
+      overCapture.push(`${key} ${a.sub}(${a.n}字) が ${b.sub}(${b.n}字) を含む`);
+      break;
+    }
+  }
+}
+
 console.log(`対象: ${prefixes.length ? prefixes.join(", ") : "全件"}`);
+if (overCapture.length) {
+  console.log(`\n■ 別科目の取り込み: ${overCapture.length}件`);
+  for (const line of overCapture) console.log(`   ${line}`);
+}
 console.log(`問題のあるエントリ: ${perFile.length}`);
 for (const [type, s] of [...summary].sort((a, b) => b[1].count - a[1].count)) {
   console.log(`\n■ ${type}: ${s.count}件 / ${s.files.size}エントリ`);
