@@ -106,7 +106,9 @@ function* walk(dir) {
 const args = process.argv.slice(2);
 const jsonAt = args.indexOf("--json");
 const jsonOut = jsonAt >= 0 ? args[jsonAt + 1] : null;
-const prefixes = args.filter((a, i) => !a.startsWith("--") && i !== jsonAt + 1);
+const prefixes = args.filter(
+  (a, i) => !a.startsWith("--") && !(jsonAt >= 0 && i === jsonAt + 1),
+);
 
 const summary = new Map(); // type -> {files:Set, count:number, samples:[]}
 const perFile = [];
