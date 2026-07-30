@@ -167,7 +167,55 @@ function groupItemsIntoLines(items) {
   return lines;
 }
 
-function makeLine(items) {
+// 行に重ねて描かれた句読点を、桁位置から求めた空白へ差し込む。
+//
+// 法務省のPDFには、行の文字列をひとまとまりで描いた上で、句読点や閉じ括弧
+// だけを別の描画項目として本来の x 位置に重ねて置くものがある（採点実感など）。
+// 本文側はその桁が空白になっている。PDF.js は描画順に項目を返すため、単純に
+// 連結すると句読点が行末へ流れ、「要件のうち 「必要があると認、」のように
+// 本文へ食い込む。等幅の全角文字なので、項目の幅と文字数から桁を逆算して
+// 元の空白に戻せる。
+const OVERLAY_RE = /^[、。，．）)」』〕】｣]$/;
+
+// text の at 桁付近にある空白の位置（無ければ -1）
+function nearestSpace(text, at) {
+  for (const d of [0, 1, -1, 2, -2]) {
+    const i = at + d;
+    if (i >= 0 && i < text.length && /[ 　]/.test(text[i])) return i;
+  }
+  return -1;
+}
+
+export function mergeOverlaidPunctuation(items) {
+  // 幅を持つ本文の項目を host とし、その範囲に重なる項目を差し込む
+  const hosts = items.filter((it) => it.text.length > 2 && it.width > 0);
+  if (!hosts.length) return items;
+  const rest = [];
+  for (const it of items) {
+    if (hosts.includes(it)) continue;
+    const host = hosts.find((h) => it.x > h.x && it.x < h.x + h.width);
+    if (!host) {
+      rest.push(it);
+      continue;
+    }
+    if (!it.text.trim()) continue; // 隙間を埋めるだけの空白項目は捨てる
+    if (!OVERLAY_RE.test(it.text)) {
+      rest.push(it);
+      continue;
+    }
+    const at = Math.round((it.x - host.x) / (host.width / host.text.length));
+    const idx = nearestSpace(host.text, at);
+    if (idx === -1) {
+      rest.push(it); // 空白が無ければ元の位置が分からないので従来どおり
+      continue;
+    }
+    host.text = host.text.slice(0, idx) + it.text + host.text.slice(idx + 1);
+  }
+  return [...hosts, ...rest];
+}
+
+function makeLine(rawItems) {
+  const items = mergeOverlaidPunctuation(rawItems);
   items.sort((a, b) => a.x - b.x);
   const text = items
     .map((it) => it.text)

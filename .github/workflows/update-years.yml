@@ -8,6 +8,12 @@ on:
     # 毎週月曜 09:00 JST (00:00 UTC)
     - cron: "0 0 * * 1"
   workflow_dispatch:
+    inputs:
+      force:
+        description: 既存の変換データも作り直す（解析ルールを直したとき）
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -34,7 +40,7 @@ jobs:
       # 既存年度（不変PDF）は同一出力＝差分なし。新年度・新規掲載分のみ差分が出る。
       # parser.js/format.js を改修した場合もここで自動的に再生成・反映される。
       - name: 事前変換データ（converted/）を生成
-        run: node scripts/precompute.mjs
+        run: node scripts/precompute.mjs ${{ inputs.force && '--force' || '' }}
 
       - name: 変更があればコミットしてプッシュ
         run: |
