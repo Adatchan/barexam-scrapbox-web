@@ -79,6 +79,16 @@ ok(
 const { parseShushiSection, parseShushiSectionSelect, mergeOverlaidPunctuation } =
   await import("../parser.js");
 
+// ─── 構造マーカー行の判定 ───────────────────────────────────────────────
+const { STRUCTURE_MARKER_RE } = await import("../rules.js");
+ok(STRUCTURE_MARKER_RE.test("第３ 採点実感等"), "「第３ …」は構造マーカー");
+ok(STRUCTURE_MARKER_RE.test("１ 出題の趣旨"), "「１ …」は構造マーカー");
+ok(STRUCTURE_MARKER_RE.test("１．出題の趣旨"), "「１．…」は構造マーカー");
+ok(
+  !STRUCTURE_MARKER_RE.test("3.5：1.5：3.5：1.5〕）社団法人Ａは，"),
+  "配点の小数は構造マーカーではない",
+);
+
 // ─── 行に重ねて描かれた句読点の差し込み ─────────────────────────────────
 // 座標は実際のPDF（令和６年 倒産法 採点実感）から採った値
 const item = (x, width, text) => ({ x, width, height: 10, y: 0, text });
