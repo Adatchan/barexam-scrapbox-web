@@ -268,8 +268,36 @@ export function closeIndex(text, depth) {
   return -1;
 }
 
+// 階層見出しの書き出し（公用文作成の考え方 Ⅰ-6 ウ: 第１ → １ → （１） → ア）
+const HEADING_MARKER_RE =
+  /^(?:第[0-9０-９一二三四五六七八九十]{1,3}[　 ]|[0-9０-９]{1,2}[　 ]|[（(][0-9０-９]{1,2}[）)][　 ]?|[⑴-⒇][　 ]?|[ア-ン][　 ])/;
+
+// 本文の右端。行の x1 の 80 パーセンタイルを使う（表や資料の飛び出しに
+// 引きずられないよう最大値は取らない）。
+export function textRightEdge(lines) {
+  const xs = lines.map((l) => l.x1).sort((a, b) => a - b);
+  if (!xs.length) return 0;
+  return xs[Math.min(xs.length - 1, Math.floor(xs.length * 0.8))];
+}
+
+// 階層見出しだけの行か。原典では見出しは独立した行に置かれ、本文の右端より
+// ずっと手前で終わる。句点を挟まないため段落テキストからは切り出せないが、
+// 座標を見れば「行が途中で終わっている」ことで判別できる。
+//
+//   ５ 学習者及び今後の法科大学院教育に求めるもの          ← 右端よりかなり手前
+//   環境法を学習する際には、まず、環境法の基本構造と…      ← 右端まで埋まる
+export function isHeadingOnlyLine(line, rightEdge) {
+  const t = line.text.trim();
+  if (!t || t.length > 40) return false;
+  if (!HEADING_MARKER_RE.test(t)) return false;
+  if (SENTENCE_END_RE.test(t)) return false; // 一文で終わる項目は見出しではない
+  // 禁則処理で 1〜2 字早く折り返すことがあるので 4 字分の余裕を見る
+  return line.x1 < rightEdge - line.height * 4;
+}
+
 function groupLinesIntoBlocks(lines) {
   const boxes = [];
+  const rightEdge = textRightEdge(lines);
   let cur = [];
 
   const flush = () => {
@@ -300,6 +328,9 @@ function groupLinesIntoBlocks(lines) {
     // 採点実感のセクションタイトル（句点で終わらないため、放置すると
     // 直後の本文と結合されてタイトル判定に失敗する年度がある）
     if (isSaitenTitle(t)) return true;
+    // 「２ 採点方針」「５ 学習者及び今後の法科大学院教育に求めるもの」のような
+    // 階層見出しの行（座標で判別する）
+    if (isHeadingOnlyLine(l, rightEdge)) return true;
     return false;
   };
 
