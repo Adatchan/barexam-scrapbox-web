@@ -1,0 +1,27 @@
+# 一時: PDFのテキスト項目の座標を調べるための手動ワークフロー。
+# 実行環境から法務省へ直接アクセスできないため、ここで動かしてログを読む。
+# 調査が済んだら削除する。
+name: 一時調査
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: PDFのURL
+        required: true
+        default: https://www.moj.go.jp/content/001429893.pdf
+      page:
+        description: ページ番号
+        required: true
+        default: "1"
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: node scripts/_diag.mjs "${{ inputs.url }}" "${{ inputs.page }}"
