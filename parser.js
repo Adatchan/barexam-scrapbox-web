@@ -248,6 +248,26 @@ function stripFooterPageNum(text) {
 // ベースライン間距離が行高の 1.5 倍未満なら同一ブロックと判定（pdfminer
 // 既定の line_margin=0.5 と等価）。ルビ（短い & 全部ひらがな）は単独ボックス
 // として後段の isRuby() で除外させる。
+// 開いたままの括弧の数
+export function bracketDepth(text) {
+  return (
+    (text.match(/[（〔]/g) || []).length - (text.match(/[）〕]/g) || []).length
+  );
+}
+
+// 深さ depth で開いている括弧が閉じる位置（その直後の添字）。閉じなければ -1
+export function closeIndex(text, depth) {
+  for (let k = 0; k < text.length; k++) {
+    const c = text[k];
+    if (c === "（" || c === "〔") depth++;
+    else if (c === "）" || c === "〕") {
+      depth--;
+      if (depth === 0) return k + 1;
+    }
+  }
+  return -1;
+}
+
 function groupLinesIntoBlocks(lines) {
   const boxes = [];
   let cur = [];
@@ -283,17 +303,18 @@ function groupLinesIntoBlocks(lines) {
     return false;
   };
 
-  const emitSolo = (line) => {
+  const emitSolo = (line, text = line.text) => {
     flush();
     boxes.push({
       x0: line.x0,
       x1: line.x1,
       y1: line.yTop,
-      text: line.text,
+      text,
     });
   };
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (!line.text) continue;
 
     if (isRubyLine(line)) {
@@ -303,6 +324,21 @@ function groupLinesIntoBlocks(lines) {
     }
 
     if (isStandaloneHeader(line)) {
+      // 「〔第２問〕（配点：１００〔…配点の割合は，」のように括弧が開いたまま
+      // 次の行へ続く見出しは、閉じるところまで取り込んで1つの見出しにする。
+      // 残り（本文の始まり）は通常の行として流す。
+      let depth = bracketDepth(line.text);
+      if (depth > 0 && i + 1 < lines.length) {
+        const nxt = lines[i + 1];
+        const cut = closeIndex(nxt.text, depth);
+        if (cut !== -1) {
+          emitSolo(line, line.text + nxt.text.slice(0, cut));
+          const rest = nxt.text.slice(cut);
+          if (rest) lines[i + 1] = { ...nxt, text: rest };
+          else i++;
+          continue;
+        }
+      }
       emitSolo(line);
       continue;
     }
