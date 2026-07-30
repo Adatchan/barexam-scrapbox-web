@@ -11,12 +11,18 @@
 // ブラウザと同じ解析結果になるよう、PDF.js は同一バージョン（pdfjs-dist
 // 4.0.379）を setPdfjs() で注入して同じパイプラインを再利用する。
 //
+// 既に converted/ にあるものは作り直さない。過去問のPDFは差し替わらないので
+// 取り直す意味がなく（法務省への負荷も無駄）、手作業で直した箇所を上書きして
+// しまわないためでもある。解析ルールを直して全部を作り直すときは --force。
+//
 // 使い方:
 //   npm install                       # pdfjs-dist を入れる
-//   node scripts/precompute.mjs       # 司法・予備とも全年度
+//   node scripts/precompute.mjs       # 未取得の分だけ（週次巡回はこれ）
 //   node scripts/precompute.mjs r6 r7 # 指定年度のみ（司法・予備とも）
+//   node scripts/precompute.mjs --force       # 全件を作り直す
+//   node scripts/precompute.mjs --force r6    # 指定年度を作り直す
 // =============================================================================
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -45,16 +51,35 @@ const { YOBI_RONBUN_SUBJECTS } = await import("../yobi-moj.js");
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "converted");
 
-const argYears = process.argv.slice(2);
+const args = process.argv.slice(2);
+const force = args.includes("--force");
+const argYears = args.filter((a) => !a.startsWith("--"));
 const silent = { log: () => {}, setProgress: () => {} };
+
+// 既存の JSON（無ければ空）。--force のときは無いものとして扱う
+function readExisting(file) {
+  if (force) return {};
+  try {
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return {}; // 未生成
+  }
+}
 
 // 1年度×1科目を変換して JSON エントリ（{ 種類: {paras, pdfUrl} }）を作る。
 // build は ({yearKey, subject, docType}, ctx)→entry を返す関数。
-async function buildSubject(build, yearKey, subject, types) {
+async function buildSubject(build, yearKey, subject, types, existing = {}) {
   const out = {};
   let ok = 0;
   let skip = 0;
+  let kept = 0;
   for (const docType of types) {
+    // 既にあるものはそのまま残す（PDF取得も解析も行わない）
+    if (existing[docType]?.paras?.length) {
+      out[docType] = existing[docType];
+      kept++;
+      continue;
+    }
     try {
       const entry = await build({ yearKey, subject, docType }, silent);
       out[docType] = { paras: entry.paras, pdfUrl: entry.pdfUrl };
@@ -65,11 +90,12 @@ async function buildSubject(build, yearKey, subject, types) {
       console.log(`--  ${yearKey} ${subject} ${docType}: ${e.message}`);
     }
   }
-  return { out, ok, skip };
+  return { out, ok, skip, kept };
 }
 
 let ok = 0;
 let skip = 0;
+let kept = 0;
 
 // ── 司法試験 ──────────────────────────────────────────────────────────────
 console.log("\n##### 司法試験 #####");
@@ -85,13 +111,21 @@ for (const yearKey of shihouYears) {
       ? ["試験問題", "出題の趣旨", "採点実感"]
       : ["試験問題"];
   for (const subject of Object.keys(SUBJECT_MAP)) {
-    const r = await buildSubject(buildEntry, yearKey, subject, types);
+    const dir = join(OUT, yearKey);
+    const file = join(dir, `${subject}.json`);
+    const r = await buildSubject(
+      buildEntry,
+      yearKey,
+      subject,
+      types,
+      readExisting(file),
+    );
     ok += r.ok;
     skip += r.skip;
-    if (Object.keys(r.out).length) {
-      const dir = join(OUT, yearKey);
+    kept += r.kept;
+    if (r.ok && Object.keys(r.out).length) {
       mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, `${subject}.json`), JSON.stringify(r.out));
+      writeFileSync(file, JSON.stringify(r.out));
     }
   }
 }
@@ -106,15 +140,23 @@ for (const yearKey of yobiYears) {
     continue;
   }
   for (const subject of YOBI_RONBUN_SUBJECTS) {
-    const r = await buildSubject(buildYobiEntry, yearKey, subject, yobiTypes);
+    const dir = join(OUT, "yobi", yearKey);
+    const file = join(dir, `${subject}.json`);
+    const r = await buildSubject(
+      buildYobiEntry,
+      yearKey,
+      subject,
+      yobiTypes,
+      readExisting(file),
+    );
     ok += r.ok;
     skip += r.skip;
-    if (Object.keys(r.out).length) {
-      const dir = join(OUT, "yobi", yearKey);
+    kept += r.kept;
+    if (r.ok && Object.keys(r.out).length) {
       mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, `${subject}.json`), JSON.stringify(r.out));
+      writeFileSync(file, JSON.stringify(r.out));
     }
   }
 }
 
-console.log(`\n完了: ${ok}件 生成 / ${skip}件 スキップ`);
+console.log(`\n完了: ${ok}件 生成 / ${kept}件 既存を保持 / ${skip}件 未取得`);
