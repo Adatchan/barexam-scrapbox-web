@@ -9,6 +9,7 @@
 //         node scripts/audit-converted.mjs --json out.json  で全件の詳細をJSON出力
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { isHeadingLine } from "../rules.js";
 
 const ROOT = "converted";
 
@@ -50,7 +51,10 @@ function analyzeEntry(paras) {
   for (let i = 0; i < paras.length - 1; i++) {
     const a = paras[i].trim();
     const b = paras[i + 1].trim();
-    if (a.length < 15) continue; // 見出し・扉行は対象外
+    if (a.length < 15) continue; // 扉行は対象外
+    // 「４ 法科大学院教育に求めるもの」のような見出しは、句点で終わらず次段落が
+    // 仮名で始まっても文の続きではない
+    if (isHeadingLine(a)) continue;
     if (END_OK.test(a)) continue;
     if (!CONT_HEAD.test(b)) continue;
     issues.push({

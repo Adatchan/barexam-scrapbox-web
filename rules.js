@@ -94,7 +94,7 @@ const HEAD_LIKE_RE = new RegExp(`^(?:${ITEM_HEAD}|【)`);
 // 段落が見出し行に見えるか（短く、句点を含まず、階層マーカーで始まる）。
 // 「４ 法科大学院教育に求めるもの」のように文末記号が無くても、
 // 次の段落の続きではない。
-function isHeadingLine(s) {
+export function isHeadingLine(s) {
   return (
     s.length <= 40 &&
     !/[。．]/.test(s) &&
