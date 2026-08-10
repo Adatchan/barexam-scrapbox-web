@@ -37,6 +37,7 @@ export const CRAWL_STATE = {
 };
 
 export const TANTOU_NEWS = [
+  { date: "2026.08.10", text: "令和8年の短答式の正答及び配点が掲載されました。" },
   { date: "2026.07.21", text: "令和8年の短答式問題が掲載されました。" },
   { date: "2026.07.20", text: "自動クロール機能が実装されました。新年度の短答式問題・正答及び配点は、法務省ウェブへの掲載後1週間以内に自動で追加されます。" },
 ];
@@ -53,5 +54,5 @@ export const TANTOU_CRAWL_STATE = {
   r5: { mondai: true, seikai: true },
   r6: { mondai: true, seikai: true },
   r7: { mondai: true, seikai: true },
-  r8: { mondai: true, seikai: false },
+  r8: { mondai: true, seikai: true },
 };
