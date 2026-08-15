@@ -1,0 +1,5 @@
+# GitHub Pages（Jekyll）の設定。
+# demo/ は動作説明動画の収録スクリプト置き場で、公開サイトには要らないため
+# 配信対象から外す。動画ファイル自体はリポジトリに含めない（.gitignore）。
+exclude:
+  - demo
