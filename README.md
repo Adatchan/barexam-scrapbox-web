@@ -97,6 +97,10 @@ web/
 │   ├── update-years.mjs    法務省サイト巡回 → years.js / news.js 更新
 │   ├── check-links.mjs     全年度×全種類のリンク探索の健全性チェック
 │   └── bump-version.mjs    index.html のキャッシュバスター（?v=）更新
+├── demo/
+│   ├── record.mjs          動作説明動画の収録（Playwright）
+│   └── overlay.js          収録用オーバーレイ（キャプション・疑似カーソル）
+├── _config.yml             GitHub Pages（Jekyll）の配信除外設定
 ├── .githooks/pre-commit    JS/CSS 変更時にキャッシュバスターを自動更新
 └── .github/workflows/
     └── update-years.yml    週次の自動巡回・健全性チェック（毎週月曜 09:00 JST）
@@ -137,6 +141,25 @@ node scripts/update-years.mjs
 
 いずれも週次ワークフロー（update-years.yml）が自動実行する。失敗すると
 GitHub からワークフロー失敗が通知される。
+
+## 動作説明動画
+
+`demo/` に、アプリの動作を説明する画面収録を作る一式を置く。ローカル配信した
+アプリを Playwright で操作し、日本語のキャプションと疑似カーソルを重ねた
+1280×800・約3分20秒の動画（トップ画面 → 使い方・FAQ → 年度・科目・種類の選択 →
+テキスト変換 → そのまま保存 → 予備試験への切替 → 全文検索 → 短答ダウンローダー）
+になる。
+
+```sh
+python3 -m http.server 8099 --bind 127.0.0.1   # 別シェルで静的配信
+node demo/record.mjs                            # demo/raw/*.webm を出力
+```
+
+`overlay.js` は `addInitScript` で注入するだけなので、アプリ本体のコードには
+触れない。mp4 への変換など詳しい手順は `demo/README.md` を見ること。
+
+書き出した動画はリポジトリに含めない（`.gitignore` で除外）。`demo/` 自体も
+`_config.yml` の `exclude` で GitHub Pages の配信対象から外してある。
 
 ## ライセンス・出典
 
