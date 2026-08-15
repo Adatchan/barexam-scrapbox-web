@@ -22,6 +22,22 @@
 PDF保存を案内し、PDF保存では全体を保存する。短答式の正答及び配点は
 1ページの表のためグループ単位で保存する。
 
+## 動作説明動画
+
+<video src="https://github.com/Adatchan/barexam-scrapbox-web/raw/main/demo/shihoshike-demo.mp4" poster="https://github.com/Adatchan/barexam-scrapbox-web/raw/main/demo/poster.png" controls muted playsinline width="100%">
+
+[![動作説明動画を再生する](demo/poster.png)](demo/shihoshike-demo.mp4)
+
+</video>
+
+1280×800・約3分20秒。トップ画面 → 使い方・FAQ → 年度・科目・種類の選択 →
+テキスト変換（ノーマル／Scrapbox記法）→ そのまま保存（個別・一式・LLM）→
+予備試験への切替 → 全文検索 → 短答ダウンローダー、の順に一巡する。
+収録環境から法務省ウェブへ接続できないため、「変換実行」「保存実行」を
+押した後の実行結果は収録していない（該当箇所に注記あり）。
+
+動画ファイルは `demo/` に置いてあり、公開ページ（GitHub Pages）からは配信しない。
+
 ## 機能
 
 - **テキスト変換**: 司法試験は年度（平成22年〜最新）× 科目（基本7科目＋選択科目
@@ -142,13 +158,10 @@ node scripts/update-years.mjs
 いずれも週次ワークフロー（update-years.yml）が自動実行する。失敗すると
 GitHub からワークフロー失敗が通知される。
 
-## 動作説明動画
+### 動作説明動画を収録し直す
 
-`demo/` に、アプリの動作を説明する画面収録を作る一式を置く。ローカル配信した
-アプリを Playwright で操作し、日本語のキャプションと疑似カーソルを重ねた
-1280×800・約3分20秒の動画（トップ画面 → 使い方・FAQ → 年度・科目・種類の選択 →
-テキスト変換 → そのまま保存 → 予備試験への切替 → 全文検索 → 短答ダウンローダー）
-になる。
+冒頭の動画は `demo/` の一式で作る。ローカル配信したアプリを Playwright で操作し、
+キャプションと疑似カーソルを重ねて収録する。
 
 ```sh
 python3 -m http.server 8099 --bind 127.0.0.1   # 別シェルで静的配信
@@ -158,8 +171,9 @@ node demo/record.mjs                            # demo/raw/*.webm を出力
 `overlay.js` は `addInitScript` で注入するだけなので、アプリ本体のコードには
 触れない。mp4 への変換など詳しい手順は `demo/README.md` を見ること。
 
-書き出した動画はリポジトリに含めない（`.gitignore` で除外）。`demo/` 自体も
-`_config.yml` の `exclude` で GitHub Pages の配信対象から外してある。
+なお `demo/` は `_config.yml` の `exclude` で GitHub Pages の配信対象から
+外してある。動画はこのリポジトリの README で見せるだけで、公開ページからは
+配信しない。
 
 ## ライセンス・出典
 

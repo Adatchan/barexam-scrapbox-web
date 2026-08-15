@@ -5,8 +5,7 @@ node_modules/
 .idea/
 .vscode/
 
-# 動作説明動画（収録物。GitHub Pages で配信しない・リポジトリにも入れない）
+# 動作説明動画の作業用ディレクトリ（収録の生データと中間ファイル）。
+# 完成した demo/shihoshike-demo.mp4 だけは README 掲載のため追跡する。
 demo/raw/
 demo/out/
-demo/*.mp4
-demo/*.webm
