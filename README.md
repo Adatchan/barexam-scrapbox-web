@@ -24,19 +24,19 @@ PDF保存を案内し、PDF保存では全体を保存する。短答式の正�
 
 ## 動作説明動画
 
-<video src="https://github.com/Adatchan/barexam-scrapbox-web/raw/main/demo/shihoshike-demo.mp4" poster="https://github.com/Adatchan/barexam-scrapbox-web/raw/main/demo/poster.png" controls muted playsinline width="100%">
+全文検索のところを抜き出したもの。科目とキーワードを入れて検索し、
+ヒットしたカードを押すと年度・科目・種類が選択欄に入る。
 
-[![動作説明動画を再生する](demo/poster.png)](demo/shihoshike-demo.mp4)
+![全文検索の操作（動作説明動画より）](demo/demo.gif)
 
-</video>
+全編は **[demo/shihoshike-demo.mp4](demo/shihoshike-demo.mp4)**（1280×800・約3分20秒）。
+GitHub はリポジトリ内の動画をその場で再生しないので、ダウンロードして見ること。
+トップ画面 → 使い方・FAQ → 年度・科目・種類の選択 → テキスト変換（ノーマル／
+Scrapbox記法）→ そのまま保存（個別・一式・LLM）→ 予備試験への切替 → 全文検索 →
+短答ダウンローダー、の順に一巡する。収録環境から法務省ウェブへ接続できないため、
+「変換実行」「保存実行」を押した後の実行結果は収録していない（該当箇所に注記あり）。
 
-1280×800・約3分20秒。トップ画面 → 使い方・FAQ → 年度・科目・種類の選択 →
-テキスト変換（ノーマル／Scrapbox記法）→ そのまま保存（個別・一式・LLM）→
-予備試験への切替 → 全文検索 → 短答ダウンローダー、の順に一巡する。
-収録環境から法務省ウェブへ接続できないため、「変換実行」「保存実行」を
-押した後の実行結果は収録していない（該当箇所に注記あり）。
-
-動画ファイルは `demo/` に置いてあり、公開ページ（GitHub Pages）からは配信しない。
+動画は `demo/` に置いてあり、公開ページ（GitHub Pages）からは配信しない。
 
 ## 機能
 
