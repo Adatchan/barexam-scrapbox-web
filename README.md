@@ -40,9 +40,15 @@ PDF保存を案内し、PDF保存では全体を保存する。短答式の正�
 - **全文検索**: 科目を選んでキーワードを入れると、その科目の全年度分の本文
   （試験問題・出題の趣旨・採点実感）を検索し、該当年度をカードで一覧。選択科目は
   「経済法第１問/第２問」として両方の問を対象にし、どちらのヒットかをカードに
-  表示する。カードを押すと年度・科目（ヒットした問）・種類が選択欄に入る。事前変換データ（`converted/`）を科目
-  単位で読むだけなので、法務省ウェブへのアクセスは発生しない（1科目あたり
-  gzip で 150〜190KB 程度・取得済みの科目は再取得しない）
+  表示する。カードを押すと年度・科目（ヒットした問）・種類が選択欄に入る。
+  検索には事前変換データから作った**検索用索引**（`converted/search/`）を使う。
+  索引は本文を照合用に正規化済み（空白除去・NFKC で全角英数字を半角に・小文字化）
+  で持つので、ブラウザは検索のたびに本文を正規化し直さず、照合（`indexOf`）だけで
+  済む（PC での計測で、民法の検索1回あたり、毎回正規化する方式の約60msに対して
+  0.2ms程度）。索引は
+  科目ごとに1ファイル（gzip で司法 130〜360KB・予備 10〜120KB 程度）で、検索
+  ダイアログを開いた時点で選択中の科目を先読みする。取得済みの科目は再取得せず、
+  法務省ウェブへのアクセスも発生しない
 - **処理結果キャッシュ**: 同じ年度・科目・種類の再処理を省略（件数・容量で上限管理）
 - **新年度の自動対応**: 毎週月曜にGitHub Actionsが法務省サイトを巡回し、新年度の
   掲載を検出すると年度リストと「更新情報」欄を自動更新してデプロイ
@@ -89,15 +95,18 @@ web/
 ├── parser.js               PDF解析（PDF.js）と段落構造の復元
 ├── format.js               テキスト整形（ノーマル / Scrapbox 記法）
 ├── convert.js              変換ディスパッチと処理結果キャッシュ
-├── search.js               事前変換データの全文検索（DOM非依存）
+├── search.js               全文検索（索引の照合・正規化・索引の形式。DOM非依存）
 ├── yobi-convert.js         予備試験論文式のテキスト変換（科目グループPDFから切り出し）
 ├── pdfout.js               原典PDFの抜き出し・スタンプ印字・zip
 ├── worker/worker.js        Cloudflare Worker（moj.go.jp 中継プロキシ）
 ├── scripts/
 │   ├── update-years.mjs    法務省サイト巡回 → years.js / news.js 更新
+│   ├── precompute.mjs      事前変換（converted/）→ 最後に全文検索の索引も更新
+│   ├── build-search-index.mjs  converted/ → 全文検索の索引（converted/search/）
+│   ├── test-search.mjs     全文検索の回帰テスト（索引が最新か・照合結果の一致）
 │   ├── check-links.mjs     全年度×全種類のリンク探索の健全性チェック
 │   └── bump-version.mjs    index.html のキャッシュバスター（?v=）更新
-├── .githooks/pre-commit    JS/CSS 変更時にキャッシュバスターを自動更新
+├── .githooks/pre-commit    JS/CSS 変更時にキャッシュバスターを、converted/ 変更時に索引を自動更新
 └── .github/workflows/
     └── update-years.yml    週次の自動巡回・健全性チェック（毎週月曜 09:00 JST）
 ```
@@ -122,6 +131,19 @@ git config core.hooksPath .githooks
 これにより JS/CSS を変更してコミットすると index.html の `?v=` が自動更新される
 （GitHub Pages の最大10分キャッシュ対策）。手動更新は
 `node scripts/bump-version.mjs`。
+
+`converted/` の事前変換データ（または `search.js` の正規化）を変更してコミット
+すると、全文検索の索引（`converted/search/`）も同じフックで作り直される。
+フックを使わずに直した場合は、索引を手で作り直す（数秒・PDFの取得はしない）:
+
+```sh
+node scripts/build-search-index.mjs          # 作り直す
+node scripts/build-search-index.mjs --check  # 最新か確かめるだけ
+node scripts/test-search.mjs                 # 索引と照合結果の回帰テスト
+```
+
+正規化の規則か索引の形式を変えたら、`search.js` の `SEARCH_INDEX_VERSION` を
+上げてから索引を作り直す（古い索引のまま照合しないようにするため）。
 
 リンク探索の健全性チェック（全年度×全種類、約2分）:
 

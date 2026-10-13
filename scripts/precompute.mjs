@@ -15,6 +15,9 @@
 // 取り直す意味がなく（法務省への負荷も無駄）、手作業で直した箇所を上書きして
 // しまわないためでもある。解析ルールを直して全部を作り直すときは --force。
 //
+// 最後に全文検索の索引（converted/search/）を converted/ の内容から作り直す
+// （scripts/build-search-index.mjs。手で直した箇所も索引に反映される）。
+//
 // 使い方:
 //   npm install                       # pdfjs-dist を入れる
 //   node scripts/precompute.mjs       # 未取得の分だけ（週次巡回はこれ）
@@ -160,3 +163,11 @@ for (const yearKey of yobiYears) {
 }
 
 console.log(`\n完了: ${ok}件 生成 / ${kept}件 既存を保持 / ${skip}件 未取得`);
+
+// ── 全文検索の索引 ────────────────────────────────────────────────────────
+const { buildSearchIndexes } = await import("./build-search-index.mjs");
+const idx = buildSearchIndexes();
+console.log(
+  `全文検索の索引: ${idx.written}件 更新 / ${idx.unchanged}件 変更なし` +
+    (idx.removed ? ` / ${idx.removed}件 削除` : ""),
+);

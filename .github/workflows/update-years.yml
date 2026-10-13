@@ -39,6 +39,7 @@ jobs:
       # 更新後の年度表で全年度×科目×種類を事前変換し converted/ を再生成する。
       # 既存年度（不変PDF）は同一出力＝差分なし。新年度・新規掲載分のみ差分が出る。
       # parser.js/format.js を改修した場合もここで自動的に再生成・反映される。
+      # 最後に全文検索の索引（converted/search/）も converted/ から作り直す。
       - name: 事前変換データ（converted/）を生成
         run: node scripts/precompute.mjs ${{ inputs.force && '--force' || '' }}
 

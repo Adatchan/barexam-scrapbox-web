@@ -99,9 +99,13 @@ function snippet(text, at) {
   return text.slice(Math.max(0, at - 18), at + 26).replace(/\n/g, "⏎");
 }
 
+// 全文検索の索引（converted/search/）は段落データではないので監査しない
+const SEARCH_INDEX_DIR = join(ROOT, "search");
+
 function* walk(dir) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
+    if (p === SEARCH_INDEX_DIR) continue;
     if (statSync(p).isDirectory()) yield* walk(p);
     else if (name.endsWith(".json")) yield p;
   }

@@ -42,7 +42,11 @@ import {
 import { buildStampedPdf, loadFflate } from "./pdfout.js";
 import { enhanceSelect } from "./colorselect.js";
 import { celebrate, alarmError, showToast } from "./effects.js";
-import { searchSubject, normalizeQuery } from "./search.js";
+import {
+  searchSubject,
+  normalizeQuery,
+  preloadSearchIndex,
+} from "./search.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -227,8 +231,8 @@ function closeSearch() {
 }
 
 // ─── 全文検索 ─────────────────────────────────────────────────────────────
-// 事前変換データ（converted/*.json）を科目単位で読み、キーワードに一致する
-// 年度・種類をカードで一覧する。カードを押すと画面の選択欄へ反映する。
+// 事前に正規化した検索用索引（converted/search/）を科目単位で読み、キーワードに
+// 一致する年度・種類をカードで一覧する。カードを押すと画面の選択欄へ反映する。
 let searchToken = 0; // 連打時に古い検索結果で上書きしないための世代番号
 let searchGroups = []; // 検索プルダウンの科目グループ（選択科目は2問まとめ）
 
@@ -306,6 +310,12 @@ function initSearchControls() {
   buildSearchSubjects(true);
 }
 
+// 選択中の科目の索引を先に取り寄せ、検索を押したら照合だけで済むようにする
+function preloadSelectedSearch() {
+  const group = searchGroups[Number($("search-subject").value)];
+  if (group) preloadSearchIndex(searchIsYobi(), group.subjects);
+}
+
 function selectedSearchTypes() {
   return [...$("search-types").querySelectorAll("input:checked")].map(
     (i) => i.value,
@@ -381,13 +391,12 @@ async function onSearch() {
   status.textContent = `「${group.label}」を検索中…`;
 
   try {
-    const { hits, searchedYears, missingYears } = await searchSubject(
-      { yobi, subjects: group.subjects, types, query },
-      (done, total) => {
-        if (token === searchToken)
-          status.textContent = `「${group.label}」を検索中… ${done}/${total}`;
-      },
-    );
+    const { hits, searchedYears, missingYears } = await searchSubject({
+      yobi,
+      subjects: group.subjects,
+      types,
+      query,
+    });
     if (token !== searchToken) return; // 新しい検索が始まっていたら捨てる
 
     if (!hits.length) {
@@ -1183,16 +1192,19 @@ window.addEventListener("DOMContentLoaded", () => {
   enhanceSelect($("search-subject"), searchGroupColor);
   setupDialog("search-dialog", "search-open", "search-close", () => {
     initSearchControls();
+    preloadSelectedSearch();
     $("search-input").focus();
   });
   for (const r of document.querySelectorAll('input[name="search-exam"]')) {
     r.addEventListener("change", () => {
       buildSearchSubjects(false);
+      preloadSelectedSearch();
       $("search-results").innerHTML = "";
       $("search-status").textContent =
         "キーワードを入力して「検索」を押してください。";
     });
   }
+  $("search-subject").addEventListener("change", preloadSelectedSearch);
   $("search-run").addEventListener("click", onSearch);
   $("search-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") onSearch();

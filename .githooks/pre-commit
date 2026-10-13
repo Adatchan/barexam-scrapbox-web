@@ -6,5 +6,11 @@
 # 配信されないため対象外）。個別列挙だと追加モジュールが漏れるので全体で見る。
 if git diff --cached --name-only |
   grep -qE '^[A-Za-z0-9_-]+\.(js|css)$'; then
-  node scripts/bump-version.mjs && git add index.html tantou.html
+  node scripts/bump-version.mjs && git add index.html tantou.html || exit 1
+fi
+
+# 事前変換データ（converted/）か照合の正規化（search.js）が変更されたら、
+# 全文検索の索引（converted/search/）を作り直してコミットに含める。
+if ! git diff --cached --quiet -- converted search.js; then
+  node scripts/build-search-index.mjs && git add converted/search || exit 1
 fi
