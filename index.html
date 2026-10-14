@@ -9,8 +9,10 @@
     <!--
       CSP（GitHub Pages はレスポンスヘッダを設定できないため meta で指定）:
       - script-src の sha256-… は下部のインラインスクリプト（エラー表示）のハッシュ。
-        インラインスクリプトを1文字でも変更したら再計算して両HTMLを更新すること:
-          node -e 'const{readFileSync}=require("node:fs");const{createHash}=require("node:crypto");const m=/<script>([\s\S]*?)<\/script>/.exec(readFileSync("index.html","utf8"));console.log("sha256-"+createHash("sha256").update(m[1],"utf8").digest("base64"))'
+        インラインスクリプトを1文字でも変更したら再計算して両HTMLを更新すること
+        （このコメント自身に一致しないよう HTML コメントを除いてから照合する。
+        -{2} は、そのまま書くとこのコメントが閉じてしまうハイフン2つの表記）:
+          node -e 'const{readFileSync}=require("node:fs");const{createHash}=require("node:crypto");const m=/<script>([\s\S]*?)<\/script>/.exec(readFileSync(process.argv[1],"utf8").replace(/<!-{2}[\s\S]*?-{2}>/g,""));console.log("sha256-"+createHash("sha256").update(m[1],"utf8").digest("base64"))' index.html
       - connect-src の workers.dev は moj.js の WORKER_URL。変更時はここも更新すること。
       - worker-src blob: は PDF.js がクロスオリジンの worker を blob 経由で包むために必要。
       - connect-src の jsDelivr は PDF.js の CMap・標準フォント（pdfjs-dist の
