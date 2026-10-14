@@ -338,6 +338,18 @@ textarea {
   padding: 8px 20px;
 }
 
+.search-mode {
+  margin: -4px 0 8px;
+  font-size: 0.74rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* 確定で検索する方式のときは、入力しても結果が出ない理由に気づけるよう色を付ける */
+.search-mode:not([data-mode="live"]) {
+  color: var(--warn);
+}
+
 .search-status {
   font-size: 0.78rem;
   color: var(--muted);
@@ -370,6 +382,7 @@ textarea {
 
 .hit-head {
   display: flex;
+  flex-wrap: wrap; /* 複数語の件数が長いときは折り返す */
   align-items: center;
   gap: 8px;
   margin-bottom: 4px;
@@ -398,6 +411,7 @@ textarea {
 
 .hit-count {
   margin-left: auto;
+  text-align: right;
   font-size: 0.72rem;
   color: var(--muted);
 }

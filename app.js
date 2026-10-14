@@ -44,8 +44,10 @@ import { enhanceSelect } from "./colorselect.js";
 import { celebrate, alarmError, showToast } from "./effects.js";
 import {
   searchSubject,
-  normalizeQuery,
+  parseQuery,
   preloadSearchIndex,
+  isSearchIndexLoaded,
+  onSearchIndexLoad,
 } from "./search.js";
 
 const $ = (id) => document.getElementById(id);
@@ -232,9 +234,40 @@ function closeSearch() {
 
 // ─── 全文検索 ─────────────────────────────────────────────────────────────
 // 事前に正規化した検索用索引（converted/search/）を科目単位で読み、キーワードに
-// 一致する年度・種類をカードで一覧する。カードを押すと画面の選択欄へ反映する。
-let searchToken = 0; // 連打時に古い検索結果で上書きしないための世代番号
+// 一致する年度・種類をカードで一覧する（空白で区切った語は AND 検索）。カードを
+// 押すと画面の選択欄へ反映する。
+let searchToken = 0; // 連打・入力中の検索で古い結果に上書きしないための世代番号
 let searchGroups = []; // 検索プルダウンの科目グループ（選択科目は2問まとめ）
+
+// ── 入力中の検索と、確定で検索する方式の切替 ──
+// 検索は読み込み済みの索引を照合するだけで通信が発生せず軽いので、入力に
+// 合わせて順次検索する。ただし次のときは従来どおり Enter／「検索」で確定して
+// から検索する。
+//   ・選んだ科目の索引をまだ読み込んでいない状態で、通信が遅いとき（データ
+//     セーバー有効・2G相当、または索引の読み込みが SLOW_LOAD_MS を超えた）。
+//     このときは先読みもせず、確定したときだけ取りに行く。読み込んだ科目は
+//     通信が要らないので入力中に検索する
+//   ・検索1回の処理（照合＋表示）が遅い端末（移動平均が SLOW_PROCESS_MS 超）
+const SLOW_LOAD_MS = 3000; // 索引の読み込みがこれより長ければ通信が遅い
+const FAST_LOAD_MS = 1000; // これより短く読み込めたら通信は遅くない
+const SLOW_PROCESS_MS = 60; // 検索1回の処理がこれを超えたら確定で検索する
+const FAST_PROCESS_MS = 25; // これを下回ったら入力中の検索に戻す
+let slowNetwork = false; // 索引の読み込み時間の実測による判断
+let slowDevice = false;
+let processMs = 0; // 検索1回の処理時間（指数移動平均）
+let liveTimer = 0;
+let lastSearchKey = ""; // 直近に実行した検索の条件（同じ条件の再検索を省く）
+let promptShown = true; // 検索状況の欄が入力を促す案内を出しているか
+
+const SEARCH_MODE_NOTE = {
+  live: "入力に合わせて検索します。",
+  device:
+    "この端末では検索の処理に時間がかかるため、Enter キーか「検索」で検索します。",
+  saveData:
+    "データセーバーが有効なため、Enter キーか「検索」を押したときに検索用データを読み込みます（読み込んだ科目は入力に合わせて検索します）。",
+  network:
+    "通信に時間がかかっているため、Enter キーか「検索」を押したときに検索用データを読み込みます（読み込んだ科目は入力に合わせて検索します）。",
+};
 
 // 検索ダイアログ内で選ばれている試験種別（メイン画面とは独立に切り替えられる）
 function searchIsYobi() {
@@ -310,10 +343,117 @@ function initSearchControls() {
   buildSearchSubjects(true);
 }
 
-// 選択中の科目の索引を先に取り寄せ、検索を押したら照合だけで済むようにする
+function selectedSearchGroup() {
+  return searchGroups[Number($("search-subject").value)];
+}
+
+// ブラウザが知らせる通信状態（Network Information API。対応ブラウザのみ）
+function connectionHint() {
+  const c = navigator.connection;
+  if (!c) return "";
+  if (c.saveData) return "saveData";
+  return /2g$/.test(c.effectiveType || "") ? "slow" : "";
+}
+
+// いまの検索方式。"live" は入力中に検索、それ以外は確定で検索（値は理由）
+function searchMode() {
+  if (slowDevice) return "device";
+  const group = selectedSearchGroup();
+  if (group && isSearchIndexLoaded(searchIsYobi(), group.subjects))
+    return "live";
+  const hint = connectionHint();
+  if (hint === "saveData") return "saveData";
+  if (hint === "slow" || slowNetwork) return "network";
+  return "live";
+}
+
+function updateSearchMode() {
+  const mode = searchMode();
+  const el = $("search-mode");
+  el.textContent = SEARCH_MODE_NOTE[mode];
+  el.dataset.mode = mode;
+  if (promptShown) showSearchPrompt();
+}
+
+function setSearchStatus(text) {
+  $("search-status").textContent = text;
+  promptShown = false;
+}
+
+// 結果が無いときの案内（方式によって「検索」を押すよう促す）
+function showSearchPrompt() {
+  $("search-status").textContent =
+    searchMode() === "live"
+      ? "キーワードを入力してください。"
+      : "キーワードを入力して「検索」を押してください。";
+  promptShown = true;
+}
+
+// 索引の読み込みが SLOW_LOAD_MS を過ぎても終わらなければ、終わるのを待たずに
+// 通信が遅いとみなす（読み込み中に入力しても確定で検索する方式に切り替わる）
+function watchIndexLoad(promise) {
+  let done = false;
+  const settle = () => {
+    done = true;
+  };
+  promise.then(settle, settle);
+  setTimeout(() => {
+    if (done) return;
+    slowNetwork = true;
+    updateSearchMode();
+  }, SLOW_LOAD_MS);
+}
+
+// 選択中の科目の索引を先に取り寄せ、検索のときは照合だけで済むようにする。
+// 通信が遅いときは先読みしない（科目を選び直すたびに読み込みが重なるのを
+// 避け、確定したときだけ取りに行く）。
 function preloadSelectedSearch() {
-  const group = searchGroups[Number($("search-subject").value)];
-  if (group) preloadSearchIndex(searchIsYobi(), group.subjects);
+  const group = selectedSearchGroup();
+  if (!group || connectionHint() || slowNetwork) return;
+  const yobi = searchIsYobi();
+  if (isSearchIndexLoaded(yobi, group.subjects)) return;
+  watchIndexLoad(preloadSearchIndex(yobi, group.subjects));
+}
+
+// 検索1回の処理時間から端末の速さを見積もる。ゆらぎで方式が頻繁に変わらない
+// よう、移動平均と2つのしきい値を使う。
+function recordSearchTime(ms) {
+  processMs = (processMs + ms) / 2;
+  const was = slowDevice;
+  if (processMs > SLOW_PROCESS_MS) slowDevice = true;
+  else if (processMs < FAST_PROCESS_MS) slowDevice = false;
+  if (slowDevice !== was) updateSearchMode();
+}
+
+// 入力に合わせた検索の予約。入力が続く間は待ち、落ち着いてから1回だけ検索
+// する（待ち時間は処理の速さに合わせて伸ばす）。確定で検索する方式のときは
+// 何もしない。
+function scheduleLiveSearch() {
+  clearTimeout(liveTimer);
+  if (searchMode() !== "live") return;
+  liveTimer = setTimeout(
+    () => runSearch(true),
+    Math.min(600, 150 + 2 * processMs),
+  );
+}
+
+// 試験・科目・種類を変えたとき。入力中に検索する方式ならすぐ検索し直す。
+// 確定で検索する方式なら、clear のとき（試験を変えたとき）は結果を消し、
+// それ以外は前の条件の結果だと分かるようにして残す。
+function onSearchConditionChange(clear) {
+  preloadSelectedSearch();
+  updateSearchMode();
+  if (searchMode() === "live") return runSearch(true);
+  searchToken++; // 前の条件で実行中の検索（読み込み待ちなど）の結果は捨てる
+  lastSearchKey = "";
+  if (clear || !$("search-results").childElementCount) {
+    $("search-results").innerHTML = "";
+    showSearchPrompt();
+  } else {
+    setSearchStatus(
+      "条件を変えました（下は前の条件の結果です）。Enter キーか「検索」で検索し直します。",
+    );
+  }
 }
 
 function selectedSearchTypes() {
@@ -323,7 +463,8 @@ function selectedSearchTypes() {
 }
 
 // ヒット1件分のカード。押すと年度・科目・種類を画面へ反映して閉じる。
-function buildHitCard(hit, showSubject, onPick) {
+// 複数語のときは件数を語ごとに出す。
+function buildHitCard(hit, terms, showSubject, onPick) {
   const card = document.createElement("button");
   card.type = "button";
   card.className = "hit-card";
@@ -345,81 +486,114 @@ function buildHitCard(hit, showSubject, onPick) {
   type.textContent = hit.docType;
   const count = document.createElement("span");
   count.className = "hit-count";
-  count.textContent = `${hit.count}件`;
+  count.textContent =
+    terms.length > 1
+      ? hit.counts.map((n, k) => `${terms[k].raw} ${n}件`).join("・")
+      : `${hit.counts[0]}件`;
   head.append(type, count);
 
   const snip = document.createElement("div");
   snip.className = "hit-snippet";
-  const mark = document.createElement("mark");
-  mark.textContent = hit.snippet.match;
-  snip.append(
-    document.createTextNode(hit.snippet.before),
-    mark,
-    document.createTextNode(hit.snippet.after),
-  );
+  for (const part of hit.snippet) {
+    if (part.mark) {
+      const mark = document.createElement("mark");
+      mark.textContent = part.text;
+      snip.appendChild(mark);
+    } else {
+      snip.appendChild(document.createTextNode(part.text));
+    }
+  }
 
   card.append(head, snip);
   card.addEventListener("click", () => onPick(hit));
   return card;
 }
 
-async function onSearch() {
+// 検索を実行する。live=true は入力中の検索（条件が直前と同じなら省く）、
+// false は Enter／「検索」による確定の検索。
+async function runSearch(live) {
+  clearTimeout(liveTimer);
   const query = $("search-input").value.trim();
+  const terms = parseQuery(query);
   const results = $("search-results");
-  const status = $("search-status");
-  results.innerHTML = "";
 
-  if (!normalizeQuery(query)) {
-    status.textContent = "キーワードを入力してください。";
-    return;
-  }
+  // 検索できない入力のときは、実行中の検索の結果も捨てる
+  const stop = (message) => {
+    searchToken++;
+    lastSearchKey = "";
+    results.innerHTML = "";
+    if (message) setSearchStatus(message);
+    else showSearchPrompt();
+  };
+  if (!terms.length) return stop(live ? "" : "キーワードを入力してください。");
   const types = selectedSearchTypes();
-  if (!types.length) {
-    status.textContent = "種類を1つ以上選んでください。";
-    return;
-  }
-
+  if (!types.length) return stop("種類を1つ以上選んでください。");
   const yobi = searchIsYobi();
-  const group = searchGroups[Number($("search-subject").value)];
-  if (!group) {
-    status.textContent = "科目を選んでください。";
-    return;
-  }
+  const group = selectedSearchGroup();
+  if (!group) return stop("科目を選んでください。");
+
+  const key = [
+    yobi,
+    group.label,
+    types.join(","),
+    terms.map((t) => t.norm).join(" "),
+  ].join("|");
+  if (live && key === lastSearchKey) return;
+  lastSearchKey = key;
+
   // 選択科目は第１問・第２問の両方を対象にするので、カードに科目名も出す
   const showSubject = group.subjects.length > 1;
   const token = ++searchToken;
-  status.textContent = `「${group.label}」を検索中…`;
+  const loaded = isSearchIndexLoaded(yobi, group.subjects);
+  // 索引が読み込み済みなら結果まで同じタスク内で進むので、この表示はちらつかない
+  setSearchStatus(
+    loaded
+      ? `「${group.label}」を検索中…`
+      : `「${group.label}」の検索用データを読み込み中…`,
+  );
+  results.innerHTML = "";
 
+  const pending = searchSubject({
+    yobi,
+    subjects: group.subjects,
+    types,
+    query,
+  });
+  if (!loaded) watchIndexLoad(pending);
   try {
-    const { hits, searchedYears, missingYears } = await searchSubject({
-      yobi,
-      subjects: group.subjects,
-      types,
-      query,
-    });
+    const { hits, searchedYears, missingYears, matchMs } = await pending;
     if (token !== searchToken) return; // 新しい検索が始まっていたら捨てる
 
+    const t0 = performance.now();
+    const label = terms.map((t) => `「${t.raw}」`).join("");
+    const what = terms.length > 1 ? `${label}をすべて含むもの` : label;
     if (!hits.length) {
-      status.textContent =
-        `「${query}」は ${group.label} の${searchedYears}年度分から見つかりませんでした。` +
-        (missingYears.length
-          ? `（変換データが無い${missingYears.length}年度は対象外）`
-          : "");
-      return;
-    }
-    status.textContent =
-      `「${query}」: ${hits.length}件（${searchedYears}年度分を検索）` +
-      (missingYears.length
-        ? `。変換データが無い${missingYears.length}年度は対象外です。`
-        : "");
-    for (const hit of hits) {
-      results.appendChild(
-        buildHitCard(hit, showSubject, (h) => applySearchHit(h, yobi)),
+      setSearchStatus(
+        `${what}は ${group.label} の${searchedYears}年度分から見つかりませんでした。` +
+          (missingYears.length
+            ? `（変換データが無い${missingYears.length}年度は対象外）`
+            : ""),
       );
+    } else {
+      setSearchStatus(
+        `${what}: ${hits.length}件（${searchedYears}年度分を検索）` +
+          (missingYears.length
+            ? `。変換データが無い${missingYears.length}年度は対象外です。`
+            : ""),
+      );
+      const frag = document.createDocumentFragment();
+      for (const hit of hits) {
+        frag.appendChild(
+          buildHitCard(hit, terms, showSubject, (h) => applySearchHit(h, yobi)),
+        );
+      }
+      results.appendChild(frag);
     }
+    recordSearchTime(matchMs + performance.now() - t0);
   } catch (e) {
     if (token !== searchToken) return;
-    status.textContent = `検索に失敗しました: ${e.message}`;
+    lastSearchKey = ""; // 次の入力・確定でやり直せるようにする
+    setSearchStatus(`検索に失敗しました: ${e.message}`);
   }
 }
 
@@ -1193,20 +1367,42 @@ window.addEventListener("DOMContentLoaded", () => {
   setupDialog("search-dialog", "search-open", "search-close", () => {
     initSearchControls();
     preloadSelectedSearch();
+    updateSearchMode();
     $("search-input").focus();
+    // 前回の入力が残っていれば、いまの条件（メイン画面の科目など）で検索し直す
+    lastSearchKey = "";
+    scheduleLiveSearch();
   });
   for (const r of document.querySelectorAll('input[name="search-exam"]')) {
     r.addEventListener("change", () => {
       buildSearchSubjects(false);
-      preloadSelectedSearch();
-      $("search-results").innerHTML = "";
-      $("search-status").textContent =
-        "キーワードを入力して「検索」を押してください。";
+      onSearchConditionChange(true);
     });
   }
-  $("search-subject").addEventListener("change", preloadSelectedSearch);
-  $("search-run").addEventListener("click", onSearch);
-  $("search-input").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") onSearch();
+  $("search-subject").addEventListener("change", () =>
+    onSearchConditionChange(false),
+  );
+  $("search-types").addEventListener("change", () =>
+    onSearchConditionChange(false),
+  );
+
+  // 索引の読み込み時間と、ブラウザが知らせる通信状態から通信の速さを見積もる
+  onSearchIndexLoad(({ ms }) => {
+    if (ms > SLOW_LOAD_MS) slowNetwork = true;
+    else if (ms < FAST_LOAD_MS) slowNetwork = false;
+    updateSearchMode();
   });
+  navigator.connection?.addEventListener?.("change", updateSearchMode);
+
+  const input = $("search-input");
+  input.addEventListener("input", (e) => {
+    if (!e.isComposing) scheduleLiveSearch(); // IME の変換中は確定を待つ
+  });
+  input.addEventListener("compositionend", scheduleLiveSearch);
+  input.addEventListener("keydown", (e) => {
+    // IME の変換を確定する Enter では検索しない
+    if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229)
+      runSearch(false);
+  });
+  $("search-run").addEventListener("click", () => runSearch(false));
 });
