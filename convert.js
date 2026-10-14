@@ -270,22 +270,27 @@ export async function runConversion({ yearKey, subject, docType, decorate }, ctx
 // 生成する（中身は { 種類: { paras, pdfUrl } }）。あればそこから即整形でき、
 // PDF取得と PDF.js 解析を丸ごと省略できる。無ければクライアント変換へ
 // フォールバックする。
+// 取得中の Promise ごと保持し、並列呼び出し（LLM保存の3種類同時など）で
+// 同じ JSON を重複取得しない。
 const PRECOMP_BASE = "./converted";
-const precompCache = new Map(); // `${yearKey}|${subject}` -> data | null
+const precompCache = new Map(); // `${yearKey}|${subject}` -> Promise<data | null>
 
-async function fetchPrecomputed(yearKey, subject) {
+function fetchPrecomputed(yearKey, subject) {
   const key = `${yearKey}|${subject}`;
-  if (precompCache.has(key)) return precompCache.get(key);
-  let data = null;
-  try {
-    const url = `${PRECOMP_BASE}/${yearKey}/${encodeURIComponent(subject)}.json`;
-    const res = await fetch(url, { cache: "no-cache" });
-    if (res.ok) data = await res.json();
-  } catch {
-    /* 静的ファイル無し・取得失敗はフォールバック */
+  let pending = precompCache.get(key);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const url = `${PRECOMP_BASE}/${yearKey}/${encodeURIComponent(subject)}.json`;
+        const res = await fetch(url, { cache: "no-cache" });
+        return res.ok ? await res.json() : null;
+      } catch {
+        return null; /* 静的ファイル無し・取得失敗はフォールバック */
+      }
+    })();
+    precompCache.set(key, pending);
   }
-  precompCache.set(key, data);
-  return data;
+  return pending;
 }
 
 // テキスト変換（表示用）。事前変換済みなら PDF.js を使わず即時に整形・表示し、

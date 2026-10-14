@@ -204,21 +204,26 @@ function yobiCachePut(key, entry) {
 // ─── 事前変換（静的JSON）───────────────────────────────────────────────────
 // scripts/precompute.mjs が web/converted/yobi/<年度>/<科目>.json を生成する。
 // 司法（converted/<年度>/）と年度キー・科目名が衝突するため yobi/ 配下に分ける。
+// 取得中の Promise ごと保持し、並列呼び出し（LLM保存の2種類同時など）で
+// 同じ JSON を重複取得しない。
 const YOBI_PRECOMP_BASE = "./converted/yobi";
-const yobiPrecompCache = new Map();
-async function fetchYobiPrecomputed(yearKey, subject) {
+const yobiPrecompCache = new Map(); // `${yearKey}|${subject}` -> Promise<data | null>
+function fetchYobiPrecomputed(yearKey, subject) {
   const key = `${yearKey}|${subject}`;
-  if (yobiPrecompCache.has(key)) return yobiPrecompCache.get(key);
-  let data = null;
-  try {
-    const url = `${YOBI_PRECOMP_BASE}/${yearKey}/${encodeURIComponent(subject)}.json`;
-    const res = await fetch(url, { cache: "no-cache" });
-    if (res.ok) data = await res.json();
-  } catch {
-    /* 静的ファイル無しはフォールバック */
+  let pending = yobiPrecompCache.get(key);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const url = `${YOBI_PRECOMP_BASE}/${yearKey}/${encodeURIComponent(subject)}.json`;
+        const res = await fetch(url, { cache: "no-cache" });
+        return res.ok ? await res.json() : null;
+      } catch {
+        return null; /* 静的ファイル無しはフォールバック */
+      }
+    })();
+    yobiPrecompCache.set(key, pending);
   }
-  yobiPrecompCache.set(key, data);
-  return data;
+  return pending;
 }
 
 // テキスト変換（表示用）。事前変換済みなら PDF.js を省略、無ければ取得→解析。
