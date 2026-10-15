@@ -520,7 +520,7 @@ const convertCtx = () => ({
   setProgress: setProgressBar,
 });
 
-// 並列取得時の変換コンテキスト。複数の runConversion が同時にログ・進捗を
+// 並列取得時の変換コンテキスト。複数の変換が同時にログ・進捗を
 // 出すため、各ログに種別タグを付けて交錯を読みやすくし、進捗バーは個別には
 // 動かさない（呼び出し側が完了件数で集約管理する）。
 const taggedCtx = (tag) => ({
@@ -641,7 +641,8 @@ function triggerDownload(blob, filename) {
 
 // ─── 原典PDF保存 ─────────────────────────────────────────────────────────
 // 選択中の種類の原典PDF（該当ページのみ）を保存する。
-// 変換実行済みならキャッシュを再利用し、未処理なら自動で取得する。
+// 取得・解析済み（個別・一式で保存済み、事前変換データの無い年度で変換実行済み
+// など）ならキャッシュを再利用し、未処理なら自動で取得する。
 async function onSaveSourcePdf() {
   if (isYobi()) return onSaveYobiSingle(currentType());
   const t0 = performance.now();
@@ -771,7 +772,8 @@ function invalidateResult() {
 }
 
 // 試験問題・出題の趣旨・採点実感を1つの Markdown にまとめて保存する。
-// LLM が文脈を把握できるよう、冒頭にメタ情報と出典を付ける。
+// LLM が文脈を把握できるよう、冒頭にメタ情報と出典を付ける。テキストだけで
+// 作るので、テキスト変換と同じく事前変換データを優先する（convertText）。
 async function onSaveLlm() {
   if (isYobi()) return onSaveYobiLlm();
   const t0 = performance.now();
@@ -790,7 +792,7 @@ async function onSaveLlm() {
     await Promise.allSettled(
       docTypes.map(async (docType) => {
         try {
-          const { result, pdfUrl, subjectLabel } = await runConversion(
+          const { result, pdfUrl, subjectLabel } = await convertText(
             { yearKey, subject, docType, decorate: false },
             taggedCtx(docType),
           );
