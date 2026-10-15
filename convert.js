@@ -2,8 +2,9 @@
 // 変換ディスパッチ
 //
 // 年度・科目・種類から PDF を特定し、取得（moj.js）→ 解析（parser.js）→
-// 整形（format.js）を組み立てる。処理結果はキャッシュされ、テキスト変換と
-// 原典PDF保存（単体・一括zip）が同じ取得・解析結果を共有して二重処理を防ぐ。
+// 整形（format.js）を組み立てる。処理結果はキャッシュされ、原典PDF保存（単体・
+// 一括zip）と、事前変換データが無いときのテキスト変換・LLM保存が同じ取得・解析
+// 結果を共有して二重処理を防ぐ。
 // =============================================================================
 import { YEAR_URL_MAP, RESULTS_URL_MAP } from "./years.js";
 import { SUBJECT_MAP, subjectInfo, Q_KANJI, yearKeyToLabel } from "./data.js";
@@ -244,8 +245,8 @@ export async function buildEntry({ yearKey, subject, docType }, ctx) {
   };
 }
 
-// クライアントでの変換（取得→解析→整形）。処理結果はキャッシュして
-// テキスト変換と原典PDF保存で共有する。
+// クライアントでの変換（取得→解析→整形）。処理結果はキャッシュして原典PDF保存と
+// テキスト変換・LLM保存（事前変換データが無いときの convertText 経由）で共有する。
 export async function runConversion({ yearKey, subject, docType, decorate }, ctx) {
   const { log, setProgress } = ctx;
   // 同じ年度・科目・種類を処理済みなら再取得せずキャッシュを使う
@@ -293,8 +294,8 @@ function fetchPrecomputed(yearKey, subject) {
   return pending;
 }
 
-// テキスト変換（表示用）。事前変換済みなら PDF.js を使わず即時に整形・表示し、
-// 無ければ従来どおりクライアントで変換する（onRun から呼ぶ）。
+// テキスト変換（表示・LLM用）。事前変換済みなら PDF.js を使わず即時に整形し、
+// 無ければ従来どおりクライアントで変換する（onRun・onSaveLlm から呼ぶ）。
 export async function convertText({ yearKey, subject, docType, decorate }, ctx) {
   const { log = () => {}, setProgress = () => {} } = ctx || {};
   if (!(yearKey in YEAR_URL_MAP)) throw new Error(`未対応の年度: ${yearKey}`);

@@ -226,7 +226,7 @@ function fetchYobiPrecomputed(yearKey, subject) {
   return pending;
 }
 
-// テキスト変換（表示用）。事前変換済みなら PDF.js を省略、無ければ取得→解析。
+// テキスト変換（表示・LLM用）。事前変換済みなら PDF.js を省略、無ければ取得→解析。
 export async function convertYobiText(
   { yearKey, subject, docType, decorate },
   ctx,

@@ -641,7 +641,8 @@ function triggerDownload(blob, filename) {
 
 // ─── 原典PDF保存 ─────────────────────────────────────────────────────────
 // 選択中の種類の原典PDF（該当ページのみ）を保存する。
-// 変換実行済みならキャッシュを再利用し、未処理なら自動で取得する。
+// 取得・解析済み（個別・一式で保存済み、事前変換データの無い年度で変換実行済み
+// など）ならキャッシュを再利用し、未処理なら自動で取得する。
 async function onSaveSourcePdf() {
   if (isYobi()) return onSaveYobiSingle(currentType());
   const t0 = performance.now();
