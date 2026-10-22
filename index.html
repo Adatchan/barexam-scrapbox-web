@@ -56,7 +56,7 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./style.css?v=20261015.0221" />
+    <link rel="stylesheet" href="./style.css?v=20261022.0553" />
   </head>
   <body>
     <main class="app">
@@ -154,7 +154,7 @@
         <details>
           <summary>出力形式の「ノーマル」と「Scrapbox記法」の違いは？</summary>
           <p>
-            ノーマルは装飾のないプレーンテキストです。Scrapbox記法を選ぶと、見出しが [* ]・[** ] で装飾され、#司法試験 などのタグ行が付きます。どちらも冒頭に出典（法務省の原典PDFのURL）が入ります。Scrapbox（ノートアプリ）に貼り付けないのであれば、ノーマルで十分です。
+            ノーマルは装飾のないプレーンテキストです。Scrapbox記法を選ぶと、見出しが [*** ]・[** ]・[* ] で装飾され、項目（⑴・ア など）が階層に応じて字下げされます。#司法試験 などのタグ行と、同じ年度・科目の試験問題・出題の趣旨・採点実感へのリンクが付き、【資料】は引用（&gt;）、採点実感の「優秀」などの評価区分は太字になります。判例のリンク化、会話文の話者名・「〜が求められる」等の文の太字は、出力形式の下のチェックで切り替えられます。どちらも冒頭に出典（法務省の原典PDFのURL）が入ります。Scrapbox（ノートアプリ）に貼り付けないのであれば、ノーマルで十分です。
           </p>
         </details>
 
@@ -390,6 +390,21 @@
                 <span>Scrapbox記法</span>
               </label>
             </div>
+            <!-- Scrapbox記法を選んだときだけ表示する装飾の切り替え -->
+            <div class="deco-options" id="deco-options" hidden>
+              <label class="deco-item">
+                <input type="checkbox" id="deco-case-links" checked />
+                判例をリンクにする
+              </label>
+              <label class="deco-item">
+                <input type="checkbox" id="deco-speaker-bold" checked />
+                会話文の話者名を太字にする
+              </label>
+              <label class="deco-item">
+                <input type="checkbox" id="deco-key-sentences" />
+                「〜が求められる」等の文を太字にする
+              </label>
+            </div>
           </div>
           <button id="run" class="btn-primary" type="button">変換実行</button>
           <div class="result-actions">
@@ -540,6 +555,6 @@
       crossorigin="anonymous"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20261015.0221"></script>
+    <script type="module" src="./app.js?v=20261022.0553"></script>
   </body>
 </html>

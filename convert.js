@@ -51,12 +51,17 @@ function cachePut(key, entry) {
   }
 }
 
-// キャッシュエントリから呼び出し元向けの結果を組み立てる
-export function assembleResult(entry, docType, decorate) {
+// Scrapbox 記法で相互リンクする種類（司法は3種類とも公表される）
+const SHIHOU_DOC_TYPES = ["試験問題", "出題の趣旨", "採点実感"];
+
+// キャッシュエントリから呼び出し元向けの結果を組み立てる。
+// deco は Scrapbox 記法の装飾の切り替え（format.js の DECO_DEFAULTS）。
+export function assembleResult(entry, docType, decorate, deco) {
   const { yearLabel, subjectLabel, paras, pdfUrl, pageRange, pdfBytes } = entry;
+  const fmt = { docTypes: SHIHOU_DOC_TYPES, deco };
   const result =
     docType === "試験問題"
-      ? toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate)
+      ? toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate, fmt)
       : toScrapboxNarrative(
           paras,
           yearLabel,
@@ -64,6 +69,7 @@ export function assembleResult(entry, docType, decorate) {
           docType,
           pdfUrl,
           decorate,
+          fmt,
         );
   return {
     yearLabel,
@@ -247,7 +253,10 @@ export async function buildEntry({ yearKey, subject, docType }, ctx) {
 
 // クライアントでの変換（取得→解析→整形）。処理結果はキャッシュして原典PDF保存と
 // テキスト変換・LLM保存（事前変換データが無いときの convertText 経由）で共有する。
-export async function runConversion({ yearKey, subject, docType, decorate }, ctx) {
+export async function runConversion(
+  { yearKey, subject, docType, decorate, deco },
+  ctx,
+) {
   const { log, setProgress } = ctx;
   // 同じ年度・科目・種類を処理済みなら再取得せずキャッシュを使う
   const cacheId = `${yearKey}|${subject}|${docType}`;
@@ -257,13 +266,13 @@ export async function runConversion({ yearKey, subject, docType, decorate }, ctx
       `処理済みのため再取得を省略: ${cached.yearLabel} ${cached.subjectLabel} ${docType}`,
     );
     setProgress(1.0);
-    return assembleResult(cached, docType, decorate);
+    return assembleResult(cached, docType, decorate, deco);
   }
 
   const entry = await buildEntry({ yearKey, subject, docType }, ctx);
   cachePut(cacheId, entry);
   setProgress(1.0);
-  return assembleResult(entry, docType, decorate);
+  return assembleResult(entry, docType, decorate, deco);
 }
 
 // ─── 事前変換（静的JSON）─────────────────────────────────────────────────
@@ -296,7 +305,10 @@ function fetchPrecomputed(yearKey, subject) {
 
 // テキスト変換（表示・LLM用）。事前変換済みなら PDF.js を使わず即時に整形し、
 // 無ければ従来どおりクライアントで変換する（onRun・onSaveLlm から呼ぶ）。
-export async function convertText({ yearKey, subject, docType, decorate }, ctx) {
+export async function convertText(
+  { yearKey, subject, docType, decorate, deco },
+  ctx,
+) {
   const { log = () => {}, setProgress = () => {} } = ctx || {};
   if (!(yearKey in YEAR_URL_MAP)) throw new Error(`未対応の年度: ${yearKey}`);
   if (!(subject in SUBJECT_MAP)) throw new Error(`未対応の科目: ${subject}`);
@@ -319,7 +331,8 @@ export async function convertText({ yearKey, subject, docType, decorate }, ctx) 
       },
       docType,
       decorate,
+      deco,
     );
   }
-  return runConversion({ yearKey, subject, docType, decorate }, ctx);
+  return runConversion({ yearKey, subject, docType, decorate, deco }, ctx);
 }

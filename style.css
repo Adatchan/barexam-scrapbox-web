@@ -578,6 +578,32 @@ textarea {
   border-color: var(--lane-blue-border);
 }
 
+/* Scrapbox記法の装飾の切り替え（出力形式の下に縦に並べる） */
+.deco-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.deco-options[hidden] {
+  display: none;
+}
+
+.deco-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.deco-item input {
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
 /* 保存レーン（原典・一式・LLM）と、選択中の形式の説明 */
 #save-mode {
   background: #fff;

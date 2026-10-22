@@ -544,6 +544,19 @@ function selectedFormat() {
   return el ? el.value : "plain";
 }
 
+// Scrapbox記法の装飾の切り替え（format.js の DECO_DEFAULTS と同じキー）
+function selectedDeco() {
+  return {
+    caseLinks: $("deco-case-links").checked,
+    speakerBold: $("deco-speaker-bold").checked,
+    keySentences: $("deco-key-sentences").checked,
+  };
+}
+
+function syncDecoOptions() {
+  $("deco-options").hidden = selectedFormat() !== "scrapbox";
+}
+
 function currentYearLabel() {
   return yearKeyToLabel($("year").value);
 }
@@ -555,6 +568,7 @@ async function onRun() {
   const subject = $("subject").value;
   const docType = currentType();
   const decorate = selectedFormat() === "scrapbox";
+  const deco = selectedDeco();
 
   $("log").textContent = "";
   $("result").textContent = "";
@@ -570,8 +584,14 @@ async function onRun() {
   try {
     // 司法は convertText、予備は convertYobiText（科目グループPDFから切り出し）。
     const { yearLabel, subjectLabel, result } = yobi
-      ? await convertYobiText({ yearKey, subject, docType, decorate }, convertCtx())
-      : await convertText({ yearKey, subject, docType, decorate }, convertCtx());
+      ? await convertYobiText(
+          { yearKey, subject, docType, decorate, deco },
+          convertCtx(),
+        )
+      : await convertText(
+          { yearKey, subject, docType, decorate, deco },
+          convertCtx(),
+        );
     lastResult = result;
     const formatSuffix = decorate ? "（scrapbox記法）" : "";
     const examLabel = yobi ? "司法試験予備試験論文式" : "司法試験";
@@ -1178,6 +1198,9 @@ window.addEventListener("DOMContentLoaded", () => {
   }
   // ボタンは司法・予備で共通。保存系ハンドラ内で isYobi() を見て分岐する。
   $("run").addEventListener("click", onRun);
+  for (const el of document.querySelectorAll('input[name="format"]'))
+    el.addEventListener("change", syncDecoOptions);
+  syncDecoOptions();
   $("copy").addEventListener("click", onCopy);
   $("download").addEventListener("click", onDownload);
   $("save-run").addEventListener("click", () => {

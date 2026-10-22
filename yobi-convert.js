@@ -174,11 +174,18 @@ export async function buildYobiEntry({ yearKey, subject, docType }, ctx) {
 }
 
 // エントリ→整形結果。試験問題は問題用、出題の趣旨はナラティブ用の整形を使う。
-export function assembleYobiResult(entry, docType, decorate) {
+// Scrapbox 記法では、公表される種類どうし（一般教養科目は試験問題のみ）を
+// 相互リンクする。deco は装飾の切り替え（format.js の DECO_DEFAULTS）。
+export function assembleYobiResult(entry, docType, decorate, deco) {
   const { yearLabel, subjectLabel, paras, pdfUrl, pageRange, pdfBytes } = entry;
+  const fmt = {
+    ...YOBI_FMT,
+    docTypes: subjectLabel === "一般教養科目" ? [] : ["試験問題", "出題の趣旨"],
+    deco,
+  };
   const result =
     docType === "試験問題"
-      ? toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate, YOBI_FMT)
+      ? toScrapbox(paras, yearLabel, subjectLabel, pdfUrl, decorate, fmt)
       : toScrapboxNarrative(
           paras,
           yearLabel,
@@ -186,7 +193,7 @@ export function assembleYobiResult(entry, docType, decorate) {
           docType,
           pdfUrl,
           decorate,
-          YOBI_FMT,
+          fmt,
         );
   return { yearLabel, subjectLabel, docType, result, pdfUrl, pageRange, pdfBytes };
 }
@@ -228,7 +235,7 @@ function fetchYobiPrecomputed(yearKey, subject) {
 
 // テキスト変換（表示・LLM用）。事前変換済みなら PDF.js を省略、無ければ取得→解析。
 export async function convertYobiText(
-  { yearKey, subject, docType, decorate },
+  { yearKey, subject, docType, decorate, deco },
   ctx,
 ) {
   const { log = () => {}, setProgress = () => {} } = ctx || {};
@@ -249,6 +256,7 @@ export async function convertYobiText(
       },
       docType,
       decorate,
+      deco,
     );
   }
 
@@ -257,11 +265,11 @@ export async function convertYobiText(
   if (cached) {
     log(`処理済みのため再取得を省略: ${cached.yearLabel} ${cached.subjectLabel} ${docType}`);
     setProgress(1.0);
-    return assembleYobiResult(cached, docType, decorate);
+    return assembleYobiResult(cached, docType, decorate, deco);
   }
 
   const entry = await buildYobiEntry({ yearKey, subject, docType }, ctx);
   yobiCachePut(cacheId, entry);
   setProgress(1.0);
-  return assembleYobiResult(entry, docType, decorate);
+  return assembleYobiResult(entry, docType, decorate, deco);
 }

@@ -145,3 +145,75 @@ export function isSaitenTitle(t) {
     t.length < 80
   );
 }
+
+// ─── 項目の細別（Scrapbox 記法の字下げ用）────────────────────────────────
+// 公用文の階層（第１ → １ → ⑴ → ア → （ア））のどれで始まる段落かを返す。
+// 0: 第１ / 1: １・１． / 2: ⑴・(1)・（１） / 3: ア / 4: (ｱ)・（ア）。該当なしは -1。
+// 括弧付きの番号は「(1)のうち」のような文中参照と区別するため、直後が
+// 平仮名のときは見出しとみなさない。
+const ITEM_TYPE_RES = [
+  /^第[0-9０-９一二三四五六七八九十]{1,3}[　 ]/,
+  /^[0-9０-９]{1,2}(?:[　 ]|[．.](?![0-9０-９]))/,
+  /^(?:[⑴-⒇]|[（(][0-9０-９]{1,2}[）)])(?![ぁ-ん])/,
+  /^[ア-ン][　 ]/,
+  /^[（(][ア-ンｱ-ﾝ][）)](?![ぁ-ん])/,
+];
+
+export function itemType(s) {
+  return ITEM_TYPE_RES.findIndex((re) => re.test(s));
+}
+
+// 段落の先頭の階層マーカー（「ア 」「⑴」等）。無ければ空文字列。
+export function itemPrefix(s) {
+  const t = itemType(s);
+  return t < 0 ? "" : ITEM_TYPE_RES[t].exec(s)[0];
+}
+
+// 項目見出しの行か（階層マーカーで始まり、短く、句点を含まない）
+export function isItemHeading(s) {
+  return itemType(s) >= 0 && s.length <= 40 && !/[。．]/.test(s);
+}
+
+// 採点実感では、見出しが次の見出しや本文と1つの段落に連結されていることが多い
+// （「⑴ 設問１についてア 設問１⑴について(ｱ) 全体的な採点実感設問１⑴において
+// 論ずべき事項は…」）。段落が階層マーカーで始まるときに限り、
+//   ・「…について」の直後に次の階層マーカー・〔…〕・本文の書き出しが続く
+//   ・「…採点実感」「…答案の例」の直後に本文が続く
+// 箇所で切り離す。原典の字送り情報は残っていないため、文中の「について」と
+// 取り違えにくい形（直後が助詞・読点でない）に限っている。
+const GLUE_MARK =
+  "(?:[0-9０-９]{1,2}[　 ]|[⑴-⒇]|[（(][0-9０-９]{1,2}[）)]|[ア-ン][　 ]|[（(][ア-ンｱ-ﾝ][）)])";
+const GLUE_NITSUITE_RE = new RegExp(
+  `^([^。、，．]{2,40}?について)(?=${GLUE_MARK}|[〔［【]|本問|本件|設問|課題|全体|全般|一般的)`,
+);
+const GLUE_TITLE_RE =
+  /^([^。、，．]{2,24}?(?:採点実感|答案の例))(?=[^\sはがをにもの、，。）」及等とで並・])/;
+
+export function splitGluedHeadings(p) {
+  const out = [];
+  let rest = p;
+  while (itemType(rest) >= 0) {
+    const m = GLUE_NITSUITE_RE.exec(rest) || GLUE_TITLE_RE.exec(rest);
+    if (!m) break;
+    out.push(m[1].trim());
+    rest = rest.slice(m[1].length).trim();
+  }
+  if (rest) out.push(rest);
+  return out;
+}
+
+// 【資料】【参考資料２】等、引用として扱う資料の見出しか。見出しの後ろに
+// 題名・条文が続くことがある。「【資料１ 会議録】を読んだ上で」のように
+// 直後が助詞で続く場合は文中の参照なので見出しではない。
+const BRACKET_REF_RE = /^【[^】]+】(?=[をにはのとで及、，])/;
+export function isShiryoHeading(s) {
+  return /^【(?:参考)?資料[^】]*】/.test(s) && !BRACKET_REF_RE.test(s);
+}
+
+// 【…】で始まる段落が見出しか。資料以外は、後ろに文（句点を含む）が続く
+// 「【事実】１から５までを前提として、…答えなさい。」を本文として扱う。
+export function isBracketHeading(s) {
+  if (isShiryoHeading(s)) return true;
+  const m = /^【[^】]+】/.exec(s);
+  return !!m && !BRACKET_REF_RE.test(s) && !/[。．]/.test(s.slice(m[0].length));
+}

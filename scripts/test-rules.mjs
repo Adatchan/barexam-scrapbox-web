@@ -4,9 +4,16 @@
 //     原典PDFに現れる構造マーカー（〔設問〕【資料】）を句点の直後で改行する。
 //   ・rules.js の段落結合: 改ページで文の途中に入った区切りを繋ぎ直す。
 //   ・parser.js のセクション切り出し: 合冊PDFで別科目を取り込まない。
+//   ・format.js の Scrapbox 記法: 連結見出しの分割・字下げ・引用・太字・リンク。
 //
 // 使い方: node scripts/test-rules.mjs
-import { normalizeParagraph, mergeBrokenParagraphs } from "../rules.js";
+import {
+  normalizeParagraph,
+  mergeBrokenParagraphs,
+  splitGluedHeadings,
+  isBracketHeading,
+} from "../rules.js";
+import { toScrapbox, toScrapboxNarrative } from "../format.js";
 
 let ng = 0;
 const ok = (cond, label) => {
@@ -346,6 +353,98 @@ ok(
     .includes("会社法"),
   "本文中の科目名では打ち切らない",
 );
+
+// ─── 採点実感で連結された見出しの分割 ───────────────────────────────
+const glue = (s) => splitGluedHeadings(s).join("|");
+ok(
+  glue("⑴ 設問１についてア 設問１⑴について(ｱ) 全体的な採点実感設問１⑴において論ずべき事項は、") ===
+    "⑴ 設問１について|ア 設問１⑴について|(ｱ) 全体的な採点実感|設問１⑴において論ずべき事項は、",
+  "連結見出しを分割",
+);
+ok(
+  glue("イ 答案の例優秀に属する答案の例は、") === "イ 答案の例|優秀に属する答案の例は、",
+  "「答案の例」の後ろで分割",
+);
+ok(
+  glue("ア 甲について検討すると、") === "ア 甲について検討すると、",
+  "文中の「について」では分割しない",
+);
+ok(glue("設問１についてア 本問") === "設問１についてア 本問", "マーカーの無い段落は分割しない");
+
+// ─── 【…】見出しの判定 ─────────────────────────────────────────────
+ok(isBracketHeading("【事実】"), "【事実】は見出し");
+ok(isBracketHeading("【資料】地方自治法（抄録）"), "題名が続く【資料】は見出し");
+ok(
+  !isBracketHeading("【資料１ 会議録】を読んだ上で，答えなさい。"),
+  "助詞が続く【…】は文中の参照",
+);
+ok(
+  !isBracketHeading("【事実】１から５までを前提として、答えなさい。"),
+  "文が続く【事実】は本文",
+);
+
+// ─── Scrapbox 記法の整形 ───────────────────────────────────────────
+const narr = (paras, deco, docType = "採点実感") =>
+  toScrapboxNarrative(paras, "令和６年", "民事系科目（民法）", docType, null, true, {
+    docTypes: ["試験問題", "出題の趣旨", "採点実感"],
+    deco,
+  }).split("\n");
+const lines = narr([
+  "１ 採点実感",
+  "⑴ 設問１についてア 全体的な採点実感本問では、最判昭和４２年１０月３１日民集２１巻８号２２３２頁を踏まえることが求められる。「優秀」な答案は少なかった。",
+]);
+ok(
+  lines.includes("関連：[令和６年司法試験　民事系科目（民法）　試験問題] [令和６年司法試験　民事系科目（民法）　出題の趣旨]"),
+  "他の種類へのリンク",
+);
+ok(lines.includes("[** １ 採点実感]"), "最上位の見出しは [** ]");
+ok(lines.includes(" [* ⑴ 設問１について]"), "下位の見出しは字下げして [* ]");
+ok(lines.includes("  [* ア 全体的な採点実感]"), "さらに下位の見出しは2段下げ");
+const body = lines.find((l) => l.includes("本問では"));
+ok(body.startsWith("   本問では"), "見出しの下の本文は1段下げ");
+ok(body.includes("[最判昭和42年10月31日]民集"), "判例リンク（半角数字）");
+ok(body.includes("「[* 優秀]」"), "評価区分を太字");
+ok(!body.includes("[* 本問では"), "重要文の太字は既定で無効");
+const keyBody = narr(["本問では、検討が求められる。次に進む。"], {
+  keySentences: true,
+}).find((l) => l.includes("本問では"));
+ok(keyBody === "[* 本問では、検討が求められる。]次に進む。", "重要文を太字");
+ok(
+  narr(["最高裁判所平成元年９月１４日第一小法廷判決"], {}, "出題の趣旨").includes(
+    "[最判平成元年9月14日]",
+  ),
+  "正式な表記の判例を略記でリンク",
+);
+ok(
+  !narr(["最判昭和４２年１０月３１日"], { caseLinks: false }).some((l) =>
+    l.includes("[最判"),
+  ),
+  "判例リンクを無効にできる",
+);
+ok(
+  narr(["本文に[設問３］とある。"]).includes("本文に［設問３］とある。"),
+  "原典の半角 [ ] は全角にする",
+);
+
+const prob = toScrapbox(
+  [
+    "〔設問１〕",
+    "ア Ｃの反論を論じなさい。",
+    "【資料 関係法令】",
+    "○ 民法（抜粋）",
+    "甲：説明します。",
+    "〔設問２〕",
+  ],
+  "令和６年",
+  "民事系科目（民法）",
+  null,
+  true,
+).split("\n");
+ok(prob[0] === "令和６年司法試験　民事系科目（民法）　試験問題", "試験問題のタイトルに種類名");
+ok(prob.includes(" ア Ｃの反論を論じなさい。"), "ア の項目を字下げ");
+ok(prob.includes("> ○ 民法（抜粋）"), "【資料】の後ろは引用");
+ok(prob.includes("> [* 甲]：説明します。"), "話者名を太字（引用内）");
+ok(prob.includes("[** 〔設問２〕]"), "次の設問で引用を終える");
 
 console.log(ng === 0 ? "\n全テストOK" : `\nNG ${ng}件`);
 process.exit(ng ? 1 : 0);
