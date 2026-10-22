@@ -46,6 +46,13 @@ let _pdfDocOptions = {
   cMapUrl: `${PDFJS_ASSETS}/cmaps/`,
   cMapPacked: true,
   standardFontDataUrl: `${PDFJS_ASSETS}/standard_fonts/`,
+  // PDF.js 4.0.379 は埋め込みフォントの描画に eval を使う経路を持ち、細工した
+  // PDF から任意コードを実行されうる（CVE-2024-4367。4.2.67 で eval 自体が
+  // 除去された）。ブラウザは CSP に unsafe-eval が無いので PDF.js 側が自動で
+  // この経路を落とすが、Node の事前変換（scripts/precompute.mjs）には CSP が
+  // 効かないため明示的に無効化する。バージョンを 4.2.67 以降に上げたらこの行は
+  // 不要になる。
+  isEvalSupported: false,
 };
 
 export function setPdfDocOptions(opts) {

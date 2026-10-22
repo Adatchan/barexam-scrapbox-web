@@ -15,6 +15,8 @@ export const PDF_DOC_OPTIONS = {
   cMapUrl: `${PDFJS_ASSETS}/cmaps/`,
   cMapPacked: true,
   standardFontDataUrl: `${PDFJS_ASSETS}/standard_fonts/`,
+  // eval 経路を使わせない（parser.js と同じ理由。CVE-2024-4367）
+  isEvalSupported: false,
 };
 let _pdfjsPromise = null;
 export function loadPdfjs() {
