@@ -192,3 +192,63 @@ export function buildHitCard(hit, opts, onPick) {
   card.addEventListener("click", () => onPick(hit));
   return card;
 }
+
+// ─── ヘルプ画像の拡大表示 ─────────────────────────────────────────────────
+// ヘルプの画面図（.help-figure a）を押すと、別画面に移らずその場で拡大表示する。
+// ヘルプ自体がダイアログなので、拡大用のダイアログを上に重ねる（showModal は
+// 後から開いたものが最前面になる）。画像を押すと全体表示と原寸表示（スクロール
+// できる）を切り替え、背景・閉じるボタン・Esc で閉じる。スマホでは全体表示だと
+// 文字が小さいので、原寸表示で細部を見られるようにする。
+// JS が動かない環境ではリンク先（画像そのもの）が開く。
+export function setupImageZoom(root = document) {
+  const dlg = document.createElement("dialog");
+  dlg.id = "zoom-dialog";
+  dlg.setAttribute("aria-label", "画像の拡大表示");
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "zoom-close";
+  close.setAttribute("aria-label", "閉じる");
+  close.textContent = "×";
+  const img = document.createElement("img");
+  img.className = "zoom-img";
+  img.alt = "";
+  const cap = document.createElement("p");
+  cap.className = "zoom-caption";
+  dlg.append(close, img, cap);
+  document.body.appendChild(dlg);
+
+  const hint = document.createElement("p");
+  hint.className = "zoom-hint";
+  hint.textContent = "画像を押すと原寸表示に切り替わります";
+  dlg.append(hint);
+
+  const setZoomed = (on) => {
+    dlg.classList.toggle("zoomed", on);
+    hint.textContent = on
+      ? "画像を押すと全体表示に戻ります"
+      : "画像を押すと原寸表示に切り替わります";
+  };
+  const hide = () => closeDialog(dlg);
+  dlg.addEventListener("click", (e) => {
+    if (e.target === img) setZoomed(!dlg.classList.contains("zoomed"));
+    else if (e.target !== cap && e.target !== hint) hide(); // 背景・閉じるボタン
+  });
+  dlg.addEventListener("cancel", (e) => {
+    e.preventDefault(); // Esc もアニメーションを通して閉じる（下のヘルプは開いたまま）
+    hide();
+  });
+
+  root.addEventListener("click", (e) => {
+    const link = e.target.closest(".help-figure a");
+    if (!link) return;
+    e.preventDefault();
+    const src = link.querySelector("img");
+    img.src = link.getAttribute("href");
+    img.alt = src ? src.alt : "";
+    cap.textContent =
+      link.closest("figure")?.querySelector("figcaption")?.textContent || "";
+    setZoomed(false);
+    dlg.showModal();
+    close.focus();
+  });
+}

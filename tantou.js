@@ -52,6 +52,7 @@ import {
   closeDialog,
   setupDialog,
   buildHitCard,
+  setupImageZoom,
 } from "./ui.js";
 import {
   searchSubject,
@@ -475,6 +476,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // ダイアログ（ヘルプ・全文検索）。背景クリック・Escでも閉じる。
   setupDialog("help-dialog", "help", "help-close");
+  setupImageZoom($("help-dialog")); // ヘルプの画面図はその場で拡大表示
   enhanceSelect($("search-subject"), (v) => SYSTEM_BG[subjectSystem(v)]);
   setupDialog("search-dialog", "search-open", "search-close", () => {
     initSearchControls();

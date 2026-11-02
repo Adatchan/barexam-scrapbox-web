@@ -140,22 +140,26 @@ textarea {
 /* 開閉アニメーション。閉じるときは JS が .closing を付け、
    animationend 後に close() する（入ってきた道を戻る） */
 #help-dialog[open],
-#search-dialog[open] {
+#search-dialog[open],
+#zoom-dialog[open] {
   animation: dlg-in 0.18s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 
 #help-dialog[open]::backdrop,
-#search-dialog[open]::backdrop {
+#search-dialog[open]::backdrop,
+#zoom-dialog[open]::backdrop {
   animation: xfade-in 0.18s ease;
 }
 
 #help-dialog.closing[open],
-#search-dialog.closing[open] {
+#search-dialog.closing[open],
+#zoom-dialog.closing[open] {
   animation: dlg-out 0.15s ease forwards;
 }
 
 #help-dialog.closing[open]::backdrop,
-#search-dialog.closing[open]::backdrop {
+#search-dialog.closing[open]::backdrop,
+#zoom-dialog.closing[open]::backdrop {
   animation: xfade-out 0.15s ease forwards;
 }
 
@@ -990,11 +994,13 @@ textarea {
     animation: xfade-in 0.12s ease;
   }
   #help-dialog[open],
-#search-dialog[open] {
+  #search-dialog[open],
+  #zoom-dialog[open] {
     animation: xfade-in 0.15s ease;
   }
   #help-dialog.closing[open],
-#search-dialog.closing[open] {
+  #search-dialog.closing[open],
+  #zoom-dialog.closing[open] {
     animation: xfade-out 0.15s ease forwards;
   }
   
@@ -1661,8 +1667,117 @@ textarea {
   margin-top: 2px;
 }
 
-/* 画像を押すと原寸で開く */
+/* 画像を押すと、その場で拡大表示する（ui.js の setupImageZoom） */
 .help-figure a {
   display: block;
   cursor: zoom-in;
+}
+
+#zoom-dialog {
+  max-width: none;
+  max-height: none;
+  width: min(1200px, calc(100vw - 24px));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  cursor: zoom-out;
+}
+
+#zoom-dialog::backdrop {
+  background: rgba(12, 16, 24, 0.94);
+}
+
+.zoom-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: calc(100vh - 90px);
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+.zoom-caption {
+  width: fit-content;
+  max-width: 100%;
+  margin: 10px auto 0;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.zoom-caption:empty {
+  display: none;
+}
+
+.zoom-hint {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.74rem;
+  text-align: center;
+}
+
+#zoom-dialog .zoom-img {
+  cursor: zoom-in;
+}
+
+/* 原寸表示: 画面いっぱいに広げ、縦横にスクロールして細部を見る */
+#zoom-dialog.zoomed {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 56px 12px 16px;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#zoom-dialog.zoomed .zoom-img {
+  width: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0 auto;
+  cursor: zoom-out;
+}
+
+#zoom-dialog.zoomed .zoom-close {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+}
+
+.zoom-close {
+  position: absolute;
+  top: -14px;
+  right: -10px;
+  z-index: 1;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.zoom-close:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .zoom-close {
+    top: -44px;
+    right: 0;
+  }
 }

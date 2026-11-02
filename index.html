@@ -20,7 +20,7 @@
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self';
-        script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'sha256-sL0sE8N+ozkm4IKLAY9i63zK3XFc/dbUSv1xFAttkaY=' 'sha256-8SE+eERaHoK0uCnZfks3lNt56j/PS333DN2dLCR6HkM=';
+        script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'sha256-pZ0+6DRWoKRrdL/zac0ynjt1b2PHLLQ4qHdwgb9cy60=' 'sha256-8SE+eERaHoK0uCnZfks3lNt56j/PS333DN2dLCR6HkM=';
         style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
         font-src 'self' https://fonts.gstatic.com;
         img-src 'self' data:;
@@ -54,7 +54,7 @@
       href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=BIZ+UDGothic:wght@400;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./style.css?v=18657ec1b4" />
+    <link rel="stylesheet" href="./style.css?v=494d83b952" />
   </head>
   <body>
     <main class="app">
@@ -109,7 +109,7 @@
             ③テキストは選んだ時点で下の欄に表示されるので、「コピー」または「.txt」で持ち出します。変換ボタンを押す必要はありません。
           </p>
           <figure class="help-figure">
-            <a href="./img/help/converter-overview.webp" target="_blank" rel="noopener" title="画像を拡大して開く">
+            <a href="./img/help/converter-overview.webp" target="_blank" rel="noopener" title="押すと拡大表示">
             <img
               src="./img/help/converter-overview.webp"
               width="1200"
@@ -152,7 +152,7 @@
             <li>検索は事前変換データから作った索引に対して行うので、法務省ウェブサイトへのアクセスは発生しません（変換データが無い年度は対象外）。索引は科目ごとに読み込んで保持するので、同じ科目の再検索はすぐに終わります。</li>
           </ul>
           <figure class="help-figure">
-            <a href="./img/help/converter-search.webp" target="_blank" rel="noopener" title="画像を拡大して開く">
+            <a href="./img/help/converter-search.webp" target="_blank" rel="noopener" title="押すと拡大表示">
             <img
               src="./img/help/converter-search.webp"
               width="1032"
@@ -496,7 +496,7 @@
          入口（app.js / tantou.js）から import される部品にも版番号を付け、
          ブラウザに古い部品が残って新しい入口と食い違うのを防ぐ。
          中身は scripts/bump-version.mjs が自動生成する（手で編集しない） -->
-    <script type="importmap">{"imports":{"./app.js":"./app.js?v=56a7a37805","./colorselect.js":"./colorselect.js?v=e3f58e9925","./convert.js":"./convert.js?v=4713d0b470","./data.js":"./data.js?v=073ad69957","./effects.js":"./effects.js?v=adabae4e0a","./format.js":"./format.js?v=0074b73123","./moj.js":"./moj.js?v=cbc07a5f2a","./news.js":"./news.js?v=f635ee97d3","./parser.js":"./parser.js?v=df499db152","./pdfout.js":"./pdfout.js?v=32646018dc","./pdfsplit.js":"./pdfsplit.js?v=9927d44153","./rules.js":"./rules.js?v=90f72bb194","./search.js":"./search.js?v=bc95d05881","./tantou-moj.js":"./tantou-moj.js?v=7d4d3c5fd0","./tantou-text.js":"./tantou-text.js?v=dc397a70cb","./tantou.js":"./tantou.js?v=ed05e40799","./ui.js":"./ui.js?v=1faa57177d","./years.js":"./years.js?v=3c463d19d4","./yobi-convert.js":"./yobi-convert.js?v=9a978ecc79","./yobi-moj.js":"./yobi-moj.js?v=8080981148","./yobi-years.js":"./yobi-years.js?v=a63917295e"}}</script>
+    <script type="importmap">{"imports":{"./app.js":"./app.js?v=a776501fbd","./colorselect.js":"./colorselect.js?v=e3f58e9925","./convert.js":"./convert.js?v=4713d0b470","./data.js":"./data.js?v=073ad69957","./effects.js":"./effects.js?v=adabae4e0a","./format.js":"./format.js?v=0074b73123","./moj.js":"./moj.js?v=cbc07a5f2a","./news.js":"./news.js?v=f635ee97d3","./parser.js":"./parser.js?v=df499db152","./pdfout.js":"./pdfout.js?v=32646018dc","./pdfsplit.js":"./pdfsplit.js?v=9927d44153","./rules.js":"./rules.js?v=90f72bb194","./search.js":"./search.js?v=bc95d05881","./tantou-moj.js":"./tantou-moj.js?v=7d4d3c5fd0","./tantou-text.js":"./tantou-text.js?v=dc397a70cb","./tantou.js":"./tantou.js?v=752e459179","./ui.js":"./ui.js?v=c0b1a9bafc","./years.js":"./years.js?v=3c463d19d4","./yobi-convert.js":"./yobi-convert.js?v=9a978ecc79","./yobi-moj.js":"./yobi-moj.js?v=8080981148","./yobi-years.js":"./yobi-years.js?v=a63917295e"}}</script>
 
     <!-- モジュール初期化失敗や想定外のエラーを状態表示欄（#status）に表示する（調査支援） -->
     <script>
@@ -528,6 +528,6 @@
       crossorigin="anonymous"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=56a7a37805"></script>
+    <script type="module" src="./app.js?v=a776501fbd"></script>
   </body>
 </html>
