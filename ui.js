@@ -170,13 +170,13 @@ export function buildHitCard(hit, opts, onPick) {
   tag("hit-year", hit.yearLabel);
   if (showSubject) tag("hit-type hit-subject", hit.subject);
   if (showDocType) tag("hit-type", hit.docType);
-  if (showQuestion && hit.question) tag("hit-type hit-question", hit.question);
-  tag(
-    "hit-count",
-    showQuestion && hit.question && hit.count > 1
-      ? `${hit.question}ほか 計${hit.count}件`
-      : `${hit.count}件`,
-  );
+  // 短答式は最初に一致した設問番号（件数が複数なら他の問にも一致している）
+  if (showQuestion && hit.question)
+    tag(
+      "hit-type hit-question",
+      hit.count > 1 ? `${hit.question}ほか` : hit.question,
+    );
+  tag("hit-count", `${hit.count}件`);
 
   const snip = document.createElement("div");
   snip.className = "hit-snippet";

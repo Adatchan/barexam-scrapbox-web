@@ -1660,3 +1660,9 @@ textarea {
 #help-dialog .help-notes li + li {
   margin-top: 2px;
 }
+
+/* 画像を押すと原寸で開く */
+.help-figure a {
+  display: block;
+  cursor: zoom-in;
+}

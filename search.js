@@ -165,9 +165,10 @@ export function preloadSearchIndex(yobi, subjects, tantou = false) {
 }
 
 // ヒット箇所の前後を切り出す（一致部分は before / match / after に分けて返し、
-// 呼び出し側が DOM で安全に強調表示できるようにする）
-function makeSnippet(text, start, end) {
-  const from = Math.max(0, start - SNIPPET_BEFORE);
+// 呼び出し側が DOM で安全に強調表示できるようにする）。minFrom より前は
+// 切り出さない（短答式で、前の問の選択肢が混ざらないよう設問の頭で止める）。
+function makeSnippet(text, start, end, minFrom = 0) {
+  const from = Math.max(0, minFrom, start - SNIPPET_BEFORE);
   const to = Math.min(text.length, end + SNIPPET_AFTER);
   return {
     before: (from > 0 ? "…" : "") + text.slice(from, start),
@@ -179,12 +180,15 @@ function makeSnippet(text, start, end) {
 // 一致箇所より前で最後に現れた設問番号（〔第１２問〕など）。短答式のカードで
 // 「どの問か」を示すのに使う。見つからなければ null。
 const QUESTION_RE = /〔第[0-9０-９]+問〕/g;
-export function questionLabelAt(text, pos) {
-  let label = null;
+function questionAt(text, pos) {
+  let found = null;
   QUESTION_RE.lastIndex = 0;
-  for (let m; (m = QUESTION_RE.exec(text)) && m.index <= pos; )
-    label = m[0].slice(1, -1); // 〔〕を外す
-  return label;
+  for (let m; (m = QUESTION_RE.exec(text)) && m.index <= pos; ) found = m;
+  return found && { label: found[0].slice(1, -1), index: found.index };
+}
+
+export function questionLabelAt(text, pos) {
+  return questionAt(text, pos)?.label ?? null;
 }
 
 // 科目（選択科目は第１問・第２問の2つ）を検索する。types は
@@ -236,14 +240,16 @@ export async function searchSubject({
         // 最初の一致を原文の位置へ戻してスニペットを切り出す
         const start = toOriginal(doc.breaks, first);
         const end = toOriginal(doc.breaks, first + q.length - 1) + 1;
+        // 短答式は一致箇所の設問番号を求め、スニペットをその設問の頭で止める
+        const question = tantou ? questionAt(doc.text, start) : null;
         hits.push({
           yearKey,
           yearLabel: yearKeyToLabel(yearKey),
           subject: subjects[si],
           docType,
           count,
-          snippet: makeSnippet(doc.text, start, end),
-          question: questionLabelAt(doc.text, start),
+          snippet: makeSnippet(doc.text, start, end, question?.index ?? 0),
+          question: question?.label ?? null,
           pdfUrl: doc.pdfUrl,
         });
       }
