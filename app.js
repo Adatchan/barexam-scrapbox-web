@@ -43,6 +43,15 @@ import { buildStampedPdf, loadFflate } from "./pdfout.js";
 import { enhanceSelect } from "./colorselect.js";
 import { celebrate, alarmError, showToast } from "./effects.js";
 import {
+  setStatus,
+  clearStatus,
+  addNote,
+  setActionButtons,
+  startBusy,
+  initNewsBar,
+  triggerDownload,
+} from "./ui.js";
+import {
   searchSubject,
   normalizeQuery,
   preloadSearchIndex,
@@ -158,32 +167,6 @@ function applyExamMode() {
   updateSavePills();
   clearStatus();
   refreshResult();
-}
-
-// 更新情報: 最新1件を1行で出し、残りは「すべて見る」で開く
-function initNews() {
-  const latest = $("news-latest");
-  const list = $("news-list");
-  if (!latest || !list || !NEWS.length) {
-    $("news")?.setAttribute("hidden", "");
-    return;
-  }
-  const line = (item) => {
-    const frag = document.createDocumentFragment();
-    const date = document.createElement("span");
-    date.className = "news-date";
-    date.textContent = item.date;
-    frag.append(date, document.createTextNode(item.text));
-    return frag;
-  };
-  latest.appendChild(line(NEWS[0]));
-  const rest = NEWS.slice(1, 5);
-  for (const item of rest) {
-    const li = document.createElement("li");
-    li.appendChild(line(item));
-    list.appendChild(li);
-  }
-  if (!rest.length) $("news").classList.add("news-single");
 }
 
 // ─── ダイアログ（ヘルプ・全文検索で共通）─────────────────────────────────
@@ -443,59 +426,10 @@ function applySearchHit(hit, yobi) {
   showToast(`${hit.yearLabel} ${hit.subject} ${hit.docType} を選びました`);
 }
 
-// ─── 状態表示・ボタン内の進捗 ─────────────────────────────────────────────
-// ログ欄は廃止した。処理の注意（一部の種類を取得できなかった等）とエラーだけを
-// 結果欄の上の1行（#status）に出し、進捗は押したボタンの中に表示する。
-let notes = [];
-
-function setStatus(text, kind = "") {
-  const s = $("status");
-  s.textContent = text;
-  s.className = "status status-line" + (kind ? " " + kind : "");
-}
-
-function clearStatus() {
-  notes = [];
-  setStatus("");
-}
-
-function addNote(msg) {
-  notes.push(msg);
-  setStatus(notes.join(" / "), "warn");
-}
-
-// 変換・保存処理の排他制御。処理中は実行系ボタンをすべて無効化する
-const ACTION_IDS = ["save-pdf", "save-zip", "save-llm", "run"];
-function setBusy(busy) {
-  for (const id of ACTION_IDS) $(id).disabled = busy;
-}
-
-// ボタンを処理中表示にし、進捗（0〜1）をボタン内のバーと % で示す。
-// 戻り値の progress を変換コンテキストに渡し、終わったら done() で戻す。
-function startBusy(id, busyLabel) {
-  const btn = $(id);
-  const label = btn.querySelector(".btn-save-label, .btn-run-label");
-  const original = label.textContent;
-  setBusy(true);
-  btn.classList.add("busy");
-  btn.setAttribute("aria-busy", "true");
-  const progress = (frac) => {
-    const pct = Math.max(0, Math.min(100, Math.round(frac * 100)));
-    btn.style.setProperty("--p", `${pct}%`);
-    label.textContent = `${busyLabel}… ${pct}%`;
-  };
-  progress(0);
-  return {
-    progress,
-    done() {
-      btn.classList.remove("busy");
-      btn.removeAttribute("aria-busy");
-      btn.style.removeProperty("--p");
-      label.textContent = original;
-      setBusy(false);
-    },
-  };
-}
+// ─── 実行ボタン・変換コンテキスト ─────────────────────────────────────────
+// 状態表示（#status）とボタン内の進捗は ui.js が担う。処理中は次のボタンを
+// すべて無効化する。
+setActionButtons(["save-pdf", "save-zip", "save-llm", "run"]);
 
 const ctxOf = (setProgress) => ({ log: () => {}, setProgress });
 // 複数種類を並列に処理するときは、個々の進捗を出さない（完了件数で集約する）
@@ -673,18 +607,6 @@ function onDownload() {
   );
   celebrate("TXTを保存", "ダウンロードフォルダに保存しました");
   showToast(`${filename} を保存しました`);
-}
-
-function triggerDownload(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  // Safari ではクリック直後の revoke でダウンロードが失敗することがある
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ─── 原典PDF保存 ─────────────────────────────────────────────────────────
@@ -1146,7 +1068,7 @@ window.addEventListener("DOMContentLoaded", () => {
   enhanceSelect($("year"));
   enhanceSelect($("subject"), (v) => SYSTEM_BG[subjectSystem(v)]);
   warmupPdfjs(); // PDF.js をアイドル時に先読みし初回クリックの待ちを隠す
-  initNews();
+  initNewsBar(NEWS);
   // 選択（年度・科目・種類・出力形式）を変えたらテキストを表示し直す
   for (const id of ["year", "subject"]) {
     $(id).addEventListener("change", refreshResult);

@@ -47,30 +47,34 @@
       href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=BIZ+UDGothic:wght@400;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./style.css?v=20261102.1352" />
+    <link rel="stylesheet" href="./style.css?v=20261102.1357" />
   </head>
   <body>
     <main class="app">
       <header class="hero">
         <div class="hero-top">
-          <h1>しほしけ短答ダウンローダー<span class="beta">（β版）</span></h1>
-          <button id="help" class="btn-help" type="button">
-            <span class="help-badge" aria-hidden="true">?</span>使い方・FAQ
-          </button>
+          <h1>しほしけ短答ダウンローダー<span class="beta">β版</span></h1>
+          <div class="hero-actions">
+            <button id="help" class="btn-icon" type="button" aria-label="使い方・FAQ">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14" /><path d="M12 17.5v.01" /></svg><span class="btn-icon-text">使い方</span>
+            </button>
+          </div>
         </div>
-        <p class="subtitle">
-          司法試験・予備試験の短答式の問題と正答及び配点を、年度別・科目別に法務省ウェブの公表PDFから保存します
-        </p>
-        <p class="subtitle" style="margin-top: 6px">
-          論文式の試験問題・出題の趣旨・採点実感をテキスト化したい場合は
-          <a href="./index.html">しほしけコンバーター（論文式）</a> をどうぞ。
-        </p>
+        <nav class="tool-switch" aria-label="ツールの切り替え">
+          <a class="tool-tab" href="./">論文式コンバーター</a>
+          <a class="tool-tab" href="./tantou.html" aria-current="page">短答ダウンローダー</a>
+          <span class="tool-desc">法務省の公表PDFから、短答式の問題と正答及び配点を保存します</span>
+        </nav>
       </header>
 
-      <section class="news" aria-label="更新情報">
-        <h2 class="news-title">更新情報</h2>
+      <details class="news-bar" id="news">
+        <summary aria-label="更新情報">
+          <span class="news-tag">更新</span>
+          <span id="news-latest" class="news-latest"></span>
+          <span class="news-more">すべて見る</span>
+        </summary>
         <ul id="news-list" class="news-list"></ul>
-      </section>
+      </details>
 
       <dialog id="help-dialog" aria-label="ヘルプ">
         <div class="help-head">
@@ -92,7 +96,7 @@
         <details>
           <summary>基本的な使い方は？</summary>
           <p>
-            「試験」（司法試験・予備試験）・年度・科目を選んで「問題PDFを保存」または「正答・配点PDFを保存」を押すと、原典PDFを取得し、見出しと出典フッターを付けて保存します。「問題＋正答をzip保存」で2点をまとめて保存できます。
+            「試験」（司法試験・予備試験）・年度・科目を選んで、「ファイルで保存」の「問題PDF」または「正答・配点PDF」を押すと、原典PDFを取得し、見出しと出典フッターを付けて保存します。「一式 zip」で2点をまとめて保存できます。
           </p>
         </details>
 
@@ -124,7 +128,7 @@
         <details>
           <summary>3つの保存ボタンの違いは？</summary>
           <p>
-            「問題PDFを保存」は選択中の年度・科目の問題、「正答・配点PDFを保存」は同じ年度の正答及び配点、「問題＋正答をzip保存」はその2点をまとめて1つのzipにします。いずれも全ページの左上に年度・科目・種類の見出しを、下部に出典と加工した旨のフッター（問題・正答及び配点の原典PDFへのリンクとファイル名付き）を印字して保存します。問題PDFは、表紙など設問の無い先頭ページを除いて保存します。
+            「問題PDF」は選択中の年度・科目の問題、「正答・配点PDF」は同じ年度の正答及び配点、「一式 zip」はその2点をまとめて1つのzipにします。いずれも全ページの左上に年度・科目・種類の見出しを、下部に出典と加工した旨のフッター（問題・正答及び配点の原典PDFへのリンクとファイル名付き）を印字して保存します。問題PDFは、表紙など設問の無い先頭ページを除いて保存します。
           </p>
         </details>
 
@@ -140,7 +144,7 @@
         <details>
           <summary>エラーが出ます／PDFを取得できません</summary>
           <p>
-            多くは、法務省ウェブサイト側でページの構成やリンクが変わったか、一時的な通信エラーです。まず画面下部の「ログ」欄でメッセージを確認し、少し時間をおいて試し直してください。特定の年度・科目だけが必ず失敗する場合はツール側の不具合の可能性が高いので、年度・科目とログの内容を添えて
+            多くは、法務省ウェブサイト側でページの構成やリンクが変わったか、一時的な通信エラーです。画面に出たメッセージを確認し、少し時間をおいて試し直してください。特定の年度・科目だけが必ず失敗する場合はツール側の不具合の可能性が高いので、年度・科目と表示されたメッセージを添えて
             <a
               href="https://github.com/Adatchan/barexam-scrapbox-web/issues"
               target="_blank"
@@ -195,8 +199,8 @@
         </details>
       </dialog>
 
-      <section class="form">
-        <div class="field">
+      <section class="form form-grid form-grid-3" aria-label="資料の選択">
+        <div class="field f-exam">
           <label>試験</label>
           <div class="seg" role="radiogroup" aria-label="試験">
             <label class="seg-item">
@@ -219,53 +223,40 @@
           <label for="subject">科目</label>
           <select id="subject"></select>
         </div>
-
       </section>
 
-      <!-- ダウンロード（変換不要）カード -->
-      <div class="actions-yobi">
-        <div class="save-card">
-          <div class="lane-head">
-            <span class="lane-title-2">ダウンロード</span>
-            <span class="badge">変換不要</span>
-          </div>
-          <div class="lane-sub">押すだけで原典PDFを取得して保存します</div>
-          <button id="q-save" class="btn-primary" type="button">
-            問題PDFを保存
+      <!-- ファイルで保存（変換不要）。押したボタンの中に進捗を表示する -->
+      <section class="savebar" aria-label="ファイルで保存">
+        <span class="savebar-label">ファイルで保存</span>
+        <div class="savebar-btns">
+          <button id="q-save" class="btn-save primary" type="button"
+            title="選択中の年度・科目の問題PDFを、見出しと出典フッターを付けて保存します">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" /></svg><span class="btn-save-label">問題PDF</span>
           </button>
-          <div class="btn-row">
-            <button id="a-save" class="btn-secondary" type="button">
-              正答・配点PDFを保存
-            </button>
-            <button id="zip-save" class="btn-secondary" type="button">
-              問題＋正答をzip保存
-            </button>
-          </div>
+          <button id="a-save" class="btn-save" type="button"
+            title="同じ年度の正答及び配点のPDFを、見出しと出典フッターを付けて保存します">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" /></svg><span class="btn-save-label">正答・配点PDF</span>
+          </button>
+          <button id="zip-save" class="btn-save" type="button"
+            title="問題と正答及び配点の2点を1つのzipにまとめて保存します">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" /></svg><span class="btn-save-label">一式 zip</span><span class="pill">2点</span>
+          </button>
         </div>
-      </div>
-
-      <section class="progress" aria-live="polite">
-        <div
-          id="bar"
-          class="bar"
-          role="progressbar"
-          aria-label="取得の進捗"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          aria-valuenow="0"
-        >
-          <div id="bar-fill" class="bar-fill"></div>
-        </div>
-        <div id="status" class="status">待機中</div>
+        <span class="savebar-note">押すだけで原典PDFを取得して保存</span>
       </section>
 
-      <section class="output">
-        <div class="tabs" role="tablist">
-          <button class="tab active" type="button" role="tab" aria-selected="true">
-            ログ
-          </button>
+      <!-- 処理の注意・エラーを1行で表示する（空なら非表示）。
+           下部のインラインスクリプトも内部エラーをここに書く -->
+      <div id="status" class="status status-line" role="status" aria-live="polite"></div>
+
+      <!-- 選択中の内容で保存されるファイルの案内 -->
+      <section class="result" aria-label="保存されるファイル">
+        <div class="result-head">
+          <div class="result-title-wrap">
+            <span id="result-title" class="result-title"></span>
+          </div>
         </div>
-        <pre id="log" class="pane active" role="tabpanel"></pre>
+        <ul id="save-info" class="save-info"></ul>
       </section>
 
       <footer class="foot">
@@ -304,7 +295,8 @@
       </footer>
     </main>
 
-    <!-- モジュール初期化失敗や想定外のエラーをログ欄に表示する（調査支援） -->
+    <!-- モジュール初期化失敗や想定外のエラーを状態表示欄（#status）に表示する（調査支援）。
+         #log は廃止したため log への書き込みは何もしない -->
     <script>
       (function () {
         function report(msg) {
@@ -326,6 +318,6 @@
       })();
     </script>
 
-    <script type="module" src="./tantou.js?v=20261102.1352"></script>
+    <script type="module" src="./tantou.js?v=20261102.1357"></script>
   </body>
 </html>
