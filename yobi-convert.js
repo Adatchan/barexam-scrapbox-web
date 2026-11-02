@@ -227,8 +227,10 @@ function fetchYobiPrecomputed(yearKey, subject) {
 }
 
 // テキスト変換（表示・LLM用）。事前変換済みなら PDF.js を省略、無ければ取得→解析。
+// cachedOnly=true のときは原典PDFを取得せず、事前変換データも処理済みキャッシュも
+// 無ければ null を返す（選択変更時の自動表示用）。
 export async function convertYobiText(
-  { yearKey, subject, docType, decorate },
+  { yearKey, subject, docType, decorate, cachedOnly = false },
   ctx,
 ) {
   const { log = () => {}, setProgress = () => {} } = ctx || {};
@@ -259,6 +261,7 @@ export async function convertYobiText(
     setProgress(1.0);
     return assembleYobiResult(cached, docType, decorate);
   }
+  if (cachedOnly) return null;
 
   const entry = await buildYobiEntry({ yearKey, subject, docType }, ctx);
   yobiCachePut(cacheId, entry);

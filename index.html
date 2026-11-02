@@ -53,39 +53,39 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=BIZ+UDGothic:wght@400;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./style.css?v=20261015.0221" />
+    <link rel="stylesheet" href="./style.css?v=20261102.1352" />
   </head>
   <body>
     <main class="app">
       <header class="hero">
         <div class="hero-top">
-          <h1>しほしけコンバーター<span class="beta">（β版）</span></h1>
+          <h1>しほしけコンバーター<span class="beta">β版</span></h1>
           <div class="hero-actions">
-            <button id="search-open" class="btn-help" type="button">
-              <span class="help-badge" aria-hidden="true">検</span>全文検索
+            <button id="search-open" class="btn-icon" type="button" aria-label="全文検索">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg><span class="btn-icon-text">全文検索</span>
             </button>
-            <button id="help" class="btn-help" type="button">
-              <span class="help-badge" aria-hidden="true">?</span>使い方・FAQ
+            <button id="help" class="btn-icon" type="button" aria-label="使い方・FAQ">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14" /><path d="M12 17.5v.01" /></svg><span class="btn-icon-text">使い方</span>
             </button>
           </div>
         </div>
-        <p class="subtitle">
-          司法試験論文式の試験問題・出題の趣旨・採点実感を、法務省ウェブの公表PDFからテキストに変換します
-        </p>
-        <p class="subtitle" style="margin-top: 6px">
-          短答式（司法試験・予備試験）の問題・正答PDFを年度別に保存したい場合は
-          <a href="./tantou.html">しほしけ短答ダウンローダー</a> をどうぞ。
-        </p>
+        <nav class="tool-switch" aria-label="ツールの切り替え">
+          <a class="tool-tab" href="./" aria-current="page">論文式コンバーター</a>
+          <a class="tool-tab" href="./tantou.html">短答ダウンローダー</a>
+          <span class="tool-desc">法務省の公表PDFから、論文式の問題・趣旨・採点実感を取り出します</span>
+        </nav>
       </header>
-
-      <section class="news" aria-label="更新情報">
-        <h2 class="news-title">更新情報</h2>
+      <details class="news-bar" id="news">
+        <summary aria-label="更新情報">
+          <span class="news-tag">更新</span>
+          <span id="news-latest" class="news-latest"></span>
+          <span class="news-more">すべて見る</span>
+        </summary>
         <ul id="news-list" class="news-list"></ul>
-      </section>
-
+      </details>
       <dialog id="help-dialog" aria-label="ヘルプ">
         <div class="help-head">
           <h2>ヘルプ（よくある質問）</h2>
@@ -107,8 +107,8 @@
           <summary>基本的な使い方は？</summary>
           <p>
             ①上の欄で「試験」「年度」「科目」「種類」を選ぶ →
-            ②テキストが欲しいときは「変換実行」、PDFやLLM用のファイルが欲しいときは「そのまま保存」で形式（個別・一式・LLM）を選んで「保存実行」を押す →
-            ③テキストは「結果をコピー」または「.txt 保存」で持ち出します。②の保存は、変換していなくてもそのまま押せます。
+            ②PDFやLLM用のファイルが欲しいときは、「ファイルで保存」の「抜粋PDF」「一式 zip」「LLM用 .md」のいずれかを押す →
+            ③テキストは選んだ時点で下の欄に表示されるので、「コピー」または「.txt」で持ち出します。変換ボタンを押す必要はありません。
           </p>
         </details>
 
@@ -131,7 +131,7 @@
         <details>
           <summary>キーワードから年度を探せますか？</summary>
           <p>
-            画面右上の「全文検索」から探せます。ダイアログの中で試験（司法試験・予備試験）・科目・種類を選べます。キーワードを入れると、その科目の全年度について、選んだ種類（試験問題・出題の趣旨・採点実感。予備試験は試験問題・出題の趣旨）の本文を検索し、該当した年度をカードで一覧します。選択科目は「経済法第１問/第２問」のように両方の問をまとめて検索し、どちらでヒットしたかはカードに表示されます。カードを押すと、その年度・科目・種類が画面の選択欄に入るので、そのまま「変換実行」や各種保存に進めます。キーワードは、空白・改行の有無、全角・半角、英字の大文字・小文字を区別せずに照合します（空白で区切っても複数語の検索にはならず、空白を詰めた1つの語句として探します）。検索は事前変換データから作った検索用の索引に対して行うので、法務省ウェブサイトへのアクセスは発生しません（変換データが無い年度は検索対象外です）。索引は科目ごとに読み込んで保持するので（ダイアログを開いた時点で選択中の科目を先読みします）、同じ科目の再検索はすぐに終わります。
+            画面右上の「全文検索」から探せます。ダイアログの中で試験（司法試験・予備試験）・科目・種類を選べます。キーワードを入れると、その科目の全年度について、選んだ種類（試験問題・出題の趣旨・採点実感。予備試験は試験問題・出題の趣旨）の本文を検索し、該当した年度をカードで一覧します。選択科目は「経済法第１問/第２問」のように両方の問をまとめて検索し、どちらでヒットしたかはカードに表示されます。カードを押すと、その年度・科目・種類が画面の選択欄に入るので、そのままテキストが表示され、各種保存にも進めます。キーワードは、空白・改行の有無、全角・半角、英字の大文字・小文字を区別せずに照合します（空白で区切っても複数語の検索にはならず、空白を詰めた1つの語句として探します）。検索は事前変換データから作った検索用の索引に対して行うので、法務省ウェブサイトへのアクセスは発生しません（変換データが無い年度は検索対象外です）。索引は科目ごとに読み込んで保持するので（ダイアログを開いた時点で選択中の科目を先読みします）、同じ科目の再検索はすぐに終わります。
           </p>
         </details>
 
@@ -142,12 +142,35 @@
           </p>
         </details>
 
-        <h3 class="help-group">テキストに変換する（メイン機能）</h3>
+        <h3 class="help-group">ファイルで保存する（変換不要）</h3>
 
         <details>
-          <summary>「変換実行」を押すと何が起きますか？</summary>
+          <summary>「抜粋PDF」は何をしますか？</summary>
           <p>
-            選んだ年度・科目・種類の本文を、改行や段落を読める形に復元したテキストにして「結果」欄に表示します。通常は事前に変換しておいたデータを使うのですぐに終わり、事前変換データがまだ無い場合（新年度の掲載直後など）だけ、法務省の原典PDFを取得してブラウザ内で解析します。完了すると「結果をコピー」と「.txt 保存」が押せるようになります。処理の進み具合は進捗バーと「ログ」タブで確認できます。
+            「ファイルで保存」の「抜粋PDF」を押すと、選択中の年度・科目・種類について、法務省の原典PDFから該当するページだけを抜き出したPDFを保存します。各ページの右下にファイル名、左下に出典と、試験問題・出題の趣旨・採点実感それぞれの原典PDFへのクリック可能なリンクを印字します。予備試験では、リンクは試験問題・出題の趣旨の2つで、各ページの左上に年度・科目・種類の見出しも印字します。テキストを見ていなくても、押せば自動で取得・処理されます。
+          </p>
+        </details>
+
+        <details>
+          <summary>「一式 zip」は何をしますか？</summary>
+          <p>
+            「一式 zip」を押すと、選択中の年度・科目について、試験問題・出題の趣旨・採点実感の3点の抜粋PDFを「[年度]司法試験[科目]一式」フォルダにまとめ、zipで保存します。予備試験では、試験問題・出題の趣旨の2点を「[年度]司法試験予備試験論文式[科目]一式」フォルダにまとめます。すでに取得・解析した種類（「抜粋PDF」で保存した種類など）は再利用されるため、その分速く完了します。未掲載の種類がある年度では、取得できた分だけが入ります。
+          </p>
+        </details>
+
+        <details>
+          <summary>「LLM用 .md」は何をしますか？</summary>
+          <p>
+            「LLM用 .md」を押すと、選択中の年度・科目について、試験問題・出題の趣旨・採点実感（予備試験は試験問題・出題の趣旨）を1つのMarkdownファイルにまとめて保存します。冒頭に「これは司法試験（予備試験）論文式の過去問である」というメタ情報と出典（原典PDFのURL）が入るので、ChatGPTやClaudeなどのLLMにそのまま貼り付け・添付して、答案の添削や解説を依頼するのに使えます。
+          </p>
+        </details>
+
+        <h3 class="help-group">テキストで使う</h3>
+
+        <details>
+          <summary>テキストはいつ表示されますか？</summary>
+          <p>
+            「試験」「年度」「科目」「種類」を選んだ時点で、本文を改行や段落を読める形に復元したテキストが下の欄に表示されます。事前に変換しておいたデータを使うので、法務省ウェブサイトへのアクセスは発生せず、すぐに表示されます。事前変換データがまだ無い場合（新年度の掲載直後など）は、欄に「原典PDFから変換する」ボタンが出るので、押すと法務省の原典PDFを取得してブラウザ内で解析します（数十秒かかることがあります）。表示されたテキストは「コピー」「.txt」で持ち出せます。
           </p>
         </details>
 
@@ -158,35 +181,12 @@
           </p>
         </details>
 
-        <h3 class="help-group">そのまま保存する（変換不要）</h3>
-
-        <details>
-          <summary>保存形式の「個別」は何をしますか？</summary>
-          <p>
-            「そのまま保存」で保存する形式を「個別」にして「保存実行」を押すと、選択中の年度・科目・種類について、法務省の原典PDFから該当するページだけを抜き出したPDFを保存します。各ページの右下にファイル名、左下に出典と、試験問題・出題の趣旨・採点実感それぞれの原典PDFへのクリック可能なリンクを印字します。予備試験では、リンクは試験問題・出題の趣旨の2つで、各ページの左上に年度・科目・種類の見出しも印字します。変換実行をしていなくても、押せば自動で取得・処理されます。
-          </p>
-        </details>
-
-        <details>
-          <summary>保存形式の「一式」は何をしますか？</summary>
-          <p>
-            保存する形式を「一式」にして「保存実行」を押すと、選択中の年度・科目について、試験問題・出題の趣旨・採点実感の3点の抜粋PDFを「[年度]司法試験[科目]一式」フォルダにまとめ、zipで保存します。予備試験では、試験問題・出題の趣旨の2点を「[年度]司法試験予備試験論文式[科目]一式」フォルダにまとめます。すでに取得・解析した種類（「個別」で保存した種類など）は再利用されるため、その分速く完了します。未掲載の種類がある年度では、取得できた分だけが入ります。
-          </p>
-        </details>
-
-        <details>
-          <summary>保存形式の「LLM」は何をしますか？</summary>
-          <p>
-            保存する形式を「LLM」にして「保存実行」を押すと、選択中の年度・科目について、試験問題・出題の趣旨・採点実感（予備試験は試験問題・出題の趣旨）を1つのMarkdownファイルにまとめて保存します。冒頭に「これは司法試験（予備試験）論文式の過去問である」というメタ情報と出典（原典PDFのURL）が入るので、ChatGPTやClaudeなどのLLMにそのまま貼り付け・添付して、答案の添削や解説を依頼するのに使えます。
-          </p>
-        </details>
-
         <h3 class="help-group">うまくいかないとき</h3>
 
         <details>
           <summary>エラーが出ます／PDFを取得できません</summary>
           <p>
-            多くは、法務省ウェブサイト側でページの構成やリンクが変わったか、一時的な通信エラーです。まず「ログ」タブでメッセージを確認し、少し時間をおいて試し直してください。特定の年度・科目だけが必ず失敗する場合はツール側の不具合の可能性が高いので、年度・科目・種類とログの内容を添えて
+            多くは、法務省ウェブサイト側でページの構成やリンクが変わったか、一時的な通信エラーです。画面に出たメッセージを確認し、少し時間をおいて試し直してください。特定の年度・科目だけが必ず失敗する場合はツール側の不具合の可能性が高いので、年度・科目・種類と表示されたメッセージを添えて
             <a
               href="https://github.com/Adatchan/barexam-scrapbox-web/issues"
               target="_blank"
@@ -200,7 +200,7 @@
         <details>
           <summary>処理に時間がかかります／2回目が速いのはなぜ？</summary>
           <p>
-            時間がかかるのは、原典PDFを取得して解析する場合（「そのまま保存」の「個別」「一式」と、事前変換データがまだ無い場合のテキスト変換・「LLM」）で、ページ数の多い年度では数十秒かかることがあります。事前変換データがある場合のテキスト変換と「LLM」はすぐに終わります。一度取得・解析した年度・科目・種類は結果を一時的に保持するので、同じものを2回目以降に処理するときや、続けて別の保存形式で保存するとき（「個別」のあとの「一式」など）は、その分速く終わります。この保持はページを再読み込みすると消えます。
+            時間がかかるのは、原典PDFを取得して解析する場合（「抜粋PDF」「一式 zip」と、事前変換データがまだ無い場合のテキスト変換・「LLM用 .md」）で、ページ数の多い年度では数十秒かかることがあります。事前変換データがある場合のテキスト表示と「LLM用 .md」はすぐに終わります。一度取得・解析した年度・科目・種類は結果を一時的に保持するので、同じものを2回目以降に処理するときや、続けて別の形式で保存するとき（「抜粋PDF」のあとの「一式 zip」など）は、その分速く終わります。この保持はページを再読み込みすると消えます。
           </p>
         </details>
 
@@ -235,7 +235,7 @@
         <details>
           <summary>予備試験の一般教養科目で、出題の趣旨が変換できません</summary>
           <p>
-            予備試験の一般教養科目については、法務省が出題の趣旨を公表していないためです（試験問題は変換できます）。それ以外の科目・年度でまれに変換できない場合は、原典PDFから文字を取り出せない可能性があるので、「そのまま保存」の「個別」で原典PDFを保存してご利用ください（変換を試みると、その旨をお知らせします）。なお、PDF上で科目の区切りを特定できないときは、出題の趣旨は全科目分、試験問題は科目グループ分をまとめて保存します。
+            予備試験の一般教養科目については、法務省が出題の趣旨を公表していないためです（試験問題は変換できます）。それ以外の科目・年度でまれに変換できない場合は、原典PDFから文字を取り出せない可能性があるので、「抜粋PDF」で原典PDFを保存してご利用ください（変換を試みると、その旨をお知らせします）。なお、PDF上で科目の区切りを特定できないときは、出題の趣旨は全科目分、試験問題は科目グループ分をまとめて保存します。
           </p>
         </details>
 
@@ -244,14 +244,14 @@
         <details>
           <summary>データはどこから取得していますか？</summary>
           <p>
-            <strong>テキスト変換</strong>と、<strong>そのまま保存</strong>の「LLM」は、まず本ツールが用意している事前変換済みデータ（GitHub リポジトリに置いてある年度・科目ごとのJSON）を探し、あればそれを整形して使います。この場合、原典PDFの取得もPDF解析も行いません。事前変換データが無い場合（新年度の掲載直後など）だけ、原典PDFを取得してブラウザ内で解析します。司法試験・予備試験とも同じです。<strong>全文検索</strong>は、この事前変換データから作った検索用の索引だけを使い、原典PDFは取得しません。
+            <strong>テキストの表示</strong>と「LLM用 .md」は、まず本ツールが用意している事前変換済みデータ（GitHub リポジトリに置いてある年度・科目ごとのJSON）を探し、あればそれを整形して使います。この場合、原典PDFの取得もPDF解析も行いません。事前変換データが無い場合（新年度の掲載直後など）だけ、原典PDFを取得してブラウザ内で解析します。司法試験・予備試験とも同じです。<strong>全文検索</strong>は、この事前変換データから作った検索用の索引だけを使い、原典PDFは取得しません。
           </p>
           <p>
-            <strong>そのまま保存</strong>の「個別」「一式」は、PDFそのものが必要なため、原典PDFを取得します。
+            「抜粋PDF」「一式 zip」は、PDFそのものが必要なため、原典PDFを取得します。
           </p>
           <p>
             原典PDFを取得する場合は、法務省ウェブサイトへの負荷を最小限にするため、原則として中継サーバー（Cloudflare
-            Worker）に保管済みのPDFを使います。まだ保管されていないPDFだけを法務省から取得し、以後はその保管分を配信します。過去問PDFは公表後に内容が変わらないため、同じPDFを法務省へ繰り返し取りに行くことはありません。取得元は「ログ」タブで確認できます。
+            Worker）に保管済みのPDFを使います。まだ保管されていないPDFだけを法務省から取得し、以後はその保管分を配信します。過去問PDFは公表後に内容が変わらないため、同じPDFを法務省へ繰り返し取りに行くことはありません。
           </p>
         </details>
 
@@ -340,8 +340,8 @@
         <div id="search-results" class="search-results"></div>
       </dialog>
 
-      <section class="form">
-        <div class="field">
+      <section class="form form-grid" aria-label="資料の選択">
+        <div class="field f-exam">
           <label>試験</label>
           <div class="seg" role="radiogroup" aria-label="試験">
             <label class="seg-item">
@@ -354,33 +354,52 @@
             </label>
           </div>
         </div>
-
         <div class="field">
           <label for="year">年度</label>
           <select id="year"></select>
         </div>
-
         <div class="field">
           <label for="subject">科目</label>
           <select id="subject"></select>
         </div>
-
-        <div class="field" id="type-field">
+        <div class="field f-type" id="type-field">
           <label>種類</label>
           <!-- 中身は radio（試験の切替と同じセグメント）。選択肢は
                initSelectors() が試験に合わせて作り直す。 -->
           <div class="seg" id="type" role="radiogroup" aria-label="種類"></div>
         </div>
       </section>
-
-      <!-- ① テキストに変換 / そのまま保存 の2レーン（司法・予備で共通）-->
-      <div class="lanes" id="actions">
-        <div class="lane lane-convert">
-          <div class="lane-title">テキストに変換</div>
-          <div class="lane-sub">このツールのメイン機能です</div>
-          <div class="field lane-format" id="format-field">
-            <label>出力形式</label>
-            <div class="seg" role="radiogroup" aria-label="出力形式">
+      <!-- ファイルで保存（変換不要）。押したボタンの中に進捗を表示する -->
+      <section class="savebar" aria-label="ファイルで保存">
+        <span class="savebar-label">ファイルで保存</span>
+        <div class="savebar-btns">
+          <button id="save-pdf" class="btn-save primary" type="button"
+            title="選択中の種類の該当ページだけを原典PDFから抜き出し、出典フッターを付けて保存します">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" /></svg><span class="btn-save-label">抜粋PDF</span><span class="pill">この種類</span>
+          </button>
+          <button id="save-zip" class="btn-save" type="button"
+            title="この科目の試験問題・出題の趣旨・採点実感の抜粋PDFを1つのzipにまとめて保存します">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" /></svg><span class="btn-save-label">一式 zip</span><span class="pill" id="zip-pill">3点</span>
+          </button>
+          <button id="save-llm" class="btn-save" type="button"
+            title="この科目の各種類を、メタ情報・出典付きの1つのMarkdownにまとめて保存します（LLMに渡す用）">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" /></svg><span class="btn-save-label">LLM用 .md</span><span class="pill" id="llm-pill">3点</span>
+          </button>
+        </div>
+        <span class="savebar-note">変換不要・押すだけで保存</span>
+      </section>
+      <!-- 処理の注意・エラーを1行で表示する（空なら非表示）。
+           下部のインラインスクリプトも内部エラーをここに書く -->
+      <div id="status" class="status status-line" role="status" aria-live="polite"></div>
+      <!-- 結果。選択を変えると事前変換データを自動で表示する -->
+      <section class="result" aria-label="テキスト">
+        <div class="result-head">
+          <div class="result-title-wrap">
+            <span id="result-title" class="result-title"></span>
+            <a id="result-src" class="result-src" target="_blank" rel="noopener" hidden>法務省の原典PDF ↗</a>
+          </div>
+          <div class="result-tools">
+            <div class="seg seg-sm" role="radiogroup" aria-label="出力形式">
               <label class="seg-item">
                 <input type="radio" name="format" value="plain" checked />
                 <span>ノーマル</span>
@@ -390,89 +409,23 @@
                 <span>Scrapbox記法</span>
               </label>
             </div>
-          </div>
-          <button id="run" class="btn-primary" type="button">変換実行</button>
-          <div class="result-actions">
-            <span class="result-hint">変換すると使えます</span>
-            <button id="copy" class="btn-secondary" type="button" disabled>
-              結果をコピー
+            <button id="copy" class="btn-tool" type="button" disabled>
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a1 1 0 0 1 1-1h9" /></svg>コピー
             </button>
-            <button id="download" class="btn-secondary" type="button" disabled>
-              .txt 保存
+            <button id="download" class="btn-tool" type="button" disabled>
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" /></svg>.txt
             </button>
           </div>
         </div>
-        <div class="lane lane-save">
-          <div class="lane-head">
-            <span class="lane-title-2">そのまま保存</span>
-            <span class="badge">変換不要</span>
-          </div>
-          <div class="lane-sub">変換せず、押すだけで保存できます</div>
-          <div class="field lane-format">
-            <label>保存する形式</label>
-            <div class="seg" id="save-mode" role="radiogroup" aria-label="保存する形式">
-              <label class="seg-item">
-                <input type="radio" name="save-mode" value="source" checked />
-                <span>個別</span>
-              </label>
-              <label class="seg-item">
-                <input type="radio" name="save-mode" value="zip" />
-                <span>一式</span>
-              </label>
-              <label class="seg-item">
-                <input type="radio" name="save-mode" value="llm" />
-                <span>LLM</span>
-              </label>
-            </div>
-          </div>
-          <button id="save-run" class="btn-primary" type="button">
-            保存実行
+        <div id="result-message" class="result-message" hidden>
+          <p id="result-message-title" class="result-message-title"></p>
+          <p id="result-message-text" class="result-message-text"></p>
+          <button id="run" class="btn-run" type="button" hidden>
+            <span class="btn-run-label">原典PDFから変換する</span>
           </button>
-          <div class="save-desc" id="save-desc"></div>
         </div>
-        </div>
-      </div>
-
-      <section class="progress" aria-live="polite">
-        <div
-          id="bar"
-          class="bar"
-          role="progressbar"
-          aria-label="進捗"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          aria-valuenow="0"
-        >
-          <div id="bar-fill" class="bar-fill"></div>
-        </div>
-        <div id="status" class="status">待機中</div>
+        <pre id="result" class="result-text"></pre>
       </section>
-
-      <section class="output">
-        <div class="tabs" role="tablist">
-          <button
-            class="tab active"
-            data-target="result"
-            type="button"
-            role="tab"
-            aria-selected="true"
-          >
-            結果
-          </button>
-          <button
-            class="tab"
-            data-target="log"
-            type="button"
-            role="tab"
-            aria-selected="false"
-          >
-            ログ
-          </button>
-        </div>
-        <pre id="result" class="pane active" role="tabpanel"></pre>
-        <pre id="log" class="pane" role="tabpanel"></pre>
-      </section>
-
       <footer class="foot">
         <p class="disclaimer">
           本サービスは法務省非公式の個人開発ツールです。出力は
@@ -509,7 +462,8 @@
       </footer>
     </main>
 
-    <!-- モジュール初期化失敗や想定外のエラーをログ欄に表示する（調査支援） -->
+    <!-- モジュール初期化失敗や想定外のエラーを状態表示欄（#status）に表示する（調査支援）。
+         #log は廃止したため log への書き込みは何もしない -->
     <script>
       (function () {
         function report(msg) {
@@ -540,6 +494,6 @@
       crossorigin="anonymous"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20261015.0221"></script>
+    <script type="module" src="./app.js?v=20261102.1352"></script>
   </body>
 </html>

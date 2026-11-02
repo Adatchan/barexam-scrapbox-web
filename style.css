@@ -1,8 +1,8 @@
 /* =============================================================================
-   しほしけ UI リデザイン（案B＝2レーン型 / クールなツール調）
-   - 主操作（塗り）は画面に1つ＝「まず押す」
-   - 変換後に使う操作（コピー/.txt）は結果のそばに置き変換まで無効表示
-   - 変換不要の保存は「変換不要」バッジ付きカードに分離
+   しほしけ UI
+   - コンバーター（index.html）: 選択 → 「ファイルで保存」バー → テキスト結果。
+     主操作（塗り）は「抜粋PDF」の1つ。テキストは選択時に自動で表示する。
+   - 短答ダウンローダー（tantou.html）は従来のカード型（.save-card 等）を使う。
    JS（app.js / tantou.js / colorselect.js）が参照する id・class は維持。
    ============================================================================= */
 :root {
@@ -16,14 +16,10 @@
 
   --primary: #1f5bd6; /* 主操作（塗り） */
   --primary-hover: #1a4fbe;
-  --primary-soft: #5b6b8c; /* 青レーン内の補足文字 */
 
   --line: #e6e8ee; /* 罫線 */
   --panel: #f5f7fa; /* 設定カード地 */
-  --lane-blue-bg: #eef3fd; /* 変換レーン地 */
-  --lane-blue-border: #d6e2fa;
-  --lane-gray-bg: #f7f8fa; /* 保存レーン地 */
-  --tile-border: #dee2ea; /* タイルボタン枠 */
+  --lane-gray-bg: #f7f8fa; /* 短答の保存カード地 */
   --result-bg: #fbfcfe; /* 結果ペイン地 */
 
   --badge-fg: #1f5bd6;
@@ -32,25 +28,22 @@
   --btn-outline-border: #cbd2de;
   --btn-outline-hover: #f1f4f9;
 
-  --accent: #cc0000; /* エラー */
-  --ok: #1f5bd6; /* 完了 */
-  --warn: #a65a00;
-
-  /* 互換のため旧変数も残す（colorselect.js 等で参照される矢印色など） */
-  --border: #cbd2de;
-  --primary-mid: #1f5bd6;
-  --primary-light: #1f5bd6;
-  --text: #161b26;
+  --accent: #c42121; /* エラー */
+  --accent-soft: #fdecec;
+  --ok: #17803d; /* 完了 */
+  --warn: #8a4b00;
+  --warn-soft: #fff4e0;
 
   --radius: 12px;
   --radius-md: 10px;
   --radius-sm: 8px;
 
-  --sans: "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Hiragino Sans",
+  /* UD（ユニバーサルデザイン）書体。長文の法律文でも読みやすい */
+  --sans: "BIZ UDPGothic", -apple-system, BlinkMacSystemFont, "Hiragino Sans",
     "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
-  --heading: "Zen Kaku Gothic New", "Noto Sans JP", -apple-system,
-    BlinkMacSystemFont, system-ui, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Hiragino Sans",
+  --heading: var(--sans);
+  /* 結果欄の本文は等幅の BIZ UDゴシック（全角・半角の幅が揃う） */
+  --mono: "BIZ UDGothic", ui-monospace, SFMono-Regular, Menlo, Consolas,
     monospace;
 }
 
@@ -83,7 +76,6 @@ textarea {
 }
 
 /* 共通: hidden 属性は他のレイアウト指定に勝たせる */
-.lanes[hidden],
 .actions-yobi[hidden],
 .field[hidden] {
   display: none;
@@ -567,29 +559,6 @@ textarea {
   outline-offset: 2px;
 }
 
-/* 種類（問題・趣旨・実感）は3つ並ぶので少し詰める */
-#type .seg-item span {
-  padding: 5px 14px;
-}
-
-/* 出力形式は青い変換レーンの中なので、地を白にして浮かせる */
-#format-field .seg {
-  background: #fff;
-  border-color: var(--lane-blue-border);
-}
-
-/* 保存レーン（原典・一式・LLM）と、選択中の形式の説明 */
-#save-mode {
-  background: #fff;
-}
-
-.save-desc {
-  margin-top: 10px;
-  font-size: 0.78rem;
-  line-height: 1.7;
-  color: var(--muted);
-}
-
 /* ── カスタムドロップダウン（colorselect.js）─────────────
    設定カード内ではコンパクトな固定幅にし、長い科目名は省略表示。 */
 .cs {
@@ -662,49 +631,12 @@ textarea {
   font-weight: 700;
 }
 
-/* ── 2レーン（① 変換 / そのまま保存）───────────────────── */
-.lanes {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  margin-bottom: 18px;
-}
-
-.lane {
-  flex: 1;
-  border-radius: 11px;
-  padding: 18px 20px;
-  min-width: 0;
-}
-
-.lane-convert {
-  background: var(--lane-blue-bg);
-  border: 1px solid var(--lane-blue-border);
-  display: flex;
-  flex-direction: column;
-}
-
-.lane-save {
-  background: var(--lane-gray-bg);
-  border: 1px solid var(--line);
-}
-
-.lane-title {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--primary);
-  margin-bottom: 3px;
-}
-
+/* ── カード見出し（短答ダウンローダーの .save-card で使用）──── */
 .lane-sub {
   font-size: 0.74rem;
   color: var(--muted);
   margin-bottom: 14px;
   line-height: 1.55;
-}
-
-.lane-convert .lane-sub {
-  color: var(--primary-soft);
 }
 
 .lane-head {
@@ -728,16 +660,6 @@ textarea {
   border-radius: 999px;
   padding: 2px 9px;
   white-space: nowrap;
-}
-
-.lane-convert .btn-primary,
-.lane-save .btn-primary {
-  width: 100%;
-}
-
-/* 「テキストに変換」カード内に移した出力形式ラジオ */
-.lane-format {
-  margin-bottom: 14px;
 }
 
 /* ── 短答ダウンローダー（tantou.html）のカード ──────── */
@@ -912,33 +834,6 @@ textarea {
   color: var(--primary);
 }
 
-/* 結果に対する操作（コピー / .txt）。「テキストに変換」カード内に置く */
-.result-actions {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-}
-
-.result-actions .btn-secondary {
-  flex: 1 1 0;
-  padding: 9px 12px;
-  font-size: 0.82rem;
-}
-
-.result-hint {
-  flex-basis: 100%;
-  font-size: 0.72rem;
-  color: var(--primary-soft);
-  margin-bottom: -2px;
-}
-
-/* 変換が済んで #copy が有効化されたらヒントを隠す（純CSS・JS非依存） */
-.result-actions:has(#copy:not(:disabled)) .result-hint {
-  display: none;
-}
-
 .pane {
   display: none;
   margin: 0;
@@ -1050,20 +945,6 @@ textarea {
     width: 100%;
   }
 
-  /* 2レーン → 縦スタック。各カードを設定カードと同じ全幅に揃える。
-     「そのまま保存」を変換より前（設定の直下）に */
-  .lanes {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 14px;
-  }
-  .lane-save {
-    order: 1;
-  }
-  .lane-convert {
-    order: 2;
-  }
-
   /* 全ボタン全幅・48px 以上のタップ領域 */
   .btn-primary {
     width: 100%;
@@ -1074,22 +955,6 @@ textarea {
   }
   .btn-row {
     flex-direction: column;
-  }
-
-  /* コピー / .txt は結果ペインの下にフルで並べる */
-  .result-actions {
-    position: static;
-    margin-top: 12px;
-    flex-wrap: wrap;
-  }
-  .result-actions .btn-secondary {
-    flex: 1 1 auto;
-    min-height: 46px;
-    padding: 11px 14px;
-    font-size: 0.85rem;
-  }
-  .result-hint {
-    flex-basis: 100%;
   }
 
   .pane {
@@ -1370,5 +1235,587 @@ textarea {
   }
   .seg-item span {
     transition: none;
+  }
+}
+
+/* =============================================================================
+   コンバーター（index.html）
+   ヘッダー（ツール切替タブ）→ 更新情報1行 → 選択 → ファイルで保存 → テキスト結果
+   ============================================================================= */
+
+/* ── ヘッダー: アイコンボタン・ツール切替タブ ──────────── */
+.ico {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--btn-outline-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--slate);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-icon:hover {
+  background: var(--btn-outline-hover);
+}
+
+.btn-icon:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.hero h1 .beta {
+  margin-left: 6px;
+  font-size: 0.7rem;
+  font-weight: 400;
+}
+
+.tool-switch {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  margin-top: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tool-tab {
+  padding: 8px 14px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tool-tab:hover {
+  color: var(--slate);
+}
+
+.tool-tab[aria-current="page"] {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.tool-desc {
+  margin-left: auto;
+  padding-bottom: 8px;
+  font-size: 0.74rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* ── 更新情報（最新1件を1行、残りは開いて見る）──────────── */
+.news-bar {
+  margin: -8px 0 20px;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  font-size: 0.8rem;
+}
+
+.news-bar summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.news-bar summary::-webkit-details-marker {
+  display: none;
+}
+
+.news-tag {
+  flex: none;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--badge-bg);
+  color: var(--badge-fg);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.news-latest {
+  flex: 1;
+  min-width: 0;
+}
+
+.news-bar .news-date {
+  margin-right: 0.75em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.news-more {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.news-more::after {
+  content: " ›";
+}
+
+.news-bar[open] .news-more::after {
+  content: " ‹";
+}
+
+.news-bar.news-single .news-more {
+  display: none;
+}
+
+.news-bar .news-list {
+  padding: 0 12px 8px 54px;
+  font-size: 0.8rem;
+}
+
+/* ── 選択フォーム（4項目を1行。ラベルは上）──────────────── */
+.form.form-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px 18px;
+  padding: 0;
+  margin-bottom: 18px;
+  background: none;
+  border: 0;
+}
+
+.form-grid .field {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.form-grid .field > label {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.form-grid .cs,
+.form-grid .field select {
+  width: 100%;
+}
+
+.form-grid .cs-trigger,
+.form-grid .field select {
+  min-height: 40px;
+  font-size: 0.9rem;
+}
+
+/* セグメント: 選択中は白いつまみ（青文字）。主操作の塗りと区別する */
+.form-grid .seg-item input:checked + span,
+.seg-sm .seg-item input:checked + span {
+  background: #fff;
+  color: var(--primary);
+  box-shadow: 0 1px 3px rgba(20, 30, 60, 0.18);
+}
+
+.form-grid .seg-item span {
+  padding: 6px 14px;
+}
+
+/* ── ファイルで保存（変換不要）──────────────────────────── */
+.savebar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.savebar-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.savebar-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.savebar-note {
+  margin-left: auto;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.btn-save {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 8px 14px;
+  overflow: hidden;
+  border: 1px solid var(--btn-outline-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
+}
+
+.btn-save:hover:not(:disabled) {
+  background: var(--btn-outline-hover);
+}
+
+.btn-save.primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(31, 91, 214, 0.25);
+}
+
+.btn-save.primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.pill {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #eef0f4;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 400;
+}
+
+.btn-save.primary .pill {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* 処理中: ボタン下端に進捗バー（--p）を伸ばし、ラベルを % 表示にする */
+.btn-save.busy,
+.btn-run.busy {
+  opacity: 1;
+  cursor: progress;
+}
+
+.btn-save.busy .pill {
+  display: none;
+}
+
+.btn-save.busy::after,
+.btn-run.busy::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: var(--p, 0%);
+  background: currentColor;
+  opacity: 0.7;
+  transition: width 0.2s;
+}
+
+.btn-save:disabled:not(.busy),
+.btn-run:disabled:not(.busy),
+.btn-tool:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-save:focus-visible,
+.btn-run:focus-visible,
+.btn-tool:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.btn-save:active:not(:disabled),
+.btn-run:active:not(:disabled),
+.btn-tool:active:not(:disabled),
+.btn-icon:active {
+  transform: scale(0.98);
+  transition: transform 100ms ease-out;
+}
+
+/* ── 状態表示（注意・エラーのみ。空なら出さない）─────────── */
+.status.status-line {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.status.status-line:empty {
+  display: none;
+}
+
+.status.status-line.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.status.status-line.error {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 400;
+}
+
+/* ── テキスト結果 ────────────────────────────────────────── */
+.result {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.result-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.result-title-wrap {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+.result-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.result-src {
+  font-size: 0.76rem;
+  color: var(--primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.result-src:hover {
+  text-decoration: underline;
+}
+
+.result-src[hidden] {
+  display: none;
+}
+
+.result-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.seg-sm {
+  background: #fff;
+}
+
+.seg-sm .seg-item span {
+  padding: 3px 11px;
+  font-size: 0.76rem;
+}
+
+.btn-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid var(--btn-outline-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.btn-tool:hover:not(:disabled) {
+  background: var(--btn-outline-hover);
+}
+
+.btn-tool .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.result-text {
+  margin: 0;
+  padding: 16px 18px;
+  min-height: 200px;
+  max-height: 560px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.8;
+  color: var(--ink);
+  transition: opacity 0.15s;
+}
+
+.result-text[hidden] {
+  display: none;
+}
+
+/* 選択を変えた直後、次のテキストが届くまで前の内容を薄く残す */
+.result-text.stale {
+  opacity: 0.35;
+}
+
+.result-message {
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.result-message[hidden] {
+  display: none;
+}
+
+.result-message-title {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.result-message-text {
+  max-width: 34em;
+  margin: 0 auto;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.btn-run {
+  position: relative;
+  margin-top: 16px;
+  padding: 12px 26px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 10px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-run:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.btn-run[hidden] {
+  display: none;
+}
+
+/* ── コンバーターのモバイル表示 ─────────────────────────── */
+@media (max-width: 640px) {
+  .btn-icon {
+    padding: 9px;
+  }
+  .btn-icon-text {
+    display: none;
+  }
+  .hero-top {
+    align-items: center;
+  }
+  .tool-desc {
+    display: none;
+  }
+  .news-bar .news-list {
+    padding-left: 12px;
+  }
+  .news-more {
+    display: none;
+  }
+
+  .form.form-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .form-grid .f-exam,
+  .form-grid .f-type {
+    grid-column: 1 / -1;
+  }
+  .form-grid .seg {
+    display: flex;
+  }
+  .form-grid .seg-item {
+    flex: 1;
+    text-align: center;
+  }
+
+  .savebar {
+    padding: 12px;
+  }
+  .savebar-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+  .btn-save {
+    justify-content: center;
+    min-height: 48px;
+  }
+  /* 抜粋PDF（主操作）は1行を占有する */
+  .btn-save.primary {
+    grid-column: 1 / -1;
+  }
+  .btn-save:not(.primary) .pill {
+    display: none;
+  }
+  .savebar-note {
+    display: none;
+  }
+
+  .result-tools {
+    width: 100%;
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+  .result-tools .seg-sm {
+    flex: 1 1 100%;
+  }
+  .result-tools .seg-sm .seg-item {
+    flex: 1;
+    text-align: center;
+  }
+  .btn-tool {
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
+  }
+  .result-text {
+    padding: 14px;
+    font-size: 0.8rem;
   }
 }
