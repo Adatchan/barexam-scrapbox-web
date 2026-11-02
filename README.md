@@ -126,8 +126,8 @@ web/
 │   ├── build-search-index.mjs  converted/ → 全文検索の索引（converted/search/）
 │   ├── test-search.mjs     全文検索の回帰テスト（索引が最新か・照合結果の一致）
 │   ├── check-links.mjs     全年度×全種類のリンク探索の健全性チェック
-│   └── bump-version.mjs    index.html のキャッシュバスター（?v=）更新
-├── .githooks/pre-commit    JS/CSS 変更時にキャッシュバスターを、converted/ 変更時に索引を自動更新
+│   └── bump-version.mjs    版番号（インポートマップ・?v=）とCSPハッシュの更新
+├── .githooks/pre-commit    JS/CSS/HTML 変更時に版番号を、converted/ 変更時に索引を自動更新
 └── .github/workflows/
     └── update-years.yml    週次の自動巡回・健全性チェック（毎週月曜 09:00 JST）
 ```
@@ -149,9 +149,17 @@ web/
 git config core.hooksPath .githooks
 ```
 
-これにより JS/CSS を変更してコミットすると index.html の `?v=` が自動更新される
-（GitHub Pages の最大10分キャッシュ対策）。手動更新は
-`node scripts/bump-version.mjs`。
+これにより JS/CSS/HTML を変更してコミットすると、両HTMLの版番号とCSPハッシュが
+自動更新される（手動更新は `node scripts/bump-version.mjs`、確認は `--check`）。
+
+- 版番号は各ファイルの内容ハッシュ。入口（`app.js` / `tantou.js`）と `style.css` の
+  `?v=` に加え、インポートマップ（`<script type="importmap">`）で、入口から
+  import される部品（`ui.js`・`search.js` など）にも `?v=` を付ける。端末に古い部品が
+  残ると新しい入口が求める export が無く読み込みに失敗するため（内容が変わった
+  ファイルだけ URL が変わるので、他はキャッシュが効く）
+- インラインスクリプト（インポートマップ・エラー表示）は CSP の `script-src` に
+  SHA-256 を列挙して許可している。中身が変わるとハッシュも変わるので、同じ
+  スクリプトが自動で計算して書き換える
 
 `converted/` の事前変換データ（または `search.js` の正規化）を変更してコミット
 すると、全文検索の索引（`converted/search/`）も同じフックで作り直される。
