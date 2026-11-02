@@ -47,7 +47,7 @@
       href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=BIZ+UDGothic:wght@400;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./style.css?v=20261102.1357" />
+    <link rel="stylesheet" href="./style.css?v=20261102.1405" />
   </head>
   <body>
     <main class="app">
@@ -55,6 +55,9 @@
         <div class="hero-top">
           <h1>しほしけ短答ダウンローダー<span class="beta">β版</span></h1>
           <div class="hero-actions">
+            <button id="search-open" class="btn-icon" type="button" aria-label="全文検索">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg><span class="btn-icon-text">全文検索</span>
+            </button>
             <button id="help" class="btn-icon" type="button" aria-label="使い方・FAQ">
               <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14" /><path d="M12 17.5v.01" /></svg><span class="btn-icon-text">使い方</span>
             </button>
@@ -199,6 +202,53 @@
         </details>
       </dialog>
 
+      <!-- 全文検索（事前変換した問題の本文を対象。原典PDFは取得しない）-->
+      <dialog id="search-dialog" aria-label="全文検索">
+        <div class="help-head">
+          <h2>全文検索（短答式）</h2>
+          <button id="search-close" class="btn-secondary" type="button">
+            閉じる
+          </button>
+        </div>
+        <p class="search-note">
+          選んだ科目について、全年度の短答式の問題文をキーワードで検索します。結果のカードを押すと、その年度・科目が画面の選択欄に入るので、そのままPDFを保存できます。検索は事前に取り出した問題文に対して行うため、まだ取り出していない年度（新年度の掲載直後など）は対象外です。正答及び配点は検索の対象外です。
+        </p>
+        <div class="search-controls">
+          <div class="field">
+            <label>試験</label>
+            <div class="seg" role="radiogroup" aria-label="試験">
+              <label class="seg-item">
+                <input type="radio" name="search-exam" value="shihou" checked />
+                <span>司法試験</span>
+              </label>
+              <label class="seg-item">
+                <input type="radio" name="search-exam" value="yobi" />
+                <span>予備試験</span>
+              </label>
+            </div>
+          </div>
+          <div class="field">
+            <label for="search-subject">科目</label>
+            <select id="search-subject"></select>
+          </div>
+        </div>
+        <div class="search-bar">
+          <input
+            id="search-input"
+            type="search"
+            placeholder="キーワード（例: 表現の自由、即時取得、共謀共同正犯）"
+            autocomplete="off"
+          />
+          <button id="search-run" class="btn-primary" type="button">
+            検索
+          </button>
+        </div>
+        <div id="search-status" class="search-status" aria-live="polite">
+          キーワードを入力して「検索」を押してください。
+        </div>
+        <div id="search-results" class="search-results"></div>
+      </dialog>
+
       <section class="form form-grid form-grid-3" aria-label="資料の選択">
         <div class="field f-exam">
           <label>試験</label>
@@ -318,6 +368,6 @@
       })();
     </script>
 
-    <script type="module" src="./tantou.js?v=20261102.1357"></script>
+    <script type="module" src="./tantou.js?v=20261102.1405"></script>
   </body>
 </html>

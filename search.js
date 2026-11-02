@@ -12,10 +12,15 @@
 // 正規化の規則と索引の形式（作る側 buildSearchDoc・読む側 openDoc）はこの
 // ファイルで定義し、索引を作るスクリプトと共有する。取得した索引はメモリに
 // 保持し、同じ科目の再検索では取り直さない。
+//
+// 検索の対象（コーパス）は4つ。tantou=true は短答式の問題（tantou-text.js）。
+//   論文式 司法試験 search/shihou/   論文式 予備試験 search/yobi/
+//   短答式 司法試験 search/tantou-shihou/   短答式 予備試験 search/tantou-yobi/
 // =============================================================================
 import { YEAR_URL_MAP } from "./years.js";
 import { YOBI_YEAR_URL_MAP } from "./yobi-years.js";
 import { yearKeyToLabel } from "./data.js";
+import { tantouYearKeys } from "./tantou-moj.js";
 
 // 索引の形式か正規化の規則を変えたら上げる（古い索引のまま照合しないように）
 export const SEARCH_INDEX_VERSION = 1;
@@ -24,17 +29,20 @@ const BASE = "./converted";
 const SNIPPET_BEFORE = 28; // スニペットでヒット箇所の前に見せる文字数
 const SNIPPET_AFTER = 60; // 同・後ろに見せる文字数
 
-// `${exam}|${subject}` → Promise<Map(年度キー → { 種類: 文書 }) | null（索引無し）>
+// `${索引の置き場所}|${subject}` → Promise<Map(年度キー → { 種類: 文書 }) | null（索引無し）>
 const indexCache = new Map();
 
 // 検索対象の年度（新しい順）。索引に無い年度は検索対象外として数える。
-export function searchYearKeys(yobi) {
+export function searchYearKeys(yobi, tantou = false) {
+  if (tantou) return tantouYearKeys(yobi).slice().reverse();
   return Object.keys(yobi ? YOBI_YEAR_URL_MAP : YEAR_URL_MAP).reverse();
 }
 
-// converted/ 内の索引の置き場所（司法と予備で科目名が衝突するため分ける）
-export function searchIndexDir(yobi) {
-  return yobi ? "search/yobi" : "search/shihou";
+// converted/ 内の索引の置き場所（司法と予備、論文と短答で科目名が衝突する
+// ため分ける）
+export function searchIndexDir(yobi, tantou = false) {
+  const exam = yobi ? "yobi" : "shihou";
+  return tantou ? `search/tantou-${exam}` : `search/${exam}`;
 }
 
 // 照合用の正規化。空白を除き、全角英数字などを NFKC で揃えて小文字化する。
@@ -112,8 +120,8 @@ export function toOriginal(breaks, i) {
 }
 
 // ─── 索引の取得 ──────────────────────────────────────────────────────────
-async function fetchIndex(yobi, subject) {
-  const url = `${BASE}/${searchIndexDir(yobi)}/${encodeURIComponent(subject)}.json`;
+async function fetchIndex(dir, subject) {
+  const url = `${BASE}/${dir}/${encodeURIComponent(subject)}.json`;
   const res = await fetch(url, { cache: "no-cache" });
   if (res.status === 404) return null; // 索引が無い科目は全年度が検索対象外
   if (!res.ok)
@@ -135,11 +143,12 @@ async function fetchIndex(yobi, subject) {
 
 // 科目の索引を取得してキャッシュする（取得中・取得済みなら同じものを返す）。
 // 通信の失敗は覚えておかず、次の検索で取り直す。
-function loadIndex(yobi, subject) {
-  const key = `${yobi ? "yobi" : "shihou"}|${subject}`;
+function loadIndex(yobi, tantou, subject) {
+  const dir = searchIndexDir(yobi, tantou);
+  const key = `${dir}|${subject}`;
   let p = indexCache.get(key);
   if (!p) {
-    p = fetchIndex(yobi, subject);
+    p = fetchIndex(dir, subject);
     indexCache.set(key, p);
     p.catch(() => {
       if (indexCache.get(key) === p) indexCache.delete(key);
@@ -150,8 +159,9 @@ function loadIndex(yobi, subject) {
 
 // 検索を押す前に索引を取り寄せておく（検索ダイアログを開いたときや科目を
 // 選び直したときに呼ぶ）。失敗はここでは報告せず、検索の実行時に取り直す。
-export function preloadSearchIndex(yobi, subjects) {
-  for (const subject of subjects) loadIndex(yobi, subject).catch(() => {});
+export function preloadSearchIndex(yobi, subjects, tantou = false) {
+  for (const subject of subjects)
+    loadIndex(yobi, tantou, subject).catch(() => {});
 }
 
 // ヒット箇所の前後を切り出す（一致部分は before / match / after に分けて返し、
@@ -166,22 +176,39 @@ function makeSnippet(text, start, end) {
   };
 }
 
+// 一致箇所より前で最後に現れた設問番号（〔第１２問〕など）。短答式のカードで
+// 「どの問か」を示すのに使う。見つからなければ null。
+const QUESTION_RE = /〔第[0-9０-９]+問〕/g;
+export function questionLabelAt(text, pos) {
+  let label = null;
+  QUESTION_RE.lastIndex = 0;
+  for (let m; (m = QUESTION_RE.exec(text)) && m.index <= pos; )
+    label = m[0].slice(1, -1); // 〔〕を外す
+  return label;
+}
+
 // 科目（選択科目は第１問・第２問の2つ）を検索する。types は
-// ["試験問題", "出題の趣旨", ...]。戻り値は年度が新しい順、同一年度では
-// subjects → types の順に並んだヒット一覧。
-export async function searchSubject({ yobi, subjects, types, query }) {
+// ["試験問題", "出題の趣旨", ...]（短答式は ["問題"]）。戻り値は年度が新しい順、
+// 同一年度では subjects → types の順に並んだヒット一覧。
+export async function searchSubject({
+  yobi,
+  tantou = false,
+  subjects,
+  types,
+  query,
+}) {
   const q = normalizeQuery(query);
   if (!q) return { hits: [], searchedYears: 0, missingYears: [] };
 
   const indexes = await Promise.all(
-    subjects.map((subject) => loadIndex(yobi, subject)),
+    subjects.map((subject) => loadIndex(yobi, tantou, subject)),
   );
 
   const hits = [];
   const missing = new Set(); // どの科目でもデータが無かった年度
   const searched = new Set();
 
-  for (const yearKey of searchYearKeys(yobi)) {
+  for (const yearKey of searchYearKeys(yobi, tantou)) {
     for (let si = 0; si < subjects.length; si++) {
       const docs = indexes[si]?.get(yearKey);
       if (!docs) {
@@ -216,6 +243,7 @@ export async function searchSubject({ yobi, subjects, types, query }) {
           docType,
           count,
           snippet: makeSnippet(doc.text, start, end),
+          question: questionLabelAt(doc.text, start),
           pdfUrl: doc.pdfUrl,
         });
       }

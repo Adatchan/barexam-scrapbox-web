@@ -50,6 +50,9 @@ import {
   startBusy,
   initNewsBar,
   triggerDownload,
+  closeDialog,
+  setupDialog,
+  buildHitCard,
 } from "./ui.js";
 import {
   searchSubject,
@@ -169,43 +172,6 @@ function applyExamMode() {
   refreshResult();
 }
 
-// ─── ダイアログ（ヘルプ・全文検索で共通）─────────────────────────────────
-// 閉じるときは開いたときと同じ経路を戻る（.closing のアニメーション完了後に
-// close()。アニメーションが無効な環境でも保険のタイマーで必ず閉じる）。
-function closeDialog(dlg) {
-  if (!dlg.open || dlg.classList.contains("closing")) return;
-  dlg.classList.add("closing");
-  const finish = () => {
-    dlg.classList.remove("closing");
-    dlg.close();
-  };
-  const fallback = setTimeout(finish, 250);
-  dlg.addEventListener(
-    "animationend",
-    () => {
-      clearTimeout(fallback);
-      finish();
-    },
-    { once: true },
-  );
-}
-
-function setupDialog(dialogId, openId, closeId, onOpen) {
-  const dlg = $(dialogId);
-  $(openId).addEventListener("click", () => {
-    dlg.showModal();
-    onOpen && onOpen();
-  });
-  $(closeId).addEventListener("click", () => closeDialog(dlg));
-  dlg.addEventListener("click", (e) => {
-    if (e.target === dlg) closeDialog(dlg); // 背景クリック
-  });
-  dlg.addEventListener("cancel", (e) => {
-    e.preventDefault(); // Esc もアニメーションを通して閉じる
-    closeDialog(dlg);
-  });
-}
-
 function closeSearch() {
   closeDialog($("search-dialog"));
 }
@@ -302,47 +268,6 @@ function selectedSearchTypes() {
   );
 }
 
-// ヒット1件分のカード。押すと年度・科目・種類を画面へ反映して閉じる。
-function buildHitCard(hit, showSubject, onPick) {
-  const card = document.createElement("button");
-  card.type = "button";
-  card.className = "hit-card";
-
-  const head = document.createElement("div");
-  head.className = "hit-head";
-  const year = document.createElement("span");
-  year.className = "hit-year";
-  year.textContent = hit.yearLabel;
-  head.appendChild(year);
-  if (showSubject) {
-    const subj = document.createElement("span");
-    subj.className = "hit-type hit-subject";
-    subj.textContent = hit.subject;
-    head.appendChild(subj);
-  }
-  const type = document.createElement("span");
-  type.className = "hit-type";
-  type.textContent = hit.docType;
-  const count = document.createElement("span");
-  count.className = "hit-count";
-  count.textContent = `${hit.count}件`;
-  head.append(type, count);
-
-  const snip = document.createElement("div");
-  snip.className = "hit-snippet";
-  const mark = document.createElement("mark");
-  mark.textContent = hit.snippet.match;
-  snip.append(
-    document.createTextNode(hit.snippet.before),
-    mark,
-    document.createTextNode(hit.snippet.after),
-  );
-
-  card.append(head, snip);
-  card.addEventListener("click", () => onPick(hit));
-  return card;
-}
-
 async function onSearch() {
   const query = $("search-input").value.trim();
   const results = $("search-results");
@@ -394,7 +319,7 @@ async function onSearch() {
         : "");
     for (const hit of hits) {
       results.appendChild(
-        buildHitCard(hit, showSubject, (h) => applySearchHit(h, yobi)),
+        buildHitCard(hit, { showSubject }, (h) => applySearchHit(h, yobi)),
       );
     }
   } catch (e) {

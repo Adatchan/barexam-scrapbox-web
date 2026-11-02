@@ -17,6 +17,14 @@ export const PDF_DOC_OPTIONS = {
   standardFontDataUrl: `${PDFJS_ASSETS}/standard_fonts/`,
 };
 let _pdfjsPromise = null;
+
+// Node（scripts/precompute.mjs）から PDF.js と CMap 等の置き場所を注入する
+// （ブラウザは CDN から読む。parser.js の setPdfjs / setPdfDocOptions と同じ役割）
+export function setSplitPdfjs(lib, docOptions = {}) {
+  _pdfjsPromise = Promise.resolve(lib);
+  Object.assign(PDF_DOC_OPTIONS, docOptions);
+}
+
 export function loadPdfjs() {
   if (!_pdfjsPromise)
     _pdfjsPromise = (async () => {

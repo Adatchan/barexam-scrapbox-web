@@ -12,6 +12,9 @@
 // =============================================================================
 import { fetchHtml } from "./moj.js";
 import { reEscape } from "./rules.js";
+import { YEAR_URL_MAP } from "./years.js";
+import { YOBI_YEAR_URL_MAP } from "./yobi-years.js";
+import { YOBI_TANTOU_SUBJECTS } from "./yobi-moj.js";
 
 export const TANTOU_SUBJECTS = ["憲法", "民法", "刑法"];
 // フッター等に並べる短答式の種類（左から順）
@@ -33,6 +36,18 @@ export function isThreeSubjectYear(key) {
   const n = Number(key.slice(1));
   if (Number.isNaN(n)) return false;
   return key[0] === "r" ? true : n >= 27;
+}
+
+// 短答式の全文検索・事前変換の対象年度（古い順）と科目。司法試験は3科目別
+// 出題の年度（平成27年以降）に限る。予備試験は全年度。
+export function tantouYearKeys(yobi) {
+  return yobi
+    ? Object.keys(YOBI_YEAR_URL_MAP)
+    : Object.keys(YEAR_URL_MAP).filter(isThreeSubjectYear);
+}
+
+export function tantouSubjects(yobi) {
+  return yobi ? YOBI_TANTOU_SUBJECTS : TANTOU_SUBJECTS;
 }
 
 function resolveUrl(href, baseUrl) {

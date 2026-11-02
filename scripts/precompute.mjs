@@ -3,6 +3,8 @@
 //   司法試験:   web/converted/<年度>/<科目>.json
 //   予備試験:   web/converted/yobi/<年度>/<科目>.json
 //     （年度キー・科目名が司法と衝突するため yobi/ 配下に分ける）
+//   短答式:     web/converted/tantou/<shihou|yobi>/<年度>/<科目>.json
+//     （問題PDFの本文。全文検索の対象にするためだけに作る。tantou-text.js）
 //
 // ブラウザ（convert.js / yobi-convert.js）はこのJSONがあれば取得して整形する
 // だけで、PDF取得・PDF.js 解析を丸ごと省略できる。無ければ従来のクライアント
@@ -21,7 +23,7 @@
 // 使い方:
 //   npm install                       # pdfjs-dist を入れる
 //   node scripts/precompute.mjs       # 未取得の分だけ（週次巡回はこれ）
-//   node scripts/precompute.mjs r6 r7 # 指定年度のみ（司法・予備とも）
+//   node scripts/precompute.mjs r6 r7 # 指定年度のみ（司法・予備・短答とも）
 //   node scripts/precompute.mjs --force       # 全件を作り直す
 //   node scripts/precompute.mjs --force r6    # 指定年度を作り直す
 // =============================================================================
@@ -31,6 +33,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { setPdfjs, setPdfDocOptions } from "../parser.js";
+import { setSplitPdfjs } from "../pdfsplit.js";
 
 setPdfjs(pdfjs); // ブラウザの CDN ロードの代わりに pdfjs-dist を注入
 
@@ -39,10 +42,13 @@ setPdfjs(pdfjs); // ブラウザの CDN ロードの代わりに pdfjs-dist を�
 const pdfjsDir = createRequire(import.meta.url)
   .resolve("pdfjs-dist/package.json")
   .replace(/package\.json$/, "");
-setPdfDocOptions({
+const localAssets = {
   cMapUrl: `${pdfjsDir}cmaps/`,
   standardFontDataUrl: `${pdfjsDir}standard_fonts/`,
-});
+};
+setPdfDocOptions(localAssets);
+// 予備試験の短答式（科目グループPDFからの切り出し）でも同じ PDF.js を使う
+setSplitPdfjs(pdfjs, localAssets);
 
 const { buildEntry } = await import("../convert.js");
 const { buildYobiEntry } = await import("../yobi-convert.js");
@@ -50,6 +56,9 @@ const { SUBJECT_MAP } = await import("../data.js");
 const { YEAR_URL_MAP, RESULTS_URL_MAP } = await import("../years.js");
 const { YOBI_YEAR_URL_MAP } = await import("../yobi-years.js");
 const { YOBI_RONBUN_SUBJECTS } = await import("../yobi-moj.js");
+const { buildTantouEntry, tantouYearKeys, tantouSubjects } = await import(
+  "../tantou-text.js"
+);
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "converted");
@@ -158,6 +167,34 @@ for (const yearKey of yobiYears) {
     if (r.ok && Object.keys(r.out).length) {
       mkdirSync(dir, { recursive: true });
       writeFileSync(file, JSON.stringify(r.out));
+    }
+  }
+}
+
+// ── 短答式（問題の本文。全文検索用）──────────────────────────────────────
+for (const yobi of [false, true]) {
+  const exam = yobi ? "yobi" : "shihou";
+  console.log(`\n##### 短答式（${yobi ? "予備試験" : "司法試験"}）#####`);
+  const all = tantouYearKeys(yobi);
+  const years = argYears.length ? argYears.filter((k) => all.includes(k)) : all;
+  for (const yearKey of years) {
+    for (const subject of tantouSubjects(yobi)) {
+      const dir = join(OUT, "tantou", exam, yearKey);
+      const file = join(dir, `${subject}.json`);
+      const r = await buildSubject(
+        ({ yearKey, subject }) => buildTantouEntry({ yobi, yearKey, subject }),
+        yearKey,
+        subject,
+        ["問題"],
+        readExisting(file),
+      );
+      ok += r.ok;
+      skip += r.skip;
+      kept += r.kept;
+      if (r.ok && Object.keys(r.out).length) {
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(file, JSON.stringify(r.out));
+      }
     }
   }
 }

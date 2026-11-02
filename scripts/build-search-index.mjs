@@ -3,6 +3,8 @@
 // 科目ごとに全年度分の本文を照合用に正規化した索引を書き出す。
 //   司法試験: converted/search/shihou/<科目>.json
 //   予備試験: converted/search/yobi/<科目>.json
+//   短答式:   converted/search/tantou-<shihou|yobi>/<科目>.json
+//             （converted/tantou/<shihou|yobi>/<年度>/<科目>.json から）
 //
 // ブラウザ（search.js）は検索のたびに本文を正規化し直さず、この索引の正規化
 // 済みテキストをそのまま照合する。正規化の規則と索引の形式は search.js が
@@ -36,24 +38,33 @@ import { SUBJECT_MAP } from "../data.js";
 import { YEAR_URL_MAP } from "../years.js";
 import { YOBI_YEAR_URL_MAP } from "../yobi-years.js";
 import { YOBI_RONBUN_SUBJECTS } from "../yobi-moj.js";
+import { tantouYearKeys, tantouSubjects } from "../tantou-moj.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const CONVERTED = join(ROOT, "converted");
 
 // 試験ごとの年度・科目と、事前変換データの置き場所（precompute.mjs と同じ）
-const EXAMS = [
+export const EXAMS = [
   {
-    yobi: false,
+    indexDir: searchIndexDir(false),
     years: Object.keys(YEAR_URL_MAP),
     subjects: Object.keys(SUBJECT_MAP),
     dirOf: (yearKey) => join(CONVERTED, yearKey),
   },
   {
-    yobi: true,
+    indexDir: searchIndexDir(true),
     years: Object.keys(YOBI_YEAR_URL_MAP),
     subjects: YOBI_RONBUN_SUBJECTS,
     dirOf: (yearKey) => join(CONVERTED, "yobi", yearKey),
   },
+  // 短答式（問題の本文のみ）
+  ...[false, true].map((yobi) => ({
+    indexDir: searchIndexDir(yobi, true),
+    years: tantouYearKeys(yobi),
+    subjects: tantouSubjects(yobi),
+    dirOf: (yearKey) =>
+      join(CONVERTED, "tantou", yobi ? "yobi" : "shihou", yearKey),
+  })),
 ];
 
 // 1科目分の索引（JSON文字列）。事前変換データが無い年度は索引に含めず、
@@ -85,7 +96,7 @@ export function buildSearchIndexes({ check = false } = {}) {
   let removed = 0;
   const stale = [];
   for (const exam of EXAMS) {
-    const outDir = join(CONVERTED, searchIndexDir(exam.yobi));
+    const outDir = join(CONVERTED, exam.indexDir);
     const expected = new Set();
     for (const subject of exam.subjects) {
       const name = `${subject}.json`;
