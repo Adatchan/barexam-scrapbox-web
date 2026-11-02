@@ -16,14 +16,18 @@ import {
   buildSearchDoc,
   normalizeQuery,
   normalizeWithMap,
-  searchIndexDir,
+  questionLabelAt,
   searchSubject,
   searchYearKeys,
   toOriginal,
 } from "../search.js";
 import { SUBJECT_MAP, subjectSearchGroups } from "../data.js";
 import { YOBI_RONBUN_SUBJECTS } from "../yobi-moj.js";
-import { buildSearchIndexes } from "./build-search-index.mjs";
+import { tantouSubjects } from "../tantou-moj.js";
+import {
+  buildSearchIndexes,
+  EXAMS as INDEX_EXAMS,
+} from "./build-search-index.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -49,6 +53,17 @@ ok(
   );
 }
 
+{
+  // 短答式のカードに出す設問番号（一致箇所より前で最後の〔第○問〕）
+  const text = "表紙\n〔第１問〕（配点：２）\nア\n〔第12問〕\nイ";
+  ok(
+    questionLabelAt(text, text.indexOf("ア")) === "第１問" &&
+      questionLabelAt(text, text.indexOf("イ")) === "第12問" &&
+      questionLabelAt(text, 0) === null,
+    "一致箇所の設問番号を求められる",
+  );
+}
+
 // ─── 索引が最新か ───────────────────────────────────────────────────────
 const { stale } = buildSearchIndexes({ check: true });
 ok(
@@ -61,8 +76,9 @@ ok(
   let docs = 0;
   let chars = 0;
   const bad = [];
-  for (const yobi of [false, true]) {
-    const dir = join(ROOT, "converted", searchIndexDir(yobi));
+  for (const { indexDir } of INDEX_EXAMS) {
+    const dir = join(ROOT, "converted", indexDir);
+    if (!existsSync(dir)) continue;
     for (const name of readdirSync(dir)) {
       const index = JSON.parse(readFileSync(join(dir, name), "utf8"));
       for (const [yearKey, byType] of Object.entries(index.years)) {
@@ -109,12 +125,21 @@ const EXAMS = [
     types: ["試験問題", "出題の趣旨"],
     dirOf: (yearKey) => join(ROOT, "converted", "yobi", yearKey),
   },
+  // 短答式（問題の本文のみ）
+  ...[false, true].map((yobi) => ({
+    yobi,
+    tantou: true,
+    subjects: tantouSubjects(yobi),
+    types: ["問題"],
+    dirOf: (yearKey) =>
+      join(ROOT, "converted", "tantou", yobi ? "yobi" : "shihou", yearKey),
+  })),
 ];
 
 // 事前変換データを読み、本文をその場で正規化しておく（年度キー → 種類 → 文書）
 function loadPlain(exam, subject) {
   const years = new Map();
-  for (const yearKey of searchYearKeys(exam.yobi)) {
+  for (const yearKey of searchYearKeys(exam.yobi, exam.tantou)) {
     const file = join(exam.dirOf(yearKey), `${subject}.json`);
     if (!existsSync(file)) continue;
     const docs = {};
@@ -131,12 +156,12 @@ function loadPlain(exam, subject) {
 }
 
 // 本文を毎回そのまま照合する素朴な検索（索引を使う前の方式と同じ規則）
-function plainSearch(yobi, plainBySubject, subjects, types, query) {
+function plainSearch(exam, plainBySubject, subjects, types, query) {
   const q = normalizeQuery(query);
   const hits = [];
   const missing = new Set();
   const searched = new Set();
-  for (const yearKey of searchYearKeys(yobi)) {
+  for (const yearKey of searchYearKeys(exam.yobi, exam.tantou)) {
     for (const subject of subjects) {
       const docs = plainBySubject.get(subject).get(yearKey);
       if (!docs) {
@@ -221,7 +246,7 @@ const FIXED_QUERIES = [
         if (!normalizeQuery(query)) continue;
         queries++;
         const want = plainSearch(
-          exam.yobi,
+          exam,
           plainBySubject,
           group.subjects,
           types,
@@ -229,6 +254,7 @@ const FIXED_QUERIES = [
         );
         const got = await searchSubject({
           yobi: exam.yobi,
+          tantou: exam.tantou,
           subjects: group.subjects,
           types,
           query,

@@ -56,7 +56,7 @@
       href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=BIZ+UDGothic:wght@400;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./style.css?v=20261102.1357" />
+    <link rel="stylesheet" href="./style.css?v=20261102.1411" />
   </head>
   <body>
     <main class="app">
@@ -103,13 +103,25 @@
           </p>
         </details>
 
-        <details>
+        <details open>
           <summary>基本的な使い方は？</summary>
           <p>
-            ①上の欄で「試験」「年度」「科目」「種類」を選ぶ →
+            ①「試験」「年度」「科目」「種類」を選ぶ →
             ②PDFやLLM用のファイルが欲しいときは、「ファイルで保存」の「抜粋PDF」「一式 zip」「LLM用 .md」のいずれかを押す →
             ③テキストは選んだ時点で下の欄に表示されるので、「コピー」または「.txt」で持ち出します。変換ボタンを押す必要はありません。
           </p>
+          <figure class="help-figure">
+            <a href="./img/help/converter-overview.webp" target="_blank" rel="noopener" title="画像を拡大して開く">
+            <img
+              src="./img/help/converter-overview.webp"
+              width="1200"
+              height="794"
+              loading="lazy"
+              alt="画面の構成。①試験・年度・科目・種類の選択欄、②抜粋PDF・一式zip・LLM用.mdの保存ボタン、③出力形式の切り替えとコピー・.txtのボタン"
+            />
+            </a>
+            <figcaption>①で選ぶ → ②でファイルを保存 → ③でテキストを持ち出す</figcaption>
+          </figure>
         </details>
 
         <details>
@@ -130,9 +142,29 @@
 
         <details>
           <summary>キーワードから年度を探せますか？</summary>
-          <p>
-            画面右上の「全文検索」から探せます。ダイアログの中で試験（司法試験・予備試験）・科目・種類を選べます。キーワードを入れると、その科目の全年度について、選んだ種類（試験問題・出題の趣旨・採点実感。予備試験は試験問題・出題の趣旨）の本文を検索し、該当した年度をカードで一覧します。選択科目は「経済法第１問/第２問」のように両方の問をまとめて検索し、どちらでヒットしたかはカードに表示されます。カードを押すと、その年度・科目・種類が画面の選択欄に入るので、そのままテキストが表示され、各種保存にも進めます。キーワードは、空白・改行の有無、全角・半角、英字の大文字・小文字を区別せずに照合します（空白で区切っても複数語の検索にはならず、空白を詰めた1つの語句として探します）。検索は事前変換データから作った検索用の索引に対して行うので、法務省ウェブサイトへのアクセスは発生しません（変換データが無い年度は検索対象外です）。索引は科目ごとに読み込んで保持するので（ダイアログを開いた時点で選択中の科目を先読みします）、同じ科目の再検索はすぐに終わります。
-          </p>
+          <p>画面右上の「全文検索」から探せます。</p>
+          <ol class="help-steps">
+            <li>ダイアログで試験（司法試験・予備試験）・科目・種類を選ぶ</li>
+            <li>キーワードを入れて「検索」を押す（Enter でも可）</li>
+            <li>その科目の全年度から、キーワードを含む年度・種類がカードで並ぶ。カードを押すと、その年度・科目・種類が画面の選択欄に入り、テキストが表示される</li>
+          </ol>
+          <ul class="help-notes">
+            <li>空白・改行の有無、全角・半角、英字の大文字・小文字は区別しません。空白で区切っても複数語の検索にはならず、空白を詰めた1つの語句として探します。</li>
+            <li>選択科目は「経済法第１問/第２問」のように両方の問をまとめて検索し、どちらでヒットしたかをカードに表示します。</li>
+            <li>検索は事前変換データから作った索引に対して行うので、法務省ウェブサイトへのアクセスは発生しません（変換データが無い年度は対象外）。索引は科目ごとに読み込んで保持するので、同じ科目の再検索はすぐに終わります。</li>
+          </ul>
+          <figure class="help-figure">
+            <a href="./img/help/converter-search.webp" target="_blank" rel="noopener" title="画像を拡大して開く">
+            <img
+              src="./img/help/converter-search.webp"
+              width="1032"
+              height="1046"
+              loading="lazy"
+              alt="全文検索のダイアログ。憲法で「表現の自由」を検索し、令和7年の試験問題・出題の趣旨・採点実感がカードで並んでいる"
+            />
+            </a>
+            <figcaption>キーワードを含む年度・種類がカードで並ぶ。カードを押すと選択欄に入る</figcaption>
+          </figure>
         </details>
 
         <details>
@@ -494,6 +526,6 @@
       crossorigin="anonymous"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=20261102.1357"></script>
+    <script type="module" src="./app.js?v=20261102.1411"></script>
   </body>
 </html>

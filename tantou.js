@@ -19,6 +19,7 @@ import { yearKeyToLabel, subjectSystem, SYSTEM_BG } from "./data.js";
 import { TANTOU_NEWS } from "./news.js";
 import { fetchPdf } from "./moj.js";
 import { celebrate, alarmError, showToast } from "./effects.js";
+import { tantouSubjects } from "./tantou-moj.js";
 import {
   TANTOU_SUBJECTS,
   TANTOU_DOC_TYPES as DOC_TYPES,
@@ -48,7 +49,15 @@ import {
   startBusy,
   initNewsBar,
   triggerDownload,
+  closeDialog,
+  setupDialog,
+  buildHitCard,
 } from "./ui.js";
+import {
+  searchSubject,
+  normalizeQuery,
+  preloadSearchIndex,
+} from "./search.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -317,6 +326,127 @@ async function saveZip() {
   }
 }
 
+// ─── 全文検索 ─────────────────────────────────────────────────────────────
+// 事前に取り出した問題文の索引（converted/search/tantou-<試験>/）を科目単位で
+// 読み、キーワードに一致する年度をカードで一覧する。カードを押すと画面の
+// 選択欄（試験・年度・科目）へ反映する。正答及び配点は検索の対象外。
+let searchToken = 0; // 連打時に古い検索結果で上書きしないための世代番号
+
+function searchIsYobi() {
+  const el = document.querySelector('input[name="search-exam"]:checked');
+  return !!el && el.value === "yobi";
+}
+
+// 科目プルダウンを、ダイアログで選ばれている試験に合わせて作り直す。
+// 同じ名前の科目があれば選んだままにし、無ければメイン画面の科目に合わせる。
+function buildSearchSubjects() {
+  const sel = $("search-subject");
+  const keep = sel.value || $("subject").value;
+  sel.innerHTML = "";
+  for (const s of tantouSubjects(searchIsYobi())) {
+    const opt = document.createElement("option");
+    opt.value = s;
+    opt.textContent = s;
+    const sys = subjectSystem(s);
+    if (sys) opt.style.backgroundColor = SYSTEM_BG[sys];
+    sel.appendChild(opt);
+  }
+  if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
+  if (sel._cs) sel._cs.refresh();
+}
+
+// ダイアログを開くたびに、メイン画面の試験・科目に合わせる
+function initSearchControls() {
+  const exam = isYobi() ? "yobi" : "shihou";
+  const radio = document.querySelector(
+    `input[name="search-exam"][value="${exam}"]`,
+  );
+  if (radio) radio.checked = true;
+  $("search-subject").value = ""; // 作り直し後はメイン画面の科目に合わせる
+  buildSearchSubjects();
+}
+
+function preloadSelectedSearch() {
+  preloadSearchIndex(searchIsYobi(), [$("search-subject").value], true);
+}
+
+async function onSearch() {
+  const query = $("search-input").value.trim();
+  const results = $("search-results");
+  const status = $("search-status");
+  results.innerHTML = "";
+  if (!normalizeQuery(query)) {
+    status.textContent = "キーワードを入力してください。";
+    return;
+  }
+  const yobi = searchIsYobi();
+  const subject = $("search-subject").value;
+  const token = ++searchToken;
+  status.textContent = `「${subject}」を検索中…`;
+  try {
+    const { hits, searchedYears, missingYears } = await searchSubject({
+      yobi,
+      tantou: true,
+      subjects: [subject],
+      types: ["問題"],
+      query,
+    });
+    if (token !== searchToken) return; // 新しい検索が始まっていたら捨てる
+    const missingNote = missingYears.length
+      ? `（問題文を取り出していない${missingYears.length}年度は対象外）`
+      : "";
+    if (!searchedYears) {
+      status.textContent = `${subject}の問題文はまだ検索できません。問題文の取り出しが済むと検索できるようになります。`;
+      return;
+    }
+    if (!hits.length) {
+      status.textContent = `「${query}」は ${subject} の${searchedYears}年度分から見つかりませんでした。${missingNote}`;
+      return;
+    }
+    status.textContent = `「${query}」: ${hits.length}年度（${searchedYears}年度分を検索）${missingNote}`;
+    for (const hit of hits) {
+      results.appendChild(
+        buildHitCard(hit, { showQuestion: true, showDocType: false }, (h) =>
+          applySearchHit(h, yobi),
+        ),
+      );
+    }
+  } catch (e) {
+    if (token !== searchToken) return;
+    status.textContent = `検索に失敗しました: ${e.message}`;
+  }
+}
+
+// カードの年度・科目を画面の選択欄へ反映する。ダイアログで試験を切り替えて
+// 検索していた場合は、メイン画面もそちらに合わせる。保存の対象年度（正答の
+// 結果ページが未登録の年度は選択肢に無い）に無ければ、その旨を知らせる。
+function applySearchHit(hit, yobi) {
+  if (isYobi() !== yobi) {
+    const radio = document.querySelector(
+      `input[name="exam"][value="${yobi ? "yobi" : "shihou"}"]`,
+    );
+    if (radio) {
+      radio.checked = true;
+      initSelectors();
+      clearStatus();
+    }
+  }
+  const year = $("year");
+  const inList = [...year.options].some((o) => o.value === hit.yearKey);
+  if (inList) year.value = hit.yearKey;
+  $("subject").value = hit.subject;
+  for (const id of ["year", "subject"]) {
+    if ($(id)._cs) $(id)._cs.refresh();
+  }
+  updateSaveInfo();
+  closeDialog($("search-dialog"));
+  showToast(
+    inList
+      ? `${hit.yearLabel} ${hit.subject} を選びました`
+      : `${hit.yearLabel}はまだ正答及び配点が掲載されていないため選べません`,
+  );
+}
+
 // ── 起動 ─────────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   initSelectors();
@@ -343,33 +473,26 @@ window.addEventListener("DOMContentLoaded", () => {
   );
   $("zip-save").addEventListener("click", saveZip);
 
-  const helpDialog = $("help-dialog");
-  // 閉じるときは開いたときと同じ経路を戻る（.closing のアニメーション完了後に
-  // close()。アニメーションが無効な環境でも保険のタイマーで必ず閉じる）
-  function closeHelp() {
-    if (helpDialog.classList.contains("closing")) return;
-    helpDialog.classList.add("closing");
-    const finish = () => {
-      helpDialog.classList.remove("closing");
-      helpDialog.close();
-    };
-    const fallback = setTimeout(finish, 250);
-    helpDialog.addEventListener(
-      "animationend",
-      () => {
-        clearTimeout(fallback);
-        finish();
-      },
-      { once: true },
-    );
-  }
-  $("help").addEventListener("click", () => helpDialog.showModal());
-  $("help-close").addEventListener("click", closeHelp);
-  helpDialog.addEventListener("click", (e) => {
-    if (e.target === helpDialog) closeHelp();
+  // ダイアログ（ヘルプ・全文検索）。背景クリック・Escでも閉じる。
+  setupDialog("help-dialog", "help", "help-close");
+  enhanceSelect($("search-subject"), (v) => SYSTEM_BG[subjectSystem(v)]);
+  setupDialog("search-dialog", "search-open", "search-close", () => {
+    initSearchControls();
+    preloadSelectedSearch();
+    $("search-input").focus();
   });
-  helpDialog.addEventListener("cancel", (e) => {
-    e.preventDefault();
-    closeHelp();
+  for (const r of document.querySelectorAll('input[name="search-exam"]')) {
+    r.addEventListener("change", () => {
+      buildSearchSubjects();
+      preloadSelectedSearch();
+      $("search-results").innerHTML = "";
+      $("search-status").textContent =
+        "キーワードを入力して「検索」を押してください。";
+    });
+  }
+  $("search-subject").addEventListener("change", preloadSelectedSearch);
+  $("search-run").addEventListener("click", onSearch);
+  $("search-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") onSearch();
   });
 });
