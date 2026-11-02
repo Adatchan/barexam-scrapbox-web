@@ -1,8 +1,9 @@
 /* =============================================================================
    しほしけ UI
-   - コンバーター（index.html）: 選択 → 「ファイルで保存」バー → テキスト結果。
-     主操作（塗り）は「抜粋PDF」の1つ。テキストは選択時に自動で表示する。
-   - 短答ダウンローダー（tantou.html）は従来のカード型（.save-card 等）を使う。
+   コンバーター（index.html）・短答ダウンローダー（tantou.html）で共通の構成:
+   ヘッダー（ツール切替タブ）→ 更新情報1行 → 選択 → 「ファイルで保存」バー →
+   状態表示1行 → 結果パネル（コンバーターはテキスト、短答は保存内容の案内）。
+   主操作（塗り）は保存バーの先頭の1つ（抜粋PDF／問題PDF）。
    JS（app.js / tantou.js / colorselect.js）が参照する id・class は維持。
    ============================================================================= */
 :root {
@@ -19,8 +20,6 @@
 
   --line: #e6e8ee; /* 罫線 */
   --panel: #f5f7fa; /* 設定カード地 */
-  --lane-gray-bg: #f7f8fa; /* 短答の保存カード地 */
-  --result-bg: #fbfcfe; /* 結果ペイン地 */
 
   --badge-fg: #1f5bd6;
   --badge-bg: #e5eefc;
@@ -76,7 +75,6 @@ textarea {
 }
 
 /* 共通: hidden 属性は他のレイアウト指定に勝たせる */
-.actions-yobi[hidden],
 .field[hidden] {
   display: none;
 }
@@ -120,51 +118,6 @@ textarea {
   font-weight: 500;
   color: var(--muted-2);
   white-space: nowrap;
-}
-
-.hero .subtitle {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.6;
-}
-
-.hero .subtitle a {
-  color: var(--primary);
-}
-
-/* ── ヘルプボタン（ヘッダー右上） ─────────────────────── */
-.btn-help {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 14px 7px 9px;
-  border: 1px solid var(--btn-outline-border);
-  border-radius: 999px;
-  background: #fff;
-  color: var(--slate);
-  font-size: 0.8rem;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.btn-help:hover {
-  background: var(--btn-outline-hover);
-}
-
-.help-badge {
-  display: grid;
-  place-items: center;
-  width: 19px;
-  height: 19px;
-  border-radius: 50%;
-  background: var(--primary);
-  color: #fff;
-  font-size: 0.72rem;
-  font-weight: 700;
-  line-height: 1;
 }
 
 /* ── ヘルプダイアログ ─────────────────────────────────── */
@@ -406,24 +359,6 @@ textarea {
   font-weight: 700;
 }
 
-/* ── 更新情報 ────────────────────────────────────────── */
-.news {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--primary);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
-  margin-bottom: 22px;
-}
-
-.news-title {
-  margin: 0 0 4px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--slate);
-  letter-spacing: 0.04em;
-}
-
 .news-list {
   margin: 0;
   padding: 0;
@@ -631,64 +566,6 @@ textarea {
   font-weight: 700;
 }
 
-/* ── カード見出し（短答ダウンローダーの .save-card で使用）──── */
-.lane-sub {
-  font-size: 0.74rem;
-  color: var(--muted);
-  margin-bottom: 14px;
-  line-height: 1.55;
-}
-
-.lane-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-bottom: 3px;
-}
-
-.lane-title-2 {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--slate);
-}
-
-.badge {
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: var(--badge-fg);
-  background: var(--badge-bg);
-  border-radius: 999px;
-  padding: 2px 9px;
-  white-space: nowrap;
-}
-
-/* ── 短答ダウンローダー（tantou.html）のカード ──────── */
-.actions-yobi {
-  margin-bottom: 18px;
-}
-
-.save-card {
-  background: var(--lane-gray-bg);
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  padding: 18px 20px;
-}
-
-.save-card .btn-primary {
-  width: 100%;
-  margin-top: 12px;
-  margin-bottom: 11px;
-}
-
-.btn-row {
-  display: flex;
-  gap: 10px;
-}
-
-.btn-row .btn-secondary {
-  flex: 1;
-}
-
 /* ── ボタン ──────────────────────────────────────────── */
 .btn-primary {
   padding: 14px 18px;
@@ -738,9 +615,7 @@ textarea {
 /* 押した瞬間に応答する（pointer-down フィードバック） */
 .btn-primary:active:not(:disabled),
 .btn-secondary:active:not(:disabled),
-.btn-help:active,
-.cs-trigger:active,
-.tab:active {
+.cs-trigger:active {
   transform: scale(0.98);
   transition: transform 100ms ease-out;
 }
@@ -752,34 +627,9 @@ textarea {
 
 /* キーボードフォーカスの可視化を全ボタンで統一する */
 .btn-primary:focus-visible,
-.btn-secondary:focus-visible,
-.btn-help:focus-visible,
-.tab:focus-visible {
+.btn-secondary:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
-}
-
-/* ── 進捗（司法・予備で共有。アクション群の直下に表示）──── */
-.progress {
-  margin: 0 0 20px;
-}
-
-.bar {
-  width: 100%;
-  height: 7px;
-  background: var(--line);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.bar-fill {
-  height: 100%;
-  width: 100%;
-  transform: scaleX(0);
-  transform-origin: left;
-  background: var(--primary);
-  border-radius: 999px;
-  transition: transform 0.2s;
 }
 
 .status {
@@ -797,77 +647,6 @@ textarea {
 .status.ok {
   color: var(--ok);
   font-weight: 700;
-}
-
-/* ── 結果エリア ──────────────────────────────────────── */
-.output {
-  position: relative;
-}
-
-.tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--line);
-}
-
-.tab {
-  padding: 8px 16px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-bottom: none;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  cursor: pointer;
-  color: var(--muted-2);
-  font-weight: 600;
-  font-size: 0.85rem;
-  margin-bottom: -1px;
-}
-
-.tab:hover {
-  color: var(--primary);
-}
-
-.tab.active {
-  background: var(--result-bg);
-  border-color: var(--line);
-  border-bottom-color: var(--result-bg);
-  color: var(--primary);
-}
-
-.pane {
-  display: none;
-  margin: 0;
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-top: none;
-  border-radius: 0 0 9px 9px;
-  background: var(--result-bg);
-  min-height: 300px;
-  max-height: 520px;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: var(--mono);
-  font-size: 0.82rem;
-  line-height: 1.6;
-  color: var(--ink);
-}
-
-.pane.active {
-  display: block;
-}
-
-#log .ok {
-  color: var(--ok);
-}
-#log .err {
-  color: var(--accent);
-}
-#log .warn {
-  color: var(--warn);
-}
-#log .info {
-  color: var(--ink);
 }
 
 /* ── フッター ────────────────────────────────────────── */
@@ -912,10 +691,6 @@ textarea {
   flex: none;
 }
 
-.muted {
-  color: var(--muted);
-}
-
 /* ── レスポンシブ（モバイル：縦スタック）──────────────── */
 @media (max-width: 640px) {
   .app {
@@ -952,14 +727,6 @@ textarea {
   }
   .btn-secondary {
     min-height: 48px;
-  }
-  .btn-row {
-    flex-direction: column;
-  }
-
-  .pane {
-    min-height: 220px;
-    font-size: 0.8rem;
   }
 }
 
@@ -1230,17 +997,15 @@ textarea {
 #search-dialog.closing[open] {
     animation: xfade-out 0.15s ease forwards;
   }
-  .bar-fill {
-    transition: none;
-  }
+  
   .seg-item span {
     transition: none;
   }
 }
 
 /* =============================================================================
-   コンバーター（index.html）
-   ヘッダー（ツール切替タブ）→ 更新情報1行 → 選択 → ファイルで保存 → テキスト結果
+   ページ構成の部品（index.html・tantou.html で共通）
+   ヘッダー（ツール切替タブ）→ 更新情報1行 → 選択 → ファイルで保存 → 結果パネル
    ============================================================================= */
 
 /* ── ヘッダー: アイコンボタン・ツール切替タブ ──────────── */
@@ -1389,7 +1154,7 @@ textarea {
   font-size: 0.8rem;
 }
 
-/* ── 選択フォーム（4項目を1行。ラベルは上）──────────────── */
+/* ── 選択フォーム（全項目を1行。ラベルは上）─────────────── */
 .form.form-grid {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto;
@@ -1399,6 +1164,11 @@ textarea {
   margin-bottom: 18px;
   background: none;
   border: 0;
+}
+
+/* 短答（試験・年度・科目の3項目） */
+.form.form-grid.form-grid-3 {
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .form-grid .field {
@@ -1584,7 +1354,7 @@ textarea {
   font-weight: 400;
 }
 
-/* ── テキスト結果 ────────────────────────────────────────── */
+/* ── 結果パネル（コンバーター: テキスト／短答: 保存内容の案内）── */
 .result {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1738,7 +1508,31 @@ textarea {
   display: none;
 }
 
-/* ── コンバーターのモバイル表示 ─────────────────────────── */
+/* 短答: 保存されるファイルの案内 */
+.save-info {
+  margin: 0;
+  padding: 14px 18px;
+  list-style: none;
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+
+.save-info li {
+  display: grid;
+  grid-template-columns: 8.5em 1fr;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.save-info li + li {
+  border-top: 1px solid var(--line);
+}
+
+.save-info-name {
+  font-weight: 700;
+}
+
+/* ── 共通部品のモバイル表示 ─────────────────────────────── */
 @media (max-width: 640px) {
   .btn-icon {
     padding: 9px;
@@ -1759,7 +1553,8 @@ textarea {
     display: none;
   }
 
-  .form.form-grid {
+  .form.form-grid,
+  .form.form-grid.form-grid-3 {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
   .form-grid .f-exam,
@@ -1817,5 +1612,12 @@ textarea {
   .result-text {
     padding: 14px;
     font-size: 0.8rem;
+  }
+  .save-info {
+    padding: 12px 14px;
+  }
+  .save-info li {
+    grid-template-columns: 1fr;
+    gap: 2px;
   }
 }
