@@ -1621,3 +1621,42 @@ textarea {
     gap: 2px;
   }
 }
+
+/* ── ヘルプのスクリーンショット ──────────────────────────── */
+.help-figure {
+  margin: 10px 0 4px;
+}
+
+.help-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--page-bg);
+}
+
+.help-figure figcaption {
+  margin-top: 6px;
+  font-size: 0.76rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+#help-dialog .help-steps,
+#help-dialog .help-notes {
+  margin: 6px 0 0;
+  padding-left: 1.6em;
+  font-size: 0.85rem;
+  line-height: 1.75;
+}
+
+#help-dialog .help-notes {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+#help-dialog .help-steps li + li,
+#help-dialog .help-notes li + li {
+  margin-top: 2px;
+}
