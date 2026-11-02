@@ -296,7 +296,12 @@ function fetchPrecomputed(yearKey, subject) {
 
 // テキスト変換（表示・LLM用）。事前変換済みなら PDF.js を使わず即時に整形し、
 // 無ければ従来どおりクライアントで変換する（onRun・onSaveLlm から呼ぶ）。
-export async function convertText({ yearKey, subject, docType, decorate }, ctx) {
+// cachedOnly=true のときは原典PDFを取得しない（選択変更時の自動表示用）。
+// 事前変換データも処理済みキャッシュも無ければ null を返す。
+export async function convertText(
+  { yearKey, subject, docType, decorate, cachedOnly = false },
+  ctx,
+) {
   const { log = () => {}, setProgress = () => {} } = ctx || {};
   if (!(yearKey in YEAR_URL_MAP)) throw new Error(`未対応の年度: ${yearKey}`);
   if (!(subject in SUBJECT_MAP)) throw new Error(`未対応の科目: ${subject}`);
@@ -320,6 +325,10 @@ export async function convertText({ yearKey, subject, docType, decorate }, ctx) 
       docType,
       decorate,
     );
+  }
+  if (cachedOnly) {
+    const cached = sourceCache.get(`${yearKey}|${subject}|${docType}`);
+    return cached ? assembleResult(cached, docType, decorate) : null;
   }
   return runConversion({ yearKey, subject, docType, decorate }, ctx);
 }

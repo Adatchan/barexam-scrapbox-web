@@ -13,7 +13,7 @@
 //   pdfout.js  原典PDFの抜き出し・スタンプ印字・zip
 //   search.js  事前変換データの全文検索
 // =============================================================================
-import { YEAR_URL_MAP } from "./years.js";
+import { YEAR_URL_MAP, RESULTS_URL_MAP } from "./years.js";
 import { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } from "./yobi-years.js";
 import { NEWS } from "./news.js";
 import {
@@ -25,7 +25,7 @@ import {
 } from "./data.js";
 import { runConversion, convertText, resolveSourceUrls } from "./convert.js";
 import { convertYobiText } from "./yobi-convert.js";
-import { fetchPdf, cacheSourceLabel, formatKB } from "./moj.js";
+import { fetchPdf } from "./moj.js";
 import {
   YOBI_RONBUN_SUBJECTS,
   YOBI_RONBUN_DEF,
@@ -71,29 +71,17 @@ function setType(value) {
   return !!el;
 }
 
-// 「そのまま保存」の保存形式（個別 / 一式 / LLM）。値は source / zip / llm、
-// 表示は短縮名にし、選択中の形式の説明をボタン下に出す。
-const SAVE_DESC = {
-  source:
-    "選択中の種類の該当ページだけを原典PDFから抜き出して保存します（未変換でも自動で取得します）。",
-  zip: {
-    shihou:
-      "試験問題・出題の趣旨・採点実感の3点の抜粋PDFを、1つのフォルダにまとめてzipで保存します。",
-    yobi: "試験問題・出題の趣旨の2点の抜粋PDFを、1つのフォルダにまとめてzipで保存します。",
-  },
-  llm: "各種類を、メタ情報・出典付きの1つのMarkdownにまとめて保存します（LLMに渡す用）。",
-};
-
-function saveMode() {
-  const el = document.querySelector('input[name="save-mode"]:checked');
-  return el ? el.value : "source";
-}
-
-function updateSaveDesc() {
-  const mode = saveMode();
-  const d = SAVE_DESC[mode];
-  $("save-desc").textContent =
-    typeof d === "string" ? d : d[isYobi() ? "yobi" : "shihou"];
+// 「ファイルで保存」の一式zip・LLM用は科目単位で、司法は3点（問題・趣旨・
+// 実感）、予備は2点（問題・趣旨）をまとめる。ボタンの小ラベルと説明を合わせる。
+function updateSavePills() {
+  const n = isYobi() ? "2点" : "3点";
+  const kinds = isYobi()
+    ? "試験問題・出題の趣旨"
+    : "試験問題・出題の趣旨・採点実感";
+  $("zip-pill").textContent = n;
+  $("llm-pill").textContent = n;
+  $("save-zip").title = `この科目の${kinds}の抜粋PDFを1つのzipにまとめて保存します`;
+  $("save-llm").title = `この科目の${kinds}を、メタ情報・出典付きの1つのMarkdownにまとめて保存します（LLMに渡す用）`;
 }
 
 // 試験種別（司法試験 / 予備試験）。予備は PDF収集モード（jinji07 系統・
@@ -163,30 +151,39 @@ function initSelectors() {
   if (subjSelect._cs) subjSelect._cs.refresh();
 }
 
-// 試験種別の切替: 司法・予備で画面（2レーン）は共通。年度・科目・種類を作り
-// 直し、「そのまま保存」の説明文だけ予備（採点実感なし）に合わせて差し替える。
+// 試験種別の切替: 司法・予備で画面は共通。年度・科目・種類を作り直し、
+// 保存ボタンの点数表示（予備は採点実感なし）を合わせて、テキストを表示し直す。
 function applyExamMode() {
-  const yobi = isYobi();
   initSelectors();
-  updateSaveDesc(); // 一式zipの説明は司法3点・予備2点で変わる
-  invalidateResult();
-  $("log").textContent = "";
-  $("result").textContent = "";
-  setProgressBar(0);
+  updateSavePills();
+  clearStatus();
+  refreshResult();
 }
 
+// 更新情報: 最新1件を1行で出し、残りは「すべて見る」で開く
 function initNews() {
+  const latest = $("news-latest");
   const list = $("news-list");
-  if (!list) return;
-  for (const item of NEWS.slice(0, 5)) {
-    const li = document.createElement("li");
+  if (!latest || !list || !NEWS.length) {
+    $("news")?.setAttribute("hidden", "");
+    return;
+  }
+  const line = (item) => {
+    const frag = document.createDocumentFragment();
     const date = document.createElement("span");
     date.className = "news-date";
     date.textContent = item.date;
-    li.appendChild(date);
-    li.appendChild(document.createTextNode(item.text));
+    frag.append(date, document.createTextNode(item.text));
+    return frag;
+  };
+  latest.appendChild(line(NEWS[0]));
+  const rest = NEWS.slice(1, 5);
+  for (const item of rest) {
+    const li = document.createElement("li");
+    li.appendChild(line(item));
     list.appendChild(li);
   }
+  if (!rest.length) $("news").classList.add("news-single");
 }
 
 // ─── ダイアログ（ヘルプ・全文検索で共通）─────────────────────────────────
@@ -441,103 +438,77 @@ function applySearchHit(hit, yobi) {
   for (const id of ["year", "subject"]) {
     if ($(id)._cs) $(id)._cs.refresh();
   }
-  invalidateResult();
+  refreshResult();
   closeSearch();
   showToast(`${hit.yearLabel} ${hit.subject} ${hit.docType} を選びました`);
 }
 
-// ─── タブ・ログ・進捗 ─────────────────────────────────────────────────────
-function activatePane(target) {
-  document.querySelectorAll(".tab").forEach((t) => {
-    const active = t.dataset.target === target;
-    t.classList.toggle("active", active);
-    t.setAttribute("aria-selected", String(active));
-    t.tabIndex = active ? 0 : -1; // roving tabindex（矢印キーで移動する）
-  });
-  document
-    .querySelectorAll(".pane")
-    .forEach((p) => p.classList.toggle("active", p.id === target));
-}
-
-function setupTabs() {
-  const tabs = [...document.querySelectorAll(".tab")];
-  tabs.forEach((tab, idx) => {
-    tab.addEventListener("click", () => activatePane(tab.dataset.target));
-    // ARIA タブパターン: ←→キーで隣のタブへ移動・切替する
-    tab.addEventListener("keydown", (e) => {
-      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-      e.preventDefault();
-      const d = e.key === "ArrowRight" ? 1 : -1;
-      const next = tabs[(idx + d + tabs.length) % tabs.length];
-      activatePane(next.dataset.target);
-      next.focus();
-    });
-  });
-}
-
-function appendLog(msg, kind = "info") {
-  const log = $("log");
-  const line = document.createElement("span");
-  line.className = kind;
-  const prefix =
-    kind === "ok"
-      ? "[OK] "
-      : kind === "err"
-        ? "[NG] "
-        : kind === "warn"
-          ? "[!] "
-          : "";
-  line.textContent = prefix + msg + "\n";
-  log.appendChild(line);
-  log.scrollTop = log.scrollHeight;
-}
+// ─── 状態表示・ボタン内の進捗 ─────────────────────────────────────────────
+// ログ欄は廃止した。処理の注意（一部の種類を取得できなかった等）とエラーだけを
+// 結果欄の上の1行（#status）に出し、進捗は押したボタンの中に表示する。
+let notes = [];
 
 function setStatus(text, kind = "") {
   const s = $("status");
   s.textContent = text;
-  s.className = "status " + kind;
+  s.className = "status status-line" + (kind ? " " + kind : "");
 }
 
-function setProgressBar(frac) {
-  const pct = Math.max(0, Math.min(100, Math.round(frac * 100)));
-  // width はレイアウト再計算を伴うため、コンポジタで済む transform で伸ばす
-  $("bar-fill").style.transform = `scaleX(${pct / 100})`;
-  $("bar").setAttribute("aria-valuenow", String(pct));
-  if (pct >= 100) setStatus("100% 完了", "ok");
-  else if (pct === 0) setStatus("待機中");
-  else setStatus(`${pct}% 進行中`);
+function clearStatus() {
+  notes = [];
+  setStatus("");
+}
+
+function addNote(msg) {
+  notes.push(msg);
+  setStatus(notes.join(" / "), "warn");
 }
 
 // 変換・保存処理の排他制御。処理中は実行系ボタンをすべて無効化する
+const ACTION_IDS = ["save-pdf", "save-zip", "save-llm", "run"];
 function setBusy(busy) {
-  for (const id of ["run", "save-run"]) {
-    $(id).disabled = busy;
-  }
+  for (const id of ACTION_IDS) $(id).disabled = busy;
 }
 
-const convertCtx = () => ({
-  log: (m) => appendLog(m, "info"),
-  setProgress: setProgressBar,
-});
-
-// 並列取得時の変換コンテキスト。複数の変換が同時にログ・進捗を
-// 出すため、各ログに種別タグを付けて交錯を読みやすくし、進捗バーは個別には
-// 動かさない（呼び出し側が完了件数で集約管理する）。
-const taggedCtx = (tag) => ({
-  log: (m) => appendLog(`[${tag}] ${m.replace(/^\s+/, "")}`, "info"),
-  setProgress: () => {},
-});
-
-// ボタン押下から成果物の出力までの所要時間をログに出す。各操作の先頭で
-// performance.now() を控え、完了時に logElapsed(t0) を呼ぶ。
-function logElapsed(t0) {
-  appendLog(`所要時間: ${((performance.now() - t0) / 1000).toFixed(3)} 秒`, "ok");
+// ボタンを処理中表示にし、進捗（0〜1）をボタン内のバーと % で示す。
+// 戻り値の progress を変換コンテキストに渡し、終わったら done() で戻す。
+function startBusy(id, busyLabel) {
+  const btn = $(id);
+  const label = btn.querySelector(".btn-save-label, .btn-run-label");
+  const original = label.textContent;
+  setBusy(true);
+  btn.classList.add("busy");
+  btn.setAttribute("aria-busy", "true");
+  const progress = (frac) => {
+    const pct = Math.max(0, Math.min(100, Math.round(frac * 100)));
+    btn.style.setProperty("--p", `${pct}%`);
+    label.textContent = `${busyLabel}… ${pct}%`;
+  };
+  progress(0);
+  return {
+    progress,
+    done() {
+      btn.classList.remove("busy");
+      btn.removeAttribute("aria-busy");
+      btn.style.removeProperty("--p");
+      label.textContent = original;
+      setBusy(false);
+    },
+  };
 }
 
-// ─── 変換実行・テキスト出力 ───────────────────────────────────────────────
+const ctxOf = (setProgress) => ({ log: () => {}, setProgress });
+// 複数種類を並列に処理するときは、個々の進捗を出さない（完了件数で集約する）
+const QUIET_CTX = ctxOf(() => {});
+
+// ─── テキストの表示 ───────────────────────────────────────────────────────
+// 年度・科目・種類・出力形式を選んだ時点で、事前変換データ（または処理済み
+// キャッシュ）からテキストを表示する。原典PDFの取得・解析は自動では行わず、
+// 変換データが無いときだけ「原典PDFから変換する」ボタンを出す。
 let lastResult = "";
-// 直近の変換結果の .txt 保存ファイル名（司法・予備で命名が異なるため保持）。
+// 表示中テキストの .txt 保存ファイル名（司法・予備で命名が異なるため保持）。
 let lastTxtName = "";
+let refreshToken = 0; // 連続した選択変更で古い結果を表示しないための世代番号
 
 function selectedFormat() {
   const el = document.querySelector('input[name="format"]:checked');
@@ -548,57 +519,135 @@ function currentYearLabel() {
   return yearKeyToLabel($("year").value);
 }
 
-async function onRun() {
-  const t0 = performance.now();
-  const yobi = isYobi();
-  const yearKey = $("year").value;
-  const subject = $("subject").value;
-  const docType = currentType();
-  const decorate = selectedFormat() === "scrapbox";
+function currentSelection() {
+  return {
+    yobi: isYobi(),
+    yearKey: $("year").value,
+    subject: $("subject").value,
+    docType: currentType(),
+    decorate: selectedFormat() === "scrapbox",
+  };
+}
 
-  $("log").textContent = "";
-  $("result").textContent = "";
+// 法務省が公表していない・まだ公表していない組合せは、ボタンを出さずに理由を示す
+function unavailableReason({ yobi, yearKey, subject, docType }) {
+  if (yobi) {
+    if (docType === "出題の趣旨" && !YOBI_RONBUN_DEF[subject]?.sHeaders)
+      return {
+        title: `${subject}の出題の趣旨は公表されていません`,
+        text: "法務省はこの科目の出題の趣旨を公表していません。試験問題は表示・保存できます。",
+      };
+    return null;
+  }
+  if (docType !== "試験問題" && !(yearKey in RESULTS_URL_MAP))
+    return {
+      title: `${yearKeyToLabel(yearKey)}の${docType}はまだ公表されていません`,
+      text: "出題の趣旨・採点実感は例年9〜11月頃に公表されます。法務省ウェブに掲載されると、1週間以内に自動で追加されます。",
+    };
+  return null;
+}
+
+function resetResultActions() {
   lastResult = "";
+  lastTxtName = "";
   $("copy").disabled = true;
   $("download").disabled = true;
-  setBusy(true);
-  $("run").textContent = "処理中…";
-  setProgressBar(0);
-  setStatus("開始");
-  activatePane("log");
+  $("result-src").hidden = true;
+  $("result-src").removeAttribute("href");
+}
+
+function showResultMessage(title, text, withRun) {
+  resetResultActions();
+  $("result").textContent = "";
+  $("result").hidden = true;
+  $("result-message-title").textContent = title;
+  $("result-message-text").textContent = text;
+  $("run").hidden = !withRun;
+  $("result-message").hidden = false;
+}
+
+function showResultText(r, sel) {
+  const { yobi, subject, docType, decorate } = sel;
+  lastResult = r.result;
+  const formatSuffix = decorate ? "（scrapbox記法）" : "";
+  const examLabel = yobi ? "司法試験予備試験論文式" : "司法試験";
+  lastTxtName = `${yearKeyToLabel(sel.yearKey)}${examLabel}${subject}${docType}${formatSuffix}.txt`;
+  $("result-message").hidden = true;
+  $("result").hidden = false;
+  $("result").classList.remove("stale");
+  $("result").textContent = r.result;
+  $("copy").disabled = false;
+  $("download").disabled = false;
+  if (r.pdfUrl) {
+    $("result-src").href = r.pdfUrl;
+    $("result-src").hidden = false;
+  }
+}
+
+async function refreshResult() {
+  const token = ++refreshToken;
+  const sel = currentSelection();
+  const { yobi, yearKey, subject, docType, decorate } = sel;
+  $("result-title").textContent = `${yearKeyToLabel(yearKey)} ${yobi ? "予備試験" : "司法試験"} ${subject} ${docType}`;
+  // 読み込みの間は前のテキストを薄く残し、ちらつきを抑える
+  $("result").classList.add("stale");
+  resetResultActions();
+
+  const reason = unavailableReason(sel);
+  if (reason) return showResultMessage(reason.title, reason.text, false);
 
   try {
+    const args = { yearKey, subject, docType, decorate, cachedOnly: true };
+    const r = yobi
+      ? await convertYobiText(args, QUIET_CTX)
+      : await convertText(args, QUIET_CTX);
+    if (token !== refreshToken) return; // 新しい選択が来ていたら捨てる
+    if (!r) {
+      showResultMessage(
+        "この資料はまだ変換データがありません",
+        (docType === "試験問題"
+          ? ""
+          : "出題の趣旨・採点実感は例年9〜11月頃に公表されるため、まだ公表されていない可能性もあります。") +
+          "法務省ウェブに掲載済みなら、原典PDFをブラウザ内で解析してテキストにできます（数十秒かかることがあります）。PDFで保存するだけなら、上の「ファイルで保存」をそのまま押せます。",
+        true,
+      );
+      return;
+    }
+    showResultText(r, sel);
+  } catch (e) {
+    if (token !== refreshToken) return;
+    showResultMessage("テキストを表示できませんでした", e.message, false);
+  }
+}
+
+// 変換データが無いときの「原典PDFから変換する」。処理結果はキャッシュされる
+// ので、完了後に refreshResult() で表示する（他の保存処理とも共有される）。
+async function onRun() {
+  const sel = currentSelection();
+  const { yobi, yearKey, subject, docType, decorate } = sel;
+  const busy = startBusy("run", "変換中");
+  clearStatus();
+  let ok = false;
+  try {
     // 司法は convertText、予備は convertYobiText（科目グループPDFから切り出し）。
-    const { yearLabel, subjectLabel, result } = yobi
-      ? await convertYobiText({ yearKey, subject, docType, decorate }, convertCtx())
-      : await convertText({ yearKey, subject, docType, decorate }, convertCtx());
-    lastResult = result;
-    const formatSuffix = decorate ? "（scrapbox記法）" : "";
-    const examLabel = yobi ? "司法試験予備試験論文式" : "司法試験";
-    lastTxtName = `${currentYearLabel()}${examLabel}${subject}${docType}${formatSuffix}.txt`;
-    $("result").textContent = result;
-    $("copy").disabled = false;
-    $("download").disabled = false;
-    appendLog(
-      `完了: ${yearLabel} ${yobi ? "予備 " : ""}${subjectLabel} ${docType}`,
-      "ok",
-    );
-    logElapsed(t0);
-    setStatus("完了", "ok");
-    activatePane("result");
-    celebrate("変換完了", "結果欄にテキストを表示しました");
+    const args = { yearKey, subject, docType, decorate };
+    if (yobi) await convertYobiText(args, ctxOf(busy.progress));
+    else await convertText(args, ctxOf(busy.progress));
+    ok = true;
   } catch (e) {
     // 予備の画像化PDF等は「失敗」ではなく案内（PDF保存を促す）として警告表示。
-    appendLog(e.message, yobi ? "warn" : "err");
-    setStatus(yobi ? "テキスト変換できませんでした" : "エラー", "error");
+    setStatus(e.message, yobi ? "warn" : "error");
     alarmError(
       yobi ? "変換できませんでした" : "エラー",
       e.message,
       yobi ? "#d97706" : "#dc2626",
     );
   } finally {
-    setBusy(false);
-    $("run").textContent = "変換実行";
+    busy.done();
+  }
+  if (ok) {
+    await refreshResult();
+    celebrate("変換完了", "テキストを表示しました");
   }
 }
 
@@ -606,17 +655,16 @@ async function onCopy() {
   if (!lastResult) return;
   try {
     await navigator.clipboard.writeText(lastResult);
-    appendLog("クリップボードにコピーしました。", "ok");
     celebrate("コピー完了", "クリップボードにコピーしました");
     showToast("クリップボードにコピーしました");
   } catch (e) {
-    appendLog(`コピー失敗: ${e.message}`, "err");
+    setStatus(`コピーできませんでした: ${e.message}`, "error");
   }
 }
 
 function onDownload() {
   if (!lastResult) return;
-  // 変換完了時に控えたファイル名（司法／予備で命名規則が異なる）を使う。
+  // 表示時に控えたファイル名（司法／予備で命名規則が異なる）を使う。
   const filename =
     lastTxtName || `${currentYearLabel()}テキスト.txt`;
   triggerDownload(
@@ -641,25 +689,25 @@ function triggerDownload(blob, filename) {
 
 // ─── 原典PDF保存 ─────────────────────────────────────────────────────────
 // 選択中の種類の原典PDF（該当ページのみ）を保存する。
-// 取得・解析済み（個別・一式で保存済み、事前変換データの無い年度で変換実行済み
-// など）ならキャッシュを再利用し、未処理なら自動で取得する。
+// 取得・解析済み（抜粋PDF・一式zipで保存済み、事前変換データの無い年度で
+// 原典PDFから変換済みなど）ならキャッシュを再利用し、未処理なら自動で取得する。
 async function onSaveSourcePdf() {
   if (isYobi()) return onSaveYobiSingle(currentType());
-  const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const docType = currentType();
-  setBusy(true);
+  const busy = startBusy("save-pdf", "PDF作成中");
+  clearStatus();
   let fallbackUrl = "";
   try {
     const { pdfUrl, pageRange, pdfBytes } = await runConversion(
       { yearKey, subject, docType, decorate: false },
-      convertCtx(),
+      ctxOf(busy.progress),
     );
     fallbackUrl = pdfUrl;
     const baseName = `${currentYearLabel()}司法試験${subject}${docType}`;
     const sourceUrls = await resolveSourceUrls(yearKey, subject);
-    const { bytes, rangeLabel, total } = await buildStampedPdf(
+    const { bytes } = await buildStampedPdf(
       pdfBytes,
       pageRange,
       baseName,
@@ -669,43 +717,36 @@ async function onSaveSourcePdf() {
       new Blob([bytes], { type: "application/pdf" }),
       `${baseName}.pdf`,
     );
-    appendLog(
-      `原典PDFの該当ページ（${rangeLabel} / 原典 全${total}ページ）を保存しました。`,
-      "ok",
-    );
-    logElapsed(t0);
-    setStatus("完了", "ok");
     celebrate("PDFを保存", "原典から該当ページを抜き出しました");
     showToast("該当ページをPDFで保存しました");
   } catch (e) {
-    appendLog(`原典PDFの保存に失敗: ${e.message}`, "err");
-    if (fallbackUrl) {
-      appendLog("元のPDFをそのまま開きます。", "warn");
-      window.open(fallbackUrl, "_blank", "noopener");
-    }
-    setStatus("エラー", "error");
+    setStatus(
+      `抜粋PDFを作成できませんでした: ${e.message}` +
+        (fallbackUrl ? "（元のPDFを新しいタブで開きます）" : ""),
+      "error",
+    );
+    if (fallbackUrl) window.open(fallbackUrl, "_blank", "noopener");
     alarmError("エラー", e.message);
   } finally {
-    setBusy(false);
+    busy.done();
   }
 }
 
 // 試験問題・出題の趣旨・採点実感の3点を取得して zip で一括保存する
 async function onSaveSourceZip() {
   if (isYobi()) return onSaveYobiZip();
-  const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const yearLabel = currentYearLabel();
-  setBusy(true);
-  setStatus("一括取得中");
-  setProgressBar(0.05);
+  const busy = startBusy("save-zip", "zip作成中");
+  clearStatus();
+  busy.progress(0.05);
   try {
     // zip 内は「[年度]司法試験[科目名]一式」フォルダにまとめる
     const folder = `${yearLabel}司法試験${subject}一式`;
     // フッターのリンク用に3種類のURLを先に1回だけ解決して共有する
     const sourceUrls = await resolveSourceUrls(yearKey, subject);
-    setProgressBar(0.15);
+    busy.progress(0.15);
     const docTypes = ["試験問題", "出題の趣旨", "採点実感"];
     const files = {};
     let done = 0;
@@ -715,21 +756,20 @@ async function onSaveSourceZip() {
         try {
           const { pageRange, pdfBytes } = await runConversion(
             { yearKey, subject, docType, decorate: false },
-            taggedCtx(docType),
+            QUIET_CTX,
           );
           const baseName = `${yearLabel}司法試験${subject}${docType}`;
-          const { bytes, rangeLabel, total } = await buildStampedPdf(
+          const { bytes } = await buildStampedPdf(
             pdfBytes,
             pageRange,
             baseName,
             sourceUrls,
           );
           files[`${folder}/${baseName}.pdf`] = new Uint8Array(bytes);
-          appendLog(`  [${docType}] ${rangeLabel}（原典 全${total}ページ）`, "ok");
         } catch (e) {
-          appendLog(`  [${docType}] 取得できませんでした: ${e.message}`, "warn");
+          addNote(`${docType}は取得できませんでした（${e.message}）`);
         } finally {
-          setProgressBar(0.15 + 0.8 * (++done / docTypes.length));
+          busy.progress(0.15 + 0.8 * (++done / docTypes.length));
         }
       }),
     );
@@ -746,29 +786,15 @@ async function onSaveSourceZip() {
       new Blob([zipped], { type: "application/zip" }),
       `${folder}.zip`,
     );
-    setProgressBar(1.0);
-    appendLog(`一括保存完了（${names.length}件を zip に格納）`, "ok");
-    logElapsed(t0);
-    setStatus("完了", "ok");
+    busy.progress(1.0);
     celebrate("zipを保存", "3点の抜粋PDFをまとめました");
     showToast("一式zipを保存しました");
   } catch (e) {
-    appendLog(`一括保存に失敗: ${e.message}`, "err");
-    setStatus("エラー", "error");
+    setStatus(`一式zipを作成できませんでした: ${e.message}`, "error");
     alarmError("エラー", e.message);
   } finally {
-    setBusy(false);
+    busy.done();
   }
-}
-
-// 年度・科目・種類が変わったら、直前の変換結果に依存する
-// コピー / .txt 保存を無効化する（古い内容と新しい選択の組合せで
-// 保存される事故を防ぐ。処理キャッシュはキーが選択値なので破棄不要）
-function invalidateResult() {
-  lastResult = "";
-  lastTxtName = "";
-  $("copy").disabled = true;
-  $("download").disabled = true;
 }
 
 // 試験問題・出題の趣旨・採点実感を1つの Markdown にまとめて保存する。
@@ -776,13 +802,12 @@ function invalidateResult() {
 // 作るので、テキスト変換と同じく事前変換データを優先する（convertText）。
 async function onSaveLlm() {
   if (isYobi()) return onSaveYobiLlm();
-  const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const yearLabel = currentYearLabel();
-  setBusy(true);
-  setStatus("LLM用ファイルを作成中");
-  setProgressBar(0.05);
+  const busy = startBusy("save-llm", "作成中");
+  clearStatus();
+  busy.progress(0.05);
   try {
     const docTypes = ["試験問題", "出題の趣旨", "採点実感"];
     const byType = {}; // docType → { body, subjectLabel }
@@ -794,17 +819,16 @@ async function onSaveLlm() {
         try {
           const { result, pdfUrl, subjectLabel } = await convertText(
             { yearKey, subject, docType, decorate: false },
-            taggedCtx(docType),
+            QUIET_CTX,
           );
           // 変換結果の1行目（タイトル）と2行目（出典）を除き本文だけ取り出す
           const body = result.split("\n").slice(2).join("\n").trim();
           byType[docType] = { body, subjectLabel };
           if (pdfUrl) sourceUrls[docType] = pdfUrl;
-          appendLog(`  [${docType}] OK`, "ok");
         } catch (e) {
-          appendLog(`  [${docType}] 取得できませんでした: ${e.message}`, "warn");
+          addNote(`${docType}は取得できませんでした（${e.message}）`);
         } finally {
-          setProgressBar(0.05 + 0.9 * (++done / docTypes.length));
+          busy.progress(0.05 + 0.9 * (++done / docTypes.length));
         }
       }),
     );
@@ -849,27 +873,20 @@ async function onSaveLlm() {
       new Blob([md.join("\n")], { type: "text/markdown;charset=utf-8" }),
       filename,
     );
-    setProgressBar(1.0);
-    appendLog(
-      `LLM用ファイルを保存しました（${got.length}種類を統合）。`,
-      "ok",
-    );
-    logElapsed(t0);
-    setStatus("完了", "ok");
+    busy.progress(1.0);
     celebrate("Markdownを保存", "LLMに渡せる1ファイルを作成しました");
     showToast("LLM用Markdownを保存しました");
   } catch (e) {
-    appendLog(`LLM用ファイルの作成に失敗: ${e.message}`, "err");
-    setStatus("エラー", "error");
+    setStatus(`LLM用ファイルを作成できませんでした: ${e.message}`, "error");
     alarmError("エラー", e.message);
   } finally {
-    setBusy(false);
+    busy.done();
   }
 }
 
 // ─── 予備試験モードの保存処理 ─────────────────────────────────────────────
-// 画面・テキスト変換は司法と共通（onRun が convertYobiText を呼ぶ）。ここでは
-// 「そのまま保存」レーン（原典PDF保存・一式zip・LLM用）の予備版を担う。原典は
+// 画面・テキスト表示は司法と共通（refreshResult・onRun が convertYobiText を
+// 呼ぶ）。ここでは「ファイルで保存」（抜粋PDF・一式zip・LLM用）の予備版を担う。原典は
 // 試験問題（科目グループ別）と出題の趣旨（全科目まとめた1PDF）から当該科目を
 // 切り出し、出典フッター・左上見出し付きで保存する。採点実感は予備に無い。
 const YOBI_DOC_TYPES = ["試験問題", "出題の趣旨"];
@@ -916,12 +933,7 @@ async function buildYobiPdf(yearKey, subject, docType, sourceUrls) {
       throw new Error(`${subject}には出題の趣旨がありません。`);
     pdfUrl = await findYobiShushiPdfUrl(YOBI_RESULTS_URL_MAP[yearKey]);
   }
-  appendLog(`  ${docType} PDF: ${pdfUrl}`);
-  const pdfBytes = await fetchPdf(pdfUrl, ({ cache }) => {
-    const src = cacheSourceLabel(cache);
-    if (src) appendLog(`  取得元: ${src}`);
-  });
-  appendLog(`  ${formatKB(pdfBytes.byteLength)}`);
+  const pdfBytes = await fetchPdf(pdfUrl);
 
   // 科目別に切り出す。問題は科目見出し（無い科目は表紙等を除いた本文全体）、
   // 趣旨は全科目まとめたPDFから当該科目の見出しで切り出す。見出しが特定できない
@@ -939,16 +951,10 @@ async function buildYobiPdf(yearKey, subject, docType, sourceUrls) {
       if (docType === "試験問題") {
         const start = await firstContentPage(pdfBytes.slice(0), pdfUrl);
         pageRange = [start, Number.MAX_SAFE_INTEGER];
-        appendLog(
-          `  「${subject}」の区分を特定できず、グループ全体を保存します（画像PDF等の可能性）。`,
-          "warn",
-        );
+        addNote(`「${subject}」の区分を特定できず、グループ全体を保存します（画像PDF等の可能性）。`);
       } else {
         pageRange = null; // 趣旨は全科目をそのまま
-        appendLog(
-          `  「${subject}」の区分を特定できず、出題の趣旨は全体（全科目）を保存します（画像PDF等の可能性）。`,
-          "warn",
-        );
+        addNote(`「${subject}」の区分を特定できず、出題の趣旨は全体（全科目）を保存します（画像PDF等の可能性）。`);
       }
     }
   } else if (docType === "試験問題") {
@@ -971,70 +977,53 @@ async function buildYobiPdf(yearKey, subject, docType, sourceUrls) {
 }
 
 async function onSaveYobiSingle(docType) {
-  const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
-  $("log").textContent = "";
-  $("result").textContent = "";
-  setBusy(true);
-  setProgressBar(0.05);
-  setStatus("取得中");
-  activatePane("log");
+  const busy = startBusy("save-pdf", "PDF作成中");
+  clearStatus();
+  busy.progress(0.05);
   try {
-    appendLog(
-      `取得開始: ${currentYearLabel()} 予備試験 論文式 ${subject} ${docType}`,
-    );
     const sourceUrls = await resolveYobiSourceUrls(yearKey, subject);
-    setProgressBar(0.4);
+    busy.progress(0.4);
     const { bytes, baseName, savedPages } = await buildYobiPdf(
       yearKey,
       subject,
       docType,
       sourceUrls,
     );
-    setProgressBar(0.95);
+    busy.progress(0.95);
     triggerDownload(
       new Blob([bytes], { type: "application/pdf" }),
       `${baseName}.pdf`,
     );
-    appendLog(
-      `保存しました（${savedPages}ページ・左上に見出し、下部に出典を印字）。`,
-      "ok",
-    );
-    logElapsed(t0);
-    setProgressBar(1.0);
+    busy.progress(1.0);
     celebrate("PDFを保存", `${docType}を保存しました`);
     showToast(`${docType}のPDFを保存しました`);
   } catch (e) {
-    appendLog(`保存に失敗: ${e.message}`, "err");
-    setStatus("エラー", "error");
+    setStatus(`抜粋PDFを作成できませんでした: ${e.message}`, "error");
     alarmError("エラー", e.message);
   } finally {
-    setBusy(false);
+    busy.done();
   }
 }
 
 async function onSaveYobiZip() {
-  const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const yearLabel = currentYearLabel();
-  $("log").textContent = "";
-  setBusy(true);
-  setProgressBar(0.05);
-  setStatus("一括取得中");
-  activatePane("log");
+  const busy = startBusy("save-zip", "zip作成中");
+  clearStatus();
+  busy.progress(0.05);
   try {
     const folder = `${yearLabel}司法試験予備試験論文式${subject}一式`;
     const sourceUrls = await resolveYobiSourceUrls(yearKey, subject);
-    setProgressBar(0.3);
+    busy.progress(0.3);
     const files = {};
     let done = 0;
     // 試験問題・出題の趣旨を並列に取得・整形する（失敗は種類ごとに隔離）
     await Promise.allSettled(
       YOBI_DOC_TYPES.map(async (docType) => {
         try {
-          appendLog(`[${docType}] 取得開始`);
           const { bytes, baseName } = await buildYobiPdf(
             yearKey,
             subject,
@@ -1042,11 +1031,10 @@ async function onSaveYobiZip() {
             sourceUrls,
           );
           files[`${folder}/${baseName}.pdf`] = new Uint8Array(bytes);
-          appendLog(`  [${docType}] OK`, "ok");
         } catch (e) {
-          appendLog(`  [${docType}] 取得できませんでした: ${e.message}`, "warn");
+          addNote(`${docType}は取得できませんでした（${e.message}）`);
         } finally {
-          setProgressBar(0.3 + 0.6 * (++done / YOBI_DOC_TYPES.length));
+          busy.progress(0.3 + 0.6 * (++done / YOBI_DOC_TYPES.length));
         }
       }),
     );
@@ -1061,17 +1049,14 @@ async function onSaveYobiZip() {
       new Blob([zipped], { type: "application/zip" }),
       `${folder}.zip`,
     );
-    appendLog(`一括保存完了（${names.length}件を zip に格納）`, "ok");
-    logElapsed(t0);
-    setProgressBar(1.0);
+    busy.progress(1.0);
     celebrate("zipを保存", "問題＋趣旨をまとめました");
     showToast("zipを保存しました");
   } catch (e) {
-    appendLog(`一括保存に失敗: ${e.message}`, "err");
-    setStatus("エラー", "error");
+    setStatus(`一式zipを作成できませんでした: ${e.message}`, "error");
     alarmError("エラー", e.message);
   } finally {
-    setBusy(false);
+    busy.done();
   }
 }
 
@@ -1079,13 +1064,12 @@ async function onSaveYobiZip() {
 // （司法の onSaveLlm の予備版。採点実感は無いので2種類）。画像化PDF等で変換
 // できない種類は警告して除外する。
 async function onSaveYobiLlm() {
-  const t0 = performance.now();
   const yearKey = $("year").value;
   const subject = $("subject").value;
   const yearLabel = currentYearLabel();
-  setBusy(true);
-  setStatus("LLM用ファイルを作成中");
-  setProgressBar(0.05);
+  const busy = startBusy("save-llm", "作成中");
+  clearStatus();
+  busy.progress(0.05);
   try {
     const byType = {}; // docType → body
     const sourceUrls = {};
@@ -1095,16 +1079,15 @@ async function onSaveYobiLlm() {
         try {
           const { result, pdfUrl } = await convertYobiText(
             { yearKey, subject, docType, decorate: false },
-            taggedCtx(docType),
+            QUIET_CTX,
           );
           // 1行目（タイトル）・2行目（出典）を除いた本文だけ取り出す
           byType[docType] = result.split("\n").slice(2).join("\n").trim();
           if (pdfUrl) sourceUrls[docType] = pdfUrl;
-          appendLog(`  [${docType}] OK`, "ok");
         } catch (e) {
-          appendLog(`  [${docType}] 変換できませんでした: ${e.message}`, "warn");
+          addNote(`${docType}は変換できませんでした（${e.message}）`);
         } finally {
-          setProgressBar(0.05 + 0.9 * (++done / YOBI_DOC_TYPES.length));
+          busy.progress(0.05 + 0.9 * (++done / YOBI_DOC_TYPES.length));
         }
       }),
     );
@@ -1145,18 +1128,14 @@ async function onSaveYobiLlm() {
       new Blob([md.join("\n")], { type: "text/markdown;charset=utf-8" }),
       filename,
     );
-    setProgressBar(1.0);
-    appendLog(`LLM用ファイルを保存しました（${got.length}種類を統合）。`, "ok");
-    logElapsed(t0);
-    setStatus("完了", "ok");
+    busy.progress(1.0);
     celebrate("Markdownを保存", "LLMに渡せる1ファイルを作成しました");
     showToast("LLM用Markdownを保存しました");
   } catch (e) {
-    appendLog(`LLM用ファイルの作成に失敗: ${e.message}`, "err");
-    setStatus("エラー", "error");
+    setStatus(`LLM用ファイルを作成できませんでした: ${e.message}`, "error");
     alarmError("エラー", e.message);
   } finally {
-    setBusy(false);
+    busy.done();
   }
 }
 
@@ -1168,11 +1147,14 @@ window.addEventListener("DOMContentLoaded", () => {
   enhanceSelect($("subject"), (v) => SYSTEM_BG[subjectSystem(v)]);
   warmupPdfjs(); // PDF.js をアイドル時に先読みし初回クリックの待ちを隠す
   initNews();
-  setupTabs();
+  // 選択（年度・科目・種類・出力形式）を変えたらテキストを表示し直す
   for (const id of ["year", "subject"]) {
-    $(id).addEventListener("change", invalidateResult);
+    $(id).addEventListener("change", refreshResult);
   }
-  $("type").addEventListener("change", invalidateResult);
+  $("type").addEventListener("change", refreshResult);
+  for (const r of document.querySelectorAll('input[name="format"]')) {
+    r.addEventListener("change", refreshResult);
+  }
   for (const r of document.querySelectorAll('input[name="exam"]')) {
     r.addEventListener("change", applyExamMode);
   }
@@ -1180,14 +1162,11 @@ window.addEventListener("DOMContentLoaded", () => {
   $("run").addEventListener("click", onRun);
   $("copy").addEventListener("click", onCopy);
   $("download").addEventListener("click", onDownload);
-  $("save-run").addEventListener("click", () => {
-    const mode = saveMode();
-    if (mode === "zip") return onSaveSourceZip();
-    if (mode === "llm") return onSaveLlm();
-    return onSaveSourcePdf();
-  });
-  $("save-mode").addEventListener("change", updateSaveDesc);
-  updateSaveDesc();
+  $("save-pdf").addEventListener("click", onSaveSourcePdf);
+  $("save-zip").addEventListener("click", onSaveSourceZip);
+  $("save-llm").addEventListener("click", onSaveLlm);
+  updateSavePills();
+  refreshResult();
 
   // ダイアログ（ヘルプ・全文検索）。背景クリック・Escでも閉じる。
   setupDialog("help-dialog", "help", "help-close");
