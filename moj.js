@@ -9,7 +9,7 @@
 import { reEscape, subjectPattern } from "./rules.js";
 
 export const WORKER_URL =
-  "https://shihoshiken-proxy.adachiyuki0409.workers.dev";
+  "https://shihoshiken-proxy.y-adachi.com";
 
 const FETCH_TIMEOUT_MS = 30000;
 

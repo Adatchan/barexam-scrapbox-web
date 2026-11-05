@@ -11,7 +11,7 @@
       - script-src の sha256-… は下部のインラインスクリプト（インポートマップと
         エラー表示）のハッシュ。scripts/bump-version.mjs が両HTMLで自動計算して
         書き換える（コミット時のフックでも実行される）ので、手で直さない。
-      - connect-src の workers.dev は moj.js の WORKER_URL。変更時はここも更新すること。
+      - connect-src の shihoshiken-proxy は moj.js の WORKER_URL。変更時はここも更新すること。
       - worker-src blob: は PDF.js がクロスオリジンの worker を blob 経由で包むために必要。
       - connect-src の jsDelivr は PDF.js の CMap・標準フォント（pdfjs-dist の
         cmaps/ と standard_fonts/）の取得先。無いと一部年度のPDFから
@@ -24,7 +24,7 @@
         style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
         font-src 'self' https://fonts.gstatic.com;
         img-src 'self' data:;
-        connect-src 'self' https://shihoshiken-proxy.adachiyuki0409.workers.dev https://cdnjs.cloudflare.com https://cdn.jsdelivr.net;
+        connect-src 'self' https://shihoshiken-proxy.y-adachi.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net;
         worker-src 'self' blob:;
         child-src 'self' blob:;
         object-src 'none';
