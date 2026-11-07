@@ -14,7 +14,7 @@
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self';
-        script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'sha256-vy54MRv+5U4angFvbFVy8myrLDtuMQva8nMzn4UECYA=' 'sha256-P/7F+euE9ZhJD74EK/Z5a57hEhvWHmwNmMhI3rXQfEI=' 'sha256-8SE+eERaHoK0uCnZfks3lNt56j/PS333DN2dLCR6HkM=';
+        script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'sha256-vy54MRv+5U4angFvbFVy8myrLDtuMQva8nMzn4UECYA=' 'sha256-sCeszf8gjJBjIr+c/RrMRz+uJp+QYGdpaQhpkLVT5tw=' 'sha256-8SE+eERaHoK0uCnZfks3lNt56j/PS333DN2dLCR6HkM=';
         style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
         font-src 'self' https://fonts.gstatic.com;
         img-src 'self' data:;
@@ -406,7 +406,7 @@
          入口（app.js / tantou.js）から import される部品にも版番号を付け、
          ブラウザに古い部品が残って新しい入口と食い違うのを防ぐ。
          中身は scripts/bump-version.mjs が自動生成する（手で編集しない） -->
-    <script type="importmap">{"imports":{"./app.js":"./app.js?v=a776501fbd","./colorselect.js":"./colorselect.js?v=e3f58e9925","./convert.js":"./convert.js?v=4713d0b470","./data.js":"./data.js?v=073ad69957","./effects.js":"./effects.js?v=adabae4e0a","./format.js":"./format.js?v=0074b73123","./moj.js":"./moj.js?v=c4bb9d8bf4","./news.js":"./news.js?v=f635ee97d3","./parser.js":"./parser.js?v=df499db152","./pdfout.js":"./pdfout.js?v=32646018dc","./pdfsplit.js":"./pdfsplit.js?v=9927d44153","./rules.js":"./rules.js?v=90f72bb194","./search.js":"./search.js?v=bc95d05881","./tantou-moj.js":"./tantou-moj.js?v=7d4d3c5fd0","./tantou-text.js":"./tantou-text.js?v=dc397a70cb","./tantou.js":"./tantou.js?v=752e459179","./ui.js":"./ui.js?v=c0b1a9bafc","./years.js":"./years.js?v=3c463d19d4","./yobi-convert.js":"./yobi-convert.js?v=9a978ecc79","./yobi-moj.js":"./yobi-moj.js?v=8080981148","./yobi-years.js":"./yobi-years.js?v=a63917295e"}}</script>
+    <script type="importmap">{"imports":{"./app.js":"./app.js?v=a776501fbd","./colorselect.js":"./colorselect.js?v=e3f58e9925","./convert.js":"./convert.js?v=4713d0b470","./data.js":"./data.js?v=073ad69957","./effects.js":"./effects.js?v=adabae4e0a","./format.js":"./format.js?v=0074b73123","./moj.js":"./moj.js?v=c4bb9d8bf4","./news.js":"./news.js?v=f635ee97d3","./parser.js":"./parser.js?v=df499db152","./pdfout.js":"./pdfout.js?v=32646018dc","./pdfsplit.js":"./pdfsplit.js?v=9927d44153","./rules.js":"./rules.js?v=90f72bb194","./search.js":"./search.js?v=bc95d05881","./tantou-moj.js":"./tantou-moj.js?v=7d4d3c5fd0","./tantou-text.js":"./tantou-text.js?v=dc397a70cb","./tantou.js":"./tantou.js?v=752e459179","./ui.js":"./ui.js?v=94cee0240a","./years.js":"./years.js?v=3c463d19d4","./yobi-convert.js":"./yobi-convert.js?v=9a978ecc79","./yobi-moj.js":"./yobi-moj.js?v=8080981148","./yobi-years.js":"./yobi-years.js?v=a63917295e"}}</script>
 
     <!-- モジュール初期化失敗や想定外のエラーを状態表示欄（#status）に表示する（調査支援） -->
     <script>

@@ -6,6 +6,9 @@
 
 公開ページ: https://barexam.y-adachi.com/
 
+[![今月のダウンロード](https://img.shields.io/endpoint?url=https%3A%2F%2Fshihoshiken-proxy.y-adachi.com%2Fbadge.json)](https://shihoshiken-proxy.y-adachi.com/stats)
+月間ダウンロード数: https://shihoshiken-proxy.y-adachi.com/stats
+
 姉妹ページとして、短答式の問題と正答及び配点を年度別・科目別に保存する
 **しほしけ短答ダウンローダー**（`tantou.html`）を同梱する。
 公開ページ: https://barexam.y-adachi.com/tantou
@@ -59,6 +62,14 @@ PDF保存を案内し、PDF保存では全体を保存する。短答式の正�
 - **新年度の自動対応**: 毎週月曜にGitHub Actionsが法務省サイトを巡回し、新年度の
   掲載を検出すると年度リストと「更新情報」欄を自動更新してデプロイ（予備試験は
   年度リスト（`yobi-years.js`）の追加だけで、「更新情報」欄には載せない）
+- **月間ダウンロード数の計測**: 保存（抜粋PDF・一式zip・LLM用 .md・.txt、短答の
+  PDF・zip）のたびに `ui.js` の `triggerDownload` が Worker の `/hit` へ種類
+  （論文/短答 × 司法/予備 × 形式）だけを送り、Worker が R2 に1件1オブジェクト
+  （`_stats/v1/<月>/<種類>/…`）で記録する。ファイル名・IP 等は送らず保存もしない。
+  公開先（barexam.y-adachi.com）からの送信だけを数える。集計は
+  [`/stats`](https://shihoshiken-proxy.y-adachi.com/stats)（月別の表）・
+  `/stats.json`・`/badge.json`（shields.io バッジ用）。月は日本時間で区切り、
+  締まった月の集計は `_stats/summary/<月>.json` に保存して再計算しない
 - **出典表示**: 出力には公共データ利用規約（PDL1.0）に基づく
   「出典：法務省ウェブサイト（URL）を加工して作成」を自動付与
 

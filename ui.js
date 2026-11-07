@@ -8,6 +8,8 @@
 //   ダイアログ ヘルプ・全文検索の開閉（アニメーション付き）
 //   検索結果   全文検索のヒットカード
 // =============================================================================
+import { WORKER_URL } from "./moj.js";
+
 const $ = (id) => document.getElementById(id);
 
 // ─── 状態表示 ─────────────────────────────────────────────────────────────
@@ -108,6 +110,38 @@ export function triggerDownload(blob, filename) {
   document.body.removeChild(a);
   // Safari ではクリック直後の revoke でダウンロードが失敗することがある
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  countDownload(filename);
+}
+
+// ─── ダウンロード数の計測 ─────────────────────────────────────────────────
+// 保存のたびに Worker（/hit）へ種類だけを送り、月間ダウンロード数を数える。
+// 送るのは「ページ（論文/短答）・試験（司法/予備）・形式（拡張子）」の組だけで、
+// ファイル名・年度・科目・端末を識別する情報は送らない（Worker も IP 等を保存しない）。
+// 集計は Worker の /stats で見られる。公開先以外（ローカル開発等）では送らない。
+const COUNT_HOST = "barexam.y-adachi.com";
+
+export function downloadKind(filename, pathname = location.pathname) {
+  const page = /tantou/.test(pathname) ? "tantou" : "ronbun";
+  const exam = /予備試験/.test(filename) ? "yobi" : "shihou";
+  const ext = (filename.match(/\.(pdf|zip|md|txt)$/i)?.[1] || "").toLowerCase();
+  return ext ? `${page}-${exam}-${ext}` : null;
+}
+
+function countDownload(filename) {
+  try {
+    if (location.hostname !== COUNT_HOST) return;
+    const kind = downloadKind(filename);
+    if (!kind) return;
+    // keepalive: 保存直後にタブを閉じても送信を完了させる。失敗は無視する
+    // （計測の失敗で保存操作を妨げない）。
+    fetch(`${WORKER_URL}/hit?k=${kind}`, {
+      method: "POST",
+      keepalive: true,
+      cache: "no-store",
+    }).catch(() => {});
+  } catch {
+    /* 計測は付随処理なので握りつぶす */
+  }
 }
 
 // ─── ダイアログ（ヘルプ・全文検索で共通）─────────────────────────────────
