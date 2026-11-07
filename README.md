@@ -4,11 +4,11 @@
 公表されているPDFから自動で抽出してテキスト化する、法務省非公式のWebアプリ。
 処理はすべてブラウザ内で行われ、サーバー側にデータは保存されない。
 
-公開ページ: https://adatchan.github.io/barexam-scrapbox-web/
+公開ページ: https://barexam.y-adachi.com/
 
 姉妹ページとして、短答式の問題と正答及び配点を年度別・科目別に保存する
 **しほしけ短答ダウンローダー**（`tantou.html`）を同梱する。
-公開ページ: https://adatchan.github.io/barexam-scrapbox-web/tantou.html
+公開ページ: https://barexam.y-adachi.com/tantou
 
 両ページとも、上部の「試験」ラジオで**司法試験 / 予備試験**を切り替えられる。
 予備試験は科目グループ別（憲法・行政法 など）にPDFが公表され、論文式の出題の趣旨は
@@ -132,7 +132,7 @@ web/
     └── update-years.yml    週次の自動巡回・健全性チェック（毎週月曜 09:00 JST）
 ```
 
-- **フロント**: 静的 HTML/CSS/JS（ビルド不要）。GitHub Pages で配信
+- **フロント**: 静的 HTML/CSS/JS（ビルド不要）。Cloudflare Pages で `barexam.y-adachi.com` に配信（`main` への push で自動デプロイ。旧公開先の GitHub Pages で開くと新URLへ転送する）
 - **バックエンド**: なし。法務省サイトの取得だけ Cloudflare Worker が中継
   （moj.go.jp 配下のみ許可・CORSヘッダ付与）
 - **PDF**: 解析は PDF.js、抜粋PDFの生成は pdf-lib、zip は fflate

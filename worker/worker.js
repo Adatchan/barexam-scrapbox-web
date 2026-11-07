@@ -39,7 +39,10 @@
 const ALLOWED_PREFIX = "https://www.moj.go.jp/";
 
 // ブラウザからの利用を許可するオリジン（公開先 + ローカル開発）
-const ALLOWED_ORIGINS = ["https://adatchan.github.io"];
+const ALLOWED_ORIGINS = [
+  "https://barexam.y-adachi.com", // 公開先（Cloudflare Pages）
+  "https://adatchan.github.io", // 旧公開先（GitHub Pages。転送用に残す）
+];
 
 export function isOriginAllowed(origin) {
   if (!origin) return true; // Origin なし（サーバー間・検証スクリプト）は許可
