@@ -20,6 +20,14 @@
 // 最後に全文検索の索引（converted/search/）を converted/ の内容から作り直す
 // （scripts/build-search-index.mjs。手で直した箇所も索引に反映される）。
 //
+// 未掲載（リンクが見つからない）・解析できない資料は記録して先へ進むが、
+// 中継 Worker・法務省との通信の障害（403/5xx/タイムアウト等）が1件でもあれば
+// 終了コード1で終える。障害を「未掲載」と取り違えて正常終了すると、週次巡回が
+// 更新情報だけを載せて変換データの無いままコミットしてしまうため。
+//
+// 予備試験の論文式で実施されていない科目（令和3年以前の選択科目、令和4年以降の
+// 一般教養科目）と、公表されない種類（一般教養科目の出題の趣旨）は取りに行かない。
+//
 // 使い方:
 //   npm install                       # pdfjs-dist を入れる
 //   node scripts/precompute.mjs       # 未取得の分だけ（週次巡回はこれ）
@@ -54,8 +62,13 @@ const { buildEntry } = await import("../convert.js");
 const { buildYobiEntry } = await import("../yobi-convert.js");
 const { SUBJECT_MAP } = await import("../data.js");
 const { YEAR_URL_MAP, RESULTS_URL_MAP } = await import("../years.js");
-const { YOBI_YEAR_URL_MAP } = await import("../yobi-years.js");
-const { YOBI_RONBUN_SUBJECTS } = await import("../yobi-moj.js");
+const { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } = await import(
+  "../yobi-years.js"
+);
+const { yobiRonbunSubjects, yobiRonbunDocTypes } = await import(
+  "../yobi-moj.js"
+);
+const { isOutageError } = await import("../moj.js");
 const { buildTantouEntry, tantouYearKeys, tantouSubjects } = await import(
   "../tantou-text.js"
 );
@@ -98,8 +111,13 @@ async function buildSubject(build, yearKey, subject, types, existing = {}) {
       ok++;
       console.log(`OK  ${yearKey} ${subject} ${docType} (${entry.paras.length}段落)`);
     } catch (e) {
-      skip++;
-      console.log(`--  ${yearKey} ${subject} ${docType}: ${e.message}`);
+      if (isOutageError(e)) {
+        outages.push(`${yearKey} ${subject} ${docType}: ${e.message}`);
+        console.log(`NG  ${yearKey} ${subject} ${docType}: ${e.message}`);
+      } else {
+        skip++;
+        console.log(`--  ${yearKey} ${subject} ${docType}: ${e.message}`);
+      }
     }
   }
   return { out, ok, skip, kept };
@@ -108,6 +126,7 @@ async function buildSubject(build, yearKey, subject, types, existing = {}) {
 let ok = 0;
 let skip = 0;
 let kept = 0;
+const outages = []; // 通信の障害（未掲載とは区別して最後に失敗にする）
 
 // ── 司法試験 ──────────────────────────────────────────────────────────────
 console.log("\n##### 司法試験 #####");
@@ -145,20 +164,23 @@ for (const yearKey of shihouYears) {
 // ── 予備試験（論文式）────────────────────────────────────────────────────
 console.log("\n##### 司法試験予備試験（論文式）#####");
 const yobiYears = argYears.length ? argYears : Object.keys(YOBI_YEAR_URL_MAP);
-const yobiTypes = ["試験問題", "出題の趣旨"]; // 予備に採点実感は無い
 for (const yearKey of yobiYears) {
   if (!(yearKey in YOBI_YEAR_URL_MAP)) {
     console.log(`?? 予備: 未知の年度をスキップ: ${yearKey}`);
     continue;
   }
-  for (const subject of YOBI_RONBUN_SUBJECTS) {
+  // 予備に採点実感は無い。結果ページ未登録の年度は趣旨も無い
+  for (const subject of yobiRonbunSubjects(yearKey)) {
     const dir = join(OUT, "yobi", yearKey);
     const file = join(dir, `${subject}.json`);
+    const types = yobiRonbunDocTypes(subject).filter(
+      (t) => t === "試験問題" || yearKey in YOBI_RESULTS_URL_MAP,
+    );
     const r = await buildSubject(
       buildYobiEntry,
       yearKey,
       subject,
-      yobiTypes,
+      types,
       readExisting(file),
     );
     ok += r.ok;
@@ -199,7 +221,10 @@ for (const yobi of [false, true]) {
   }
 }
 
-console.log(`\n完了: ${ok}件 生成 / ${kept}件 既存を保持 / ${skip}件 未取得`);
+console.log(
+  `\n完了: ${ok}件 生成 / ${kept}件 既存を保持 / ${skip}件 未取得` +
+    (outages.length ? ` / ${outages.length}件 通信障害` : ""),
+);
 
 // ── 全文検索の索引 ────────────────────────────────────────────────────────
 const { buildSearchIndexes } = await import("./build-search-index.mjs");
@@ -208,3 +233,12 @@ console.log(
   `全文検索の索引: ${idx.written}件 更新 / ${idx.unchanged}件 変更なし` +
     (idx.removed ? ` / ${idx.removed}件 削除` : ""),
 );
+
+if (outages.length) {
+  console.error(
+    `\n通信障害で取得できなかったものが ${outages.length} 件あります。` +
+      "中継 Worker か法務省ウェブの障害の可能性があります（未掲載ではありません）。",
+  );
+  for (const o of outages.slice(0, 5)) console.error(`  ${o}`);
+  process.exit(1);
+}

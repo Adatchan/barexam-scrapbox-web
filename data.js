@@ -106,6 +106,13 @@ export const SYSTEM_BG = {
   criminal: "#e8f0fe", // 刑事系: 青系
 };
 
+// 年度キー（"r7" / "h22"）→ 西暦（2025 / 2010）。年度の前後比較に使う
+// （平成31年と令和元年はどちらも 2019 になる）。
+export function yearKeyToAd(key) {
+  const n = parseInt(key.slice(1), 10);
+  return (key.startsWith("r") ? 2018 : 1988) + n;
+}
+
 // 年度キー（"r7" / "h22"）→ 表示ラベル（"令和7年(2025年)" / "平成22年(2010年)"）
 export function yearKeyToLabel(key) {
   const n = parseInt(key.slice(1), 10);

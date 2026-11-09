@@ -14,6 +14,11 @@ on:
         type: boolean
         required: false
         default: false
+      full_check:
+        description: リンク探索の健全性チェックを全年度で行う（通常は月初のみ全年度）
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -40,12 +45,18 @@ jobs:
       # 既存年度（不変PDF）は同一出力＝差分なし。新年度・新規掲載分のみ差分が出る。
       # parser.js/format.js を改修した場合もここで自動的に再生成・反映される。
       # 最後に全文検索の索引（converted/search/）も converted/ から作り直す。
+      # 中継 Worker・法務省の通信障害が1件でもあると失敗で止まり、更新情報だけが
+      # 載ってデータの無いコミットを作らない（次回の巡回で取り直す）。
       - name: 事前変換データ（converted/）を生成
         run: node scripts/precompute.mjs ${{ inputs.force && '--force' || '' }}
 
       - name: 変更があればコミットしてプッシュ
         run: |
-          git add years.js news.js yobi-years.js converted
+          # years.js / news.js も配信モジュールなので、HTMLの版番号（インポート
+          # マップの ?v=）を合わせないと、端末に古い年度表が残る（手元ではコミット
+          # フックが行う処理）
+          node scripts/bump-version.mjs
+          git add years.js news.js yobi-years.js converted index.html tantou.html
           if git diff --cached --quiet; then
             echo "変更なし"
             exit 0
@@ -58,10 +69,17 @@ jobs:
           git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
-      # 全年度×全種類で PDF リンク探索が機能するか検査する。
-      # 法務省サイトの構造変更や中継 Worker の障害をここで検知する
+      # PDF リンク探索が機能するか検査する。法務省サイトの構造変更や中継 Worker の
+      # 障害をここで検知する。過去年度のページはほぼ変わらないので、毎週は最新年度
+      # だけを見て、全年度（約2分・法務省のページ80枚超）は月初（1〜7日）の巡回と
+      # 手動実行で full_check を付けたときに行う
       - name: リンク探索の健全性チェック
-        run: node scripts/check-links.mjs
+        run: |
+          if [ "${{ inputs.full_check }}" = "true" ] || [ "$(TZ=Asia/Tokyo date +%-d)" -le 7 ]; then
+            node scripts/check-links.mjs
+          else
+            node scripts/check-links.mjs --latest
+          fi
 
       # リポジトリに60日間コミットがないと GitHub が定期実行を自動停止する
       # ため、実行のたびに再有効化してタイマーをリセットする

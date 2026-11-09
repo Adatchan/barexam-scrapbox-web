@@ -9,6 +9,7 @@
 // =============================================================================
 import { fetchHtml } from "./moj.js";
 import { reEscape } from "./rules.js";
+import { yearKeyToAd } from "./data.js";
 
 // 予備試験は科目をまとめたPDF（憲法・行政法 など）で公表されるため、個別
 // 科目で切り出すには「どのグループPDFに入っていて、PDF内のどの角括弧見出し
@@ -108,6 +109,30 @@ export const YOBI_RONBUN_DEF = {
 // プルダウン用の個別科目名一覧（DEFの定義順）
 export const YOBI_TANTOU_SUBJECTS = Object.keys(YOBI_TANTOU_DEF);
 export const YOBI_RONBUN_SUBJECTS = Object.keys(YOBI_RONBUN_DEF);
+
+// 論文式で科目が実施された年度。令和4年の制度改正で一般教養科目が廃止され、
+// 選択科目が加わった（どちらも短答式には関係しない。短答の一般教養科目は存続）。
+// 実施されていない年度は、事前変換で取りに行かず、画面の科目欄に出さず、
+// 全文検索でも「変換データが無い年度」に数えない。
+const R4 = yearKeyToAd("r4");
+export function yobiRonbunHasSubject(yearKey, subject) {
+  const ad = yearKeyToAd(yearKey);
+  if (SENTAKU_HEADERS.includes(subject)) return ad >= R4;
+  if (subject === "一般教養科目") return ad < R4;
+  return subject in YOBI_RONBUN_DEF;
+}
+
+// その年度に実施された論文式の科目（定義順）
+export function yobiRonbunSubjects(yearKey) {
+  return YOBI_RONBUN_SUBJECTS.filter((s) => yobiRonbunHasSubject(yearKey, s));
+}
+
+// その科目に公表される種類（一般教養科目に出題の趣旨は無い）
+export function yobiRonbunDocTypes(subject) {
+  return YOBI_RONBUN_DEF[subject]?.sHeaders
+    ? ["試験問題", "出題の趣旨"]
+    : ["試験問題"];
+}
 
 function resolveUrl(href, baseUrl) {
   if (/^https?:/.test(href)) return href;

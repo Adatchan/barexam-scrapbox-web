@@ -6,7 +6,15 @@
 // 構造変更や Worker の障害を検知するため、週次ワークフローから実行される
 // （失敗すると GitHub がワークフローの失敗を通知する）。
 //
-// 使い方: node scripts/check-links.mjs
+// 使い方: node scripts/check-links.mjs           # 全年度（約2分）
+//         node scripts/check-links.mjs --latest  # 最新年度だけ（週次巡回用）
+//
+// 過去年度のページはほぼ変わらないので、週次巡回は最新年度だけを見て法務省への
+// アクセスを抑え、全年度は月初の巡回と手動実行、リンク探索のコードを変えたとき
+// （ci.yml）に検査する。
+//
+// 最新年度で「リンクが見つからない」のは未公表なだけのことが多いので警告に
+// とどめるが、中継 Worker・法務省との通信の障害（403/5xx 等）はどの年度でも失敗にする。
 // =============================================================================
 import { YEAR_URL_MAP, RESULTS_URL_MAP } from "../years.js";
 import { YOBI_YEAR_URL_MAP, YOBI_RESULTS_URL_MAP } from "../yobi-years.js";
@@ -22,6 +30,9 @@ import {
 } from "../tantou-moj.js";
 import { findYobiRonbunPdfUrl, findYobiShushiPdfUrl } from "../yobi-moj.js";
 import { SELECT_SUBJECTS } from "../data.js";
+import { isOutageError } from "../moj.js";
+
+const latestOnly = process.argv.includes("--latest");
 
 // 選択科目は8科目すべてを検査する（data.js の定義を単一の出典とする）
 const SELECT_KEYWORDS = SELECT_SUBJECTS;
@@ -41,7 +52,7 @@ async function check(label, fn, soft = false) {
     await fn();
     return `${label}:OK`;
   } catch (e) {
-    if (soft) {
+    if (soft && !isOutageError(e)) {
       warnings++;
       return `${label}:未掲載?(${e.message})`;
     }
@@ -52,6 +63,7 @@ async function check(label, fn, soft = false) {
 
 const LATEST = latestOf(YEAR_URL_MAP);
 for (const [year, examUrl] of Object.entries(YEAR_URL_MAP)) {
+  if (latestOnly && year !== LATEST) continue;
   const row = [year];
   const soft = year === LATEST;
 
@@ -107,6 +119,7 @@ for (const [year, examUrl] of Object.entries(YEAR_URL_MAP)) {
 // 短答問題・短答正答・論文問題・論文出題の趣旨のリンク探索を検査する。
 const YOBI_LATEST = latestOf(YOBI_YEAR_URL_MAP);
 for (const [year, examUrl] of Object.entries(YOBI_YEAR_URL_MAP)) {
+  if (latestOnly && year !== YOBI_LATEST) continue;
   const row = [`予備${year}`];
   const soft = year === YOBI_LATEST;
   const subj = "憲法・行政法";
@@ -135,4 +148,4 @@ if (failures > 0) {
   console.error(`\nNG ${failures} 件。法務省ページの構造変更の可能性があります。`);
   process.exit(1);
 }
-console.log("\n全チェック OK");
+console.log(`\n全チェック OK${latestOnly ? "（最新年度のみ）" : ""}`);

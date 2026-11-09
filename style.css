@@ -1469,6 +1469,44 @@ textarea {
   opacity: 0.35;
 }
 
+/* 全文検索から開いたときの、本文内の一致箇所の移動バー */
+.find-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--warn-soft);
+  font-size: 0.85rem;
+}
+
+.find-bar[hidden] {
+  display: none;
+}
+
+.find-label {
+  font-weight: 700;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.find-pos {
+  color: var(--muted);
+  margin-right: auto;
+}
+
+.result-text mark.find-hit {
+  background: #fff1a8;
+  color: inherit;
+  border-radius: 2px;
+}
+
+.result-text mark.find-hit.current {
+  background: #ffc94d;
+  outline: 2px solid #e0a100;
+}
+
 .result-message {
   padding: 32px 20px;
   text-align: center;

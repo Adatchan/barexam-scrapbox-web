@@ -39,7 +39,47 @@ export function cacheSourceLabel(status) {
     : "🌐 法務省サイト";
 }
 
-async function fetchViaProxy(url, type = "text", onMeta) {
+// 中継 Worker・法務省との通信の失敗（「リンクが見つからない」などの未掲載とは
+// 区別する）。status は HTTP ステータス、通信自体の失敗・タイムアウトは 0。
+// 事前変換・巡回・リンク検査は、これを「掲載待ち」ではなく障害として扱い、
+// 失敗のまま正常終了しないようにする（isOutageError）。
+export class FetchError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.name = "FetchError";
+    this.status = status;
+  }
+}
+
+// 障害とみなす取得失敗か（404 は「まだ無い」ことがあるので障害にしない）
+export function isOutageError(e) {
+  return e?.name === "FetchError" && e.status !== 404;
+}
+
+// 一時的な失敗（通信断・混雑・中継先の不調）は一度だけ取り直す
+const RETRY_STATUSES = new Set([0, 429, 500, 502, 503, 504]);
+const RETRY_DELAY_MS = 1500;
+
+// 失敗応答の本文の頭（Worker の {"error": …} や Cloudflare の遮断ページの
+// 見出し）を添えて、403 が Worker 自身の拒否か手前での遮断かを区別できるようにする
+async function describeFailure(res) {
+  try {
+    const body = (await res.text()).trim();
+    let msg = body;
+    try {
+      msg = JSON.parse(body).error || body;
+    } catch {
+      const title = /<title>([^<]*)<\/title>/i.exec(body);
+      if (title) msg = title[1];
+    }
+    msg = msg.replace(/\s+/g, " ").slice(0, 120);
+    return msg ? `（${msg}）` : "";
+  } catch {
+    return "";
+  }
+}
+
+async function fetchViaProxyOnce(url, type, onMeta) {
   const proxyUrl = `${WORKER_URL}/?url=${encodeURIComponent(url)}`;
   let res;
   try {
@@ -50,18 +90,36 @@ async function fetchViaProxy(url, type = "text", onMeta) {
       cache: "no-store",
     });
   } catch (e) {
-    throw new Error(
+    const err = new FetchError(
       e.name === "TimeoutError"
         ? `取得がタイムアウトしました（${FETCH_TIMEOUT_MS / 1000}秒）: ${url}`
         : `取得に失敗しました: ${e.message} (${url})`,
+      0,
     );
+    err.timeout = e.name === "TimeoutError";
+    throw err;
   }
   if (!res.ok) {
-    throw new Error(`取得失敗 HTTP ${res.status}: ${url}`);
+    throw new FetchError(
+      `取得失敗 HTTP ${res.status}${await describeFailure(res)}: ${url}`,
+      res.status,
+    );
   }
   if (onMeta) onMeta({ cache: res.headers.get("X-MOJ-Cache") });
   if (type === "arraybuffer") return await res.arrayBuffer();
   return await res.text();
+}
+
+async function fetchViaProxy(url, type = "text", onMeta) {
+  try {
+    return await fetchViaProxyOnce(url, type, onMeta);
+  } catch (e) {
+    // タイムアウトは待ち時間が倍になるので取り直さない
+    if (!(e instanceof FetchError) || e.timeout || !RETRY_STATUSES.has(e.status))
+      throw e;
+    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    return await fetchViaProxyOnce(url, type, onMeta);
+  }
 }
 
 // 同一ページの再取得を避けるキャッシュ（一括zip保存や検査スクリプトで、

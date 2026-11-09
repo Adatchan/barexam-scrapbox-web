@@ -20,7 +20,7 @@
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self';
-        script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'sha256-vy54MRv+5U4angFvbFVy8myrLDtuMQva8nMzn4UECYA=' 'sha256-P/7F+euE9ZhJD74EK/Z5a57hEhvWHmwNmMhI3rXQfEI=' 'sha256-8SE+eERaHoK0uCnZfks3lNt56j/PS333DN2dLCR6HkM=';
+        script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'sha256-vy54MRv+5U4angFvbFVy8myrLDtuMQva8nMzn4UECYA=' 'sha256-PgdSiz6kzF6uMtCqS3ZP4lT31Lv+3xxTAwQsHhNYypA=' 'sha256-8SE+eERaHoK0uCnZfks3lNt56j/PS333DN2dLCR6HkM=';
         style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
         font-src 'self' https://fonts.gstatic.com;
         img-src 'self' data:;
@@ -69,7 +69,7 @@
       href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=BIZ+UDGothic:wght@400;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./style.css?v=494d83b952" />
+    <link rel="stylesheet" href="./style.css?v=28da1cd8bb" />
   </head>
   <body>
     <main class="app">
@@ -149,7 +149,7 @@
           <p>
             画面上部の「試験」で司法試験・予備試験を切り替えられます。<br />
             ・司法試験: 平成22年から最新年度まで。基本7科目（憲法・行政法・民法・商法・民訴・刑法・刑訴）と、選択科目8科目（倒産法・租税法・経済法・知的財産法・労働法・環境法・国際関係法（公法系）・国際関係法（私法系））の各第１問・第２問。<br />
-            ・予備試験: 平成23年から最新年度まで。基本7科目・法律実務基礎科目（民事・刑事）・選択科目8科目（令和4年以降）・一般教養科目（令和3年以前）。種類は試験問題と出題の趣旨のみです。予備試験は複数科目をまとめたPDF（「憲法・行政法」など）で公表されますが、選んだ科目だけを自動で切り出します。
+            ・予備試験: 平成23年から最新年度まで。基本7科目・法律実務基礎科目（民事・刑事）・選択科目8科目（令和4年以降）・一般教養科目（令和3年以前）。科目欄には、選んだ年度に実施された科目だけが並びます。種類は試験問題と出題の趣旨のみです。予備試験は複数科目をまとめたPDF（「憲法・行政法」など）で公表されますが、選んだ科目だけを自動で切り出します。
           </p>
         </details>
 
@@ -159,7 +159,7 @@
           <ol class="help-steps">
             <li>ダイアログで試験（司法試験・予備試験）・科目・種類を選ぶ</li>
             <li>キーワードを入れて「検索」を押す（Enter でも可）</li>
-            <li>その科目の全年度から、キーワードを含む年度・種類がカードで並ぶ。カードを押すと、その年度・科目・種類が画面の選択欄に入り、テキストが表示される</li>
+            <li>その科目の全年度から、キーワードを含む年度・種類がカードで並ぶ。カードを押すと、その年度・科目・種類が画面の選択欄に入り、テキストが表示される。本文中のキーワードは色付きで強調され、最初の箇所まで自動でスクロールする。結果欄の上のバーの「前へ」「次へ」で他の箇所に移動でき、「解除」で強調を消せる</li>
           </ol>
           <ul class="help-notes">
             <li>空白・改行の有無、全角・半角、英字の大文字・小文字は区別しません。空白で区切っても複数語の検索にはならず、空白を詰めた1つの語句として探します。</li>
@@ -469,6 +469,14 @@
             <span class="btn-run-label">原典PDFから変換する</span>
           </button>
         </div>
+        <!-- 全文検索のカードから開いたとき、本文内の一致箇所を前後に移動する -->
+        <div id="find-bar" class="find-bar" role="group" aria-label="本文内の一致箇所" hidden>
+          <span class="find-label">「<span id="find-query"></span>」</span>
+          <span id="find-pos" class="find-pos" aria-live="polite"></span>
+          <button id="find-prev" class="btn-tool" type="button" aria-label="前の一致箇所">↑ 前へ</button>
+          <button id="find-next" class="btn-tool" type="button" aria-label="次の一致箇所">↓ 次へ</button>
+          <button id="find-clear" class="btn-tool" type="button" aria-label="強調表示を解除">× 解除</button>
+        </div>
         <pre id="result" class="result-text"></pre>
       </section>
       <footer class="foot">
@@ -511,7 +519,7 @@
          入口（app.js / tantou.js）から import される部品にも版番号を付け、
          ブラウザに古い部品が残って新しい入口と食い違うのを防ぐ。
          中身は scripts/bump-version.mjs が自動生成する（手で編集しない） -->
-    <script type="importmap">{"imports":{"./app.js":"./app.js?v=a776501fbd","./colorselect.js":"./colorselect.js?v=e3f58e9925","./convert.js":"./convert.js?v=4713d0b470","./data.js":"./data.js?v=073ad69957","./effects.js":"./effects.js?v=adabae4e0a","./format.js":"./format.js?v=0074b73123","./moj.js":"./moj.js?v=c4bb9d8bf4","./news.js":"./news.js?v=f635ee97d3","./parser.js":"./parser.js?v=df499db152","./pdfout.js":"./pdfout.js?v=32646018dc","./pdfsplit.js":"./pdfsplit.js?v=9927d44153","./rules.js":"./rules.js?v=90f72bb194","./search.js":"./search.js?v=bc95d05881","./tantou-moj.js":"./tantou-moj.js?v=7d4d3c5fd0","./tantou-text.js":"./tantou-text.js?v=dc397a70cb","./tantou.js":"./tantou.js?v=752e459179","./ui.js":"./ui.js?v=c0b1a9bafc","./years.js":"./years.js?v=3c463d19d4","./yobi-convert.js":"./yobi-convert.js?v=9a978ecc79","./yobi-moj.js":"./yobi-moj.js?v=8080981148","./yobi-years.js":"./yobi-years.js?v=a63917295e"}}</script>
+    <script type="importmap">{"imports":{"./app.js":"./app.js?v=a81bfcd745","./colorselect.js":"./colorselect.js?v=e3f58e9925","./convert.js":"./convert.js?v=4713d0b470","./data.js":"./data.js?v=c382566ba7","./effects.js":"./effects.js?v=adabae4e0a","./format.js":"./format.js?v=0074b73123","./moj.js":"./moj.js?v=ba3974e654","./news.js":"./news.js?v=f635ee97d3","./parser.js":"./parser.js?v=df499db152","./pdfout.js":"./pdfout.js?v=32646018dc","./pdfsplit.js":"./pdfsplit.js?v=9927d44153","./rules.js":"./rules.js?v=90f72bb194","./search.js":"./search.js?v=f7e62eb3af","./tantou-moj.js":"./tantou-moj.js?v=7d4d3c5fd0","./tantou-text.js":"./tantou-text.js?v=dc397a70cb","./tantou.js":"./tantou.js?v=752e459179","./ui.js":"./ui.js?v=c0b1a9bafc","./years.js":"./years.js?v=3c463d19d4","./yobi-convert.js":"./yobi-convert.js?v=9a978ecc79","./yobi-moj.js":"./yobi-moj.js?v=8f10c286f5","./yobi-years.js":"./yobi-years.js?v=a63917295e"}}</script>
 
     <!-- モジュール初期化失敗や想定外のエラーを状態表示欄（#status）に表示する（調査支援） -->
     <script>
@@ -543,6 +551,6 @@
       crossorigin="anonymous"
       type="module"
     ></script>
-    <script type="module" src="./app.js?v=a776501fbd"></script>
+    <script type="module" src="./app.js?v=a81bfcd745"></script>
   </body>
 </html>

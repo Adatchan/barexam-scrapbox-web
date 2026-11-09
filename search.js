@@ -21,6 +21,7 @@ import { YEAR_URL_MAP } from "./years.js";
 import { YOBI_YEAR_URL_MAP } from "./yobi-years.js";
 import { yearKeyToLabel } from "./data.js";
 import { tantouYearKeys } from "./tantou-moj.js";
+import { yobiRonbunHasSubject } from "./yobi-moj.js";
 
 // 索引の形式か正規化の規則を変えたら上げる（古い索引のまま照合しないように）
 export const SEARCH_INDEX_VERSION = 1;
@@ -36,6 +37,13 @@ const indexCache = new Map();
 export function searchYearKeys(yobi, tantou = false) {
   if (tantou) return tantouYearKeys(yobi).slice().reverse();
   return Object.keys(yobi ? YOBI_YEAR_URL_MAP : YEAR_URL_MAP).reverse();
+}
+
+// その年度にその科目の試験が行われたか。予備試験の論文式は令和4年に選択科目が
+// 加わり一般教養科目が無くなったので、無い年度は検索対象にも「変換データが
+// 無い年度」にも数えない（それ以外は全年度で実施）。
+export function searchHasSubject(yobi, tantou, yearKey, subject) {
+  return !yobi || tantou || yobiRonbunHasSubject(yearKey, subject);
 }
 
 // converted/ 内の索引の置き場所（司法と予備、論文と短答で科目名が衝突する
@@ -214,6 +222,7 @@ export async function searchSubject({
 
   for (const yearKey of searchYearKeys(yobi, tantou)) {
     for (let si = 0; si < subjects.length; si++) {
+      if (!searchHasSubject(yobi, tantou, yearKey, subjects[si])) continue;
       const docs = indexes[si]?.get(yearKey);
       if (!docs) {
         if (!searched.has(yearKey)) missing.add(yearKey);

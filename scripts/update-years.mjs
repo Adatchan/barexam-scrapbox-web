@@ -20,6 +20,7 @@ import {
   findTantouQuestionPdfUrl,
   findTantouAnswerPdfUrl,
 } from "../tantou-moj.js";
+import { isOutageError } from "../moj.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const YEARS_JS = join(ROOT, "years.js");
@@ -317,7 +318,9 @@ for (const key of sortKeys(Object.keys(yearMap))) {
       await findTantouQuestionPdfUrl(yearMap[key], "憲法");
       st.mondai = true;
       addTantouNews(`${yearKeyToLabel(key)}の短答式問題が掲載されました。`);
-    } catch {
+    } catch (e) {
+      // 中継 Worker の障害は「未掲載」と区別して止める（掲載を見逃さないため）
+      if (isOutageError(e)) throw e;
       /* 短答式問題が未掲載のページ構造のためスキップ */
     }
   }
@@ -328,7 +331,8 @@ for (const key of sortKeys(Object.keys(yearMap))) {
       addTantouNews(
         `${yearKeyToLabel(key)}の短答式の正答及び配点が掲載されました。`,
       );
-    } catch {
+    } catch (e) {
+      if (isOutageError(e)) throw e;
       /* 正答及び配点が未掲載のためスキップ */
     }
   }

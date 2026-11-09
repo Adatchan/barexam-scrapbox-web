@@ -19,6 +19,7 @@ import {
   questionLabelAt,
   searchSubject,
   searchYearKeys,
+  searchHasSubject,
   toOriginal,
 } from "../search.js";
 import { SUBJECT_MAP, subjectSearchGroups } from "../data.js";
@@ -163,6 +164,7 @@ function plainSearch(exam, plainBySubject, subjects, types, query) {
   const searched = new Set();
   for (const yearKey of searchYearKeys(exam.yobi, exam.tantou)) {
     for (const subject of subjects) {
+      if (!searchHasSubject(exam.yobi, exam.tantou, yearKey, subject)) continue;
       const docs = plainBySubject.get(subject).get(yearKey);
       if (!docs) {
         if (!searched.has(yearKey)) missing.add(yearKey);

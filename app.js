@@ -29,6 +29,7 @@ import { fetchPdf } from "./moj.js";
 import {
   YOBI_RONBUN_SUBJECTS,
   YOBI_RONBUN_DEF,
+  yobiRonbunSubjects,
   YOBI_ALL_HEADERS,
   yobiSubjectCandidates,
   findYobiRonbunPdfUrl,
@@ -58,6 +59,7 @@ import {
 import {
   searchSubject,
   normalizeQuery,
+  normalizeWithMap,
   preloadSearchIndex,
 } from "./search.js";
 
@@ -149,9 +151,19 @@ function initSelectors() {
   }
   if (yearSelect._cs) yearSelect._cs.refresh();
 
+  buildSubjectOptions();
+}
+
+// 科目リストを作る。予備試験の論文式は年度で科目が違う（令和4年から選択科目、
+// 令和3年までは一般教養科目）ので、選択中の年度に実施された科目だけを出す。
+// 選んでいた科目が新しいリストにもあれば選び直す。無くなった科目名を返す。
+function buildSubjectOptions() {
   const subjSelect = $("subject");
+  const keep = subjSelect.value;
   subjSelect.innerHTML = "";
-  const subs = yobi ? YOBI_RONBUN_SUBJECTS : Object.keys(SUBJECT_MAP);
+  const subs = isYobi()
+    ? yobiRonbunSubjects($("year").value)
+    : Object.keys(SUBJECT_MAP);
   for (const s of subs) {
     const opt = document.createElement("option");
     opt.value = s;
@@ -160,8 +172,22 @@ function initSelectors() {
     if (sys) opt.style.backgroundColor = SYSTEM_BG[sys];
     subjSelect.appendChild(opt);
   }
+  if (subs.includes(keep)) subjSelect.value = keep;
   // 科目リストを作り直したらカスタムドロップダウンを再同期する
   if (subjSelect._cs) subjSelect._cs.refresh();
+  return keep && !subs.includes(keep) ? keep : null;
+}
+
+// 年度を変えたら（予備は）科目リストを作り直してからテキストを表示し直す
+function onYearChange() {
+  if (isYobi()) {
+    const dropped = buildSubjectOptions();
+    if (dropped)
+      showToast(
+        `${dropped}は${currentYearLabel()}の論文式にありません。${$("subject").value}を選びました`,
+      );
+  }
+  refreshResult();
 }
 
 // 試験種別の切替: 司法・予備で画面は共通。年度・科目・種類を作り直し、
@@ -320,7 +346,9 @@ async function onSearch() {
         : "");
     for (const hit of hits) {
       results.appendChild(
-        buildHitCard(hit, { showSubject }, (h) => applySearchHit(h, yobi)),
+        buildHitCard(hit, { showSubject }, (h) =>
+          applySearchHit(h, yobi, query),
+        ),
       );
     }
   } catch (e) {
@@ -331,7 +359,7 @@ async function onSearch() {
 
 // カードの内容を画面の選択欄へ反映する（選択科目はヒットした問の方を選ぶ）。
 // ダイアログで試験を切り替えて検索していた場合は、メイン画面もそちらに合わせる。
-function applySearchHit(hit, yobi) {
+function applySearchHit(hit, yobi, query) {
   if (isYobi() !== yobi) {
     const radio = document.querySelector(
       `input[name="exam"][value="${yobi ? "yobi" : "shihou"}"]`,
@@ -341,12 +369,14 @@ function applySearchHit(hit, yobi) {
       applyExamMode(); // 年度・科目・種類のリストを作り直す
     }
   }
-  $("subject").value = hit.subject;
+  // 年度を先に入れる（予備は年度で科目リストが変わる）
   $("year").value = hit.yearKey;
+  if ($("year")._cs) $("year")._cs.refresh();
+  buildSubjectOptions();
+  $("subject").value = hit.subject;
+  if ($("subject")._cs) $("subject")._cs.refresh();
   setType(hit.docType);
-  for (const id of ["year", "subject"]) {
-    if ($(id)._cs) $(id)._cs.refresh();
-  }
+  setFindQuery(query); // 表示したテキストで一致箇所へ移動する
   refreshResult();
   closeSearch();
   showToast(`${hit.yearLabel} ${hit.subject} ${hit.docType} を選びました`);
@@ -420,10 +450,78 @@ function showResultMessage(title, text, withRun) {
   resetResultActions();
   $("result").textContent = "";
   $("result").hidden = true;
+  $("find-bar").hidden = true;
   $("result-message-title").textContent = title;
   $("result-message-text").textContent = text;
   $("run").hidden = !withRun;
   $("result-message").hidden = false;
+}
+
+// ─── 本文内の一致箇所（全文検索から開いたとき）────────────────────────
+// 検索結果のカードから開いたテキストでは、キーワードの一致箇所をすべて強調し、
+// 最初の箇所までスクロールする。結果欄の上のバーで前後の一致へ移動でき、×で
+// 解除するまでは、種類や出力形式を切り替えても同じキーワードを強調し続ける。
+// 照合の規則（空白・全角半角・大文字小文字を区別しない）は全文検索と同じ。
+let findQuery = "";
+let findMarks = [];
+let findIndex = 0;
+
+function setFindQuery(query) {
+  findQuery = normalizeQuery(query || "") ? query : "";
+}
+
+// テキストを結果欄に出す。キーワードがあれば一致箇所を <mark> で囲む
+function renderResultText(text) {
+  const pre = $("result");
+  findMarks = [];
+  findIndex = 0;
+  const q = findQuery ? normalizeQuery(findQuery) : "";
+  if (!q) {
+    pre.textContent = text;
+    $("find-bar").hidden = true;
+    return;
+  }
+  const { text: norm, map } = normalizeWithMap(text);
+  const frag = document.createDocumentFragment();
+  let last = 0;
+  for (let i = norm.indexOf(q); i !== -1; i = norm.indexOf(q, i + q.length)) {
+    const start = map[i];
+    const end = map[i + q.length - 1] + 1;
+    frag.append(document.createTextNode(text.slice(last, start)));
+    const mark = document.createElement("mark");
+    mark.className = "find-hit";
+    mark.textContent = text.slice(start, end);
+    frag.append(mark);
+    findMarks.push(mark);
+    last = end;
+  }
+  frag.append(document.createTextNode(text.slice(last)));
+  pre.replaceChildren(frag);
+  $("find-bar").hidden = false;
+  $("find-query").textContent = findQuery;
+  $("find-prev").disabled = $("find-next").disabled = findMarks.length < 2;
+  showFindPosition(true);
+}
+
+function showFindPosition(scroll) {
+  const n = findMarks.length;
+  $("find-pos").textContent = n ? `${findIndex + 1} / ${n}件` : "この資料には無し";
+  findMarks.forEach((m, i) => m.classList.toggle("current", i === findIndex));
+  // 結果欄の中と画面の両方を、一致箇所が中央に来るようにスクロールする
+  if (scroll && n)
+    findMarks[findIndex].scrollIntoView({
+      block: "center",
+      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
+}
+
+function moveFind(step) {
+  const n = findMarks.length;
+  if (!n) return;
+  findIndex = (findIndex + step + n) % n;
+  showFindPosition(true);
 }
 
 function showResultText(r, sel) {
@@ -435,7 +533,7 @@ function showResultText(r, sel) {
   $("result-message").hidden = true;
   $("result").hidden = false;
   $("result").classList.remove("stale");
-  $("result").textContent = r.result;
+  renderResultText(r.result);
   $("copy").disabled = false;
   $("download").disabled = false;
   if (r.pdfUrl) {
@@ -996,9 +1094,14 @@ window.addEventListener("DOMContentLoaded", () => {
   warmupPdfjs(); // PDF.js をアイドル時に先読みし初回クリックの待ちを隠す
   initNewsBar(NEWS);
   // 選択（年度・科目・種類・出力形式）を変えたらテキストを表示し直す
-  for (const id of ["year", "subject"]) {
-    $(id).addEventListener("change", refreshResult);
-  }
+  $("year").addEventListener("change", onYearChange);
+  $("subject").addEventListener("change", refreshResult);
+  $("find-prev").addEventListener("click", () => moveFind(-1));
+  $("find-next").addEventListener("click", () => moveFind(1));
+  $("find-clear").addEventListener("click", () => {
+    setFindQuery("");
+    renderResultText(lastResult);
+  });
   $("type").addEventListener("change", refreshResult);
   for (const r of document.querySelectorAll('input[name="format"]')) {
     r.addEventListener("change", refreshResult);
