@@ -20,7 +20,7 @@ import {
   findTantouQuestionPdfUrl,
   findTantouAnswerPdfUrl,
 } from "../tantou-moj.js";
-import { isOutageError } from "../moj.js";
+import { isOutageError, fetchHtml as fetchHtmlViaProxy } from "../moj.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const YEARS_JS = join(ROOT, "years.js");
@@ -35,10 +35,21 @@ const YOBI_JISSHI_HUB =
 const YOBI_KEKKA_HUB =
   "https://www.moj.go.jp/jinji/shihoushiken/jinji07_00027.html";
 
+// 法務省へ直接取りに行き、だめなら中継 Worker 経由で取り直す。法務省サイトは
+// 実行元（海外のIPなど）によって 403 を返すことがあり、逆に Worker 側が実行元を
+// 弾くこともあるので、どちらか片方が通れば巡回を続けられるようにする。
 async function fetchHtml(url) {
-  const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
-  return await res.text();
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
+    return await res.text();
+  } catch (e) {
+    console.log(`  直接取得に失敗（${e.message}）。中継 Worker 経由で取り直します`);
+    return await fetchHtmlViaProxy(url);
+  }
 }
 
 function resolveUrl(href, baseUrl) {

@@ -12,6 +12,7 @@
 // =============================================================================
 
 export const NEWS = [
+  { date: "2026.11.13", text: "令和8年の出題の趣旨が掲載されました。" },
   { date: "2026.07.21", text: "令和8年の試験問題が掲載されました。" },
   { date: "2026.07.20", text: "自動クロール機能が実装されました。新年度の試験問題・出題の趣旨・採点実感は、法務省ウェブへの掲載後1週間以内に自動で追加されます。" },
 ];
@@ -33,7 +34,7 @@ export const CRAWL_STATE = {
   r5: { shushi: true, saiten: true },
   r6: { shushi: true, saiten: true },
   r7: { shushi: true, saiten: true },
-  r8: { shushi: false, saiten: false },
+  r8: { shushi: true, saiten: false },
 };
 
 export const TANTOU_NEWS = [
