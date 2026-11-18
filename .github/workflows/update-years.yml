@@ -22,6 +22,12 @@ permissions:
 jobs:
   update-years:
     runs-on: ubuntu-latest
+    # 中継 Worker はカスタムドメイン（y-adachi.com）だとゾーンのボット対策で
+    # GitHub Actions からのアクセスが 403 になるため、workers.dev 側を使う。
+    # 事前変換（precompute.mjs）と健全性チェック（check-links.mjs）の両方が
+    # moj.js 経由で Worker を使うので、ジョブ全体に渡す
+    env:
+      WORKER_URL: https://shihoshiken-proxy.yuki-adachi.workers.dev
     steps:
       - uses: actions/checkout@v5
 
@@ -60,12 +66,8 @@ jobs:
 
       # 全年度×全種類で PDF リンク探索が機能するか検査する。
       # 法務省サイトの構造変更や中継 Worker の障害をここで検知する
-      # 中継 Worker はカスタムドメイン（y-adachi.com）だとゾーンのボット対策で
-      # GitHub Actions からのアクセスが 403 になるため、workers.dev 側を使う
       - name: リンク探索の健全性チェック
         run: node scripts/check-links.mjs
-        env:
-          WORKER_URL: https://shihoshiken-proxy.yuki-adachi.workers.dev
 
       # リポジトリに60日間コミットがないと GitHub が定期実行を自動停止する
       # ため、実行のたびに再有効化してタイマーをリセットする
