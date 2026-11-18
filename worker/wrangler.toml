@@ -1,0 +1,27 @@
+# 中継 Worker（shihoshiken-proxy）の wrangler 設定。
+# デプロイ（リポジトリのルートで実行）:
+#   npx wrangler deploy --config worker/wrangler.toml
+# ダッシュボードで設定を変えたら、ここにも反映すること（wrangler deploy は
+# この設定でダッシュボード側の設定を上書きする）。
+
+name = "shihoshiken-proxy"
+main = "worker.js"
+compatibility_date = "2026-05-20"
+
+# 公開URL（https://shihoshiken-proxy.y-adachi.com）。moj.js の WORKER_URL と、
+# 両HTMLの CSP connect-src もこのホストを指す。
+routes = [{ pattern = "shihoshiken-proxy.y-adachi.com", custom_domain = true }]
+
+# shihoshiken-proxy.yuki-adachi.workers.dev も従来どおり残す
+workers_dev = true
+preview_urls = false
+
+# PDF の永続キャッシュ（worker.js の env.MOJ_PDF）
+[[r2_buckets]]
+binding = "MOJ_PDF"
+bucket_name = "moj-pdf-cache"
+
+# ログ（ダッシュボードの Observability）
+[observability]
+enabled = true
+head_sampling_rate = 1

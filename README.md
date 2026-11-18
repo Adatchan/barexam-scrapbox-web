@@ -120,6 +120,7 @@ web/
 ├── yobi-convert.js         予備試験論文式のテキスト変換（科目グループPDFから切り出し）
 ├── pdfout.js               原典PDFの抜き出し・スタンプ印字・zip
 ├── worker/worker.js        Cloudflare Worker（moj.go.jp 中継プロキシ）
+├── worker/wrangler.toml    中継 Worker の wrangler 設定（R2・カスタムドメイン）
 ├── scripts/
 │   ├── update-years.mjs    法務省サイト巡回 → years.js / news.js 更新
 │   ├── precompute.mjs      事前変換（converted/）→ 最後に全文検索の索引も更新
@@ -134,7 +135,8 @@ web/
 
 - **フロント**: 静的 HTML/CSS/JS（ビルド不要）。Cloudflare Pages で `barexam.y-adachi.com` に配信（`main` への push で自動デプロイ。旧公開先の GitHub Pages で開くと新URLへ転送する）
 - **バックエンド**: なし。法務省サイトの取得だけ Cloudflare Worker が中継
-  （moj.go.jp 配下のみ許可・CORSヘッダ付与）
+  （moj.go.jp 配下のみ許可・CORSヘッダ付与）。Worker は push では更新されないため、
+  `worker/` を変えたら `npx wrangler deploy --config worker/wrangler.toml` で反映する
 - **PDF**: 解析は PDF.js、抜粋PDFの生成は pdf-lib、zip は fflate
   （いずれも CDN から動的ロード）
 - **セキュリティ**: 両HTMLに CSP メタタグを設定し、スクリプトの読み込み先を
