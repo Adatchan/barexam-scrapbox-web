@@ -2,7 +2,8 @@
 // テキスト出力（ノーマル / Scrapbox 記法）
 //
 // 解析済みの段落配列（paras）を最終的な出力テキストに整形する。
-// decorate=true のときだけ Scrapbox の装飾（[* ] [** ] #タグ）を付ける。
+// decorate=true のときだけ Scrapbox の装飾（[* ] [** ] #タグ）を付け、
+// 問題文本体は全行を引用記法（> ）にする。
 // =============================================================================
 import {
   SETSUMON_RE,
@@ -33,6 +34,8 @@ export function toScrapbox(
     out.push(`#${examTag} #${tag} #論文式 #${yearLabel}`);
   }
   out.push("");
+  // 問題文本体（ここから先）は Scrapbox 記法では全行を引用（> ）にする
+  const bodyStart = out.length;
   // 構造マーカー行（「第１ ○○」「１ ○○」「１．○○」）と会話文
   // （「甲：」「Ｘ：」）は空行なしの連続行として出力する
   let inDialogue = false;
@@ -63,6 +66,15 @@ export function toScrapbox(
     }
     inDialogue = dialogue;
     inMarkerBlock = marker;
+  }
+  if (decorate) {
+    while (out.length > bodyStart && out[out.length - 1] === "") out.pop();
+    const body = out
+      .splice(bodyStart)
+      .join("\n")
+      .split("\n")
+      .map((l) => (l === "" ? ">" : `> ${l}`));
+    out.push(...body);
   }
   return out.join("\n").replace(/\s+$/, "") + "\n";
 }
