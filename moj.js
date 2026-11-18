@@ -8,7 +8,11 @@
 // =============================================================================
 import { reEscape, subjectPattern } from "./rules.js";
 
+// Node 実行（scripts/ や GitHub Actions）では環境変数 WORKER_URL で差し替えられる。
+// CI からカスタムドメインに送るとゾーンのボット対策で 403 になるため、
+// ワークフローでは workers.dev の URL を渡している（ブラウザでは常に下の既定値）。
 export const WORKER_URL =
+  globalThis.process?.env?.WORKER_URL ||
   "https://shihoshiken-proxy.y-adachi.com";
 
 const FETCH_TIMEOUT_MS = 30000;
