@@ -14,10 +14,8 @@
  *   - エラー応答はキャッシュも R2 保存もしない。
  *
  * 必要なバインディング:
- *   - R2 バケットを binding 名 MOJ_PDF で割り当てること。
- *     ダッシュボード → 対象 Worker → Settings → Variables and Secrets の
- *     「R2 Bucket Bindings」で Variable name = MOJ_PDF, Bucket = 作成した
- *     バケット（例: moj-pdf-cache）を選んで保存する。
+ *   - R2 バケット moj-pdf-cache を binding 名 MOJ_PDF で割り当てる
+ *     （worker/wrangler.toml に記載済み。デプロイ時に自動で設定される）。
  *
  * セキュリティ:
  *   - moj.go.jp 配下の URL のみ許可（オープンプロキシ化防止）
@@ -28,10 +26,11 @@
  *       アクセス対策は Cloudflare のレート制限で別途行うこと。
  *   - レスポンスは Content-Type をそのまま中継
  *
- * デプロイ:
- *   1. https://dash.cloudflare.com → Workers & Pages → 対象 Worker
- *   2. このファイルの内容を貼り付けて Deploy（Quick edit / Save and deploy）
- *   3. 上記 R2 バインディング（MOJ_PDF）を必ず設定しておくこと。
+ * デプロイ（wrangler。設定は worker/wrangler.toml）:
+ *   リポジトリのルートで `npx wrangler deploy --config worker/wrangler.toml`
+ *   （初回は `npx wrangler login`、または環境変数 CLOUDFLARE_API_TOKEN を設定）。
+ *   ダッシュボードで直接編集すると次回のデプロイで上書きされるので、
+ *   変更は必ずこのファイルと wrangler.toml に入れること。
  *
  * 公開先を変えたら ALLOWED_ORIGINS を更新すること。
  */
