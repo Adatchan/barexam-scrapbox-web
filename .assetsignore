@@ -1,0 +1,13 @@
+# 公開サイトに配信しないもの（wrangler.jsonc の assets はリポジトリ直下を配信する）
+.git
+.github
+.githooks
+.DS_Store
+.npmrc
+node_modules
+scripts
+worker
+wrangler.jsonc
+package.json
+package-lock.json
+.wrangler
