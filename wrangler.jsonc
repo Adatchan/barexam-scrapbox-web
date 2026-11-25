@@ -1,0 +1,14 @@
+// 公開サイト（barexam.y-adachi.com）の Cloudflare Workers 設定。
+// main への push で Cloudflare の Workers Builds が自動デプロイする（Git 連携）。
+// サーバー側のコードは無く、リポジトリ直下を静的ファイルとして配信するだけ。
+// 中継 Worker（shihoshiken-proxy）の設定は worker/wrangler.toml で、これとは別。
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "barexam-scrapbox-web",
+  "compatibility_date": "2026-11-25",
+  "assets": {
+    "directory": ".",
+    // 存在しないURLには 404.html を 404 ステータスで返す（既定では空の404になる）
+    "not_found_handling": "404-page"
+  }
+}

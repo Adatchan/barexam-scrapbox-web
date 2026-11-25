@@ -121,6 +121,10 @@ web/
 ├── pdfout.js               原典PDFの抜き出し・スタンプ印字・zip
 ├── worker/worker.js        Cloudflare Worker（moj.go.jp 中継プロキシ）
 ├── worker/wrangler.toml    中継 Worker の wrangler 設定（R2・カスタムドメイン）
+├── wrangler.jsonc          公開サイト（静的配信）の Cloudflare Workers 設定（404ページ等）
+├── .assetsignore           公開サイトに配信しないファイル
+├── 404.html                存在しないURL用のページ
+├── robots.txt / sitemap.xml  検索エンジン向け
 ├── scripts/
 │   ├── update-years.mjs    法務省サイト巡回 → years.js / news.js 更新
 │   ├── precompute.mjs      事前変換（converted/）→ 最後に全文検索の索引も更新
@@ -133,7 +137,7 @@ web/
     └── update-years.yml    週次の自動巡回・健全性チェック（毎週月曜 09:00 JST）
 ```
 
-- **フロント**: 静的 HTML/CSS/JS（ビルド不要）。Cloudflare Pages で `barexam.y-adachi.com` に配信（`main` への push で自動デプロイ。旧公開先の GitHub Pages で開くと新URLへ転送する）
+- **フロント**: 静的 HTML/CSS/JS（ビルド不要）。Cloudflare Workers の静的アセット配信で `barexam.y-adachi.com` に配信（`main` への push で Workers Builds が自動デプロイ。設定は `wrangler.jsonc`。旧公開先の GitHub Pages で開くと新URLへ転送する）
 - **バックエンド**: なし。法務省サイトの取得だけ Cloudflare Worker が中継
   （moj.go.jp 配下のみ許可・CORSヘッダ付与）。Worker は push では更新されないため、
   `worker/` を変えたら `npx wrangler deploy --config worker/wrangler.toml` で反映する
